@@ -29,6 +29,11 @@ export function assertDenied(error, msg) {
 }
 
 export function assertInvisible(data, msg) {
+  // A null/undefined data is PostgREST reporting an unexpected error, not a policy
+  // silently filtering rows -- treating it as "[]" would let a broken query pass as a
+  // denial. Callers that genuinely expect null (an update/delete outright refused, no
+  // rows to select) must assert that explicitly instead of routing through here.
+  if (data == null) throw new Error(`${msg || "expected zero visible rows"}: got ${JSON.stringify(data)}`);
   if (!Array.isArray(data)) throw new Error(`expected rows array, got ${JSON.stringify(data)}`);
   if (data.length !== 0) throw new Error(`${msg || "expected zero visible rows"}: saw ${data.length}`);
 }

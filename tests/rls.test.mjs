@@ -12,7 +12,7 @@ const TENANT_TABLES = [
 ];
 
 test("RLS is enabled on every table", async () => {
-  const world = await getWorld();
+  await getWorld();
   const { rows } = await sql(
     `select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity = false`
@@ -67,7 +67,7 @@ test("vendor A cannot update vendor B's item", async () => {
     .from("items").update({ price: 1 }).eq("id", world.b.itemId).select();
   const { rows } = await sql(`select price from items where id = $1`, [world.b.itemId]);
   assertEqual(Number(rows[0].price), 40, "vendor B's price was changed by vendor A");
-  assertInvisible(data || [], "vendor A updated a vendor B row");
+  assertInvisible(data, "vendor A updated a vendor B row");
 });
 
 test("recorder cannot change item prices", async () => {
@@ -76,7 +76,7 @@ test("recorder cannot change item prices", async () => {
     .from("items").update({ price: 999 }).eq("id", world.a.itemId).select();
   const { rows } = await sql(`select price from items where id = $1`, [world.a.itemId]);
   assertEqual(Number(rows[0].price), 40, "a recorder changed a price");
-  assertInvisible(data || [], "recorder update returned rows");
+  assertInvisible(data, "recorder update returned rows");
 });
 
 test("biller cannot change item prices", async () => {
@@ -85,7 +85,7 @@ test("biller cannot change item prices", async () => {
     .from("items").update({ price: 888 }).eq("id", world.a.itemId).select();
   const { rows } = await sql(`select price from items where id = $1`, [world.a.itemId]);
   assertEqual(Number(rows[0].price), 40, "a biller changed a price");
-  assertInvisible(data || [], "biller update returned rows");
+  assertInvisible(data, "biller update returned rows");
 });
 
 test("admin can change item prices", async () => {
@@ -123,10 +123,10 @@ test("no role can update or delete a points ledger row", async () => {
     `select id from points_ledger where vendor_id = $1 limit 1`, [world.a.vendorId]);
   const { data: updated } = await world.a.clients.admin
     .from("points_ledger").update({ points: 5000 }).eq("id", led.id).select();
-  assertInvisible(updated || [], "a ledger row was updated");
+  assertInvisible(updated, "a ledger row was updated");
   const { data: deleted } = await world.a.clients.admin
     .from("points_ledger").delete().eq("id", led.id).select();
-  assertInvisible(deleted || [], "a ledger row was deleted");
+  assertInvisible(deleted, "a ledger row was deleted");
 });
 
 test("no role can write vendor_counters directly", async () => {
@@ -135,7 +135,7 @@ test("no role can write vendor_counters directly", async () => {
     const { data } = await world.a.clients[role]
       .from("vendor_counters").update({ last_token: 9999 })
       .eq("vendor_id", world.a.vendorId).select();
-    assertInvisible(data || [], `${role} rewrote the token counter`);
+    assertInvisible(data, `${role} rewrote the token counter`);
   }
 });
 
@@ -157,6 +157,6 @@ test("an anonymous client sees nothing", async () => {
   const anon = newClient();
   for (const table of TENANT_TABLES) {
     const { data } = await anon.from(table).select("*");
-    assertInvisible(data || [], `${table}: anonymous read returned rows`);
+    assertInvisible(data, `${table}: anonymous read returned rows`);
   }
 });
