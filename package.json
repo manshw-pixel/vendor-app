@@ -1,0 +1,12 @@
+{
+  "name": "vendor-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "pg": "^8.13.0"
+  }
+}

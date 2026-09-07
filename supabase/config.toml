@@ -1,0 +1,17 @@
+project_id = "vendor-app"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public"]
+
+[db]
+port = 55322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+# Tests sign up real users and need a session immediately. With confirmations on,
+# signUp returns { session: null } and every downstream assertion fails on a null token.
+enable_confirmations = false
