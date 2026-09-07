@@ -8,6 +8,7 @@ import "./rls.test.mjs";
 import "./issue_token.test.mjs";
 import "./complete_bill.test.mjs";
 import "./points_balance.test.mjs";
+import "./views.test.mjs";
 
 try {
   await bootstrap();
