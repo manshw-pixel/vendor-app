@@ -4,6 +4,10 @@ import { bootstrap } from "./fixtures.mjs";
 
 import "./smoke.test.mjs";
 import "./schema.test.mjs";
+import "./rls.test.mjs";
+import "./issue_token.test.mjs";
+import "./complete_bill.test.mjs";
+import "./points_balance.test.mjs";
 
 try {
   await bootstrap();
