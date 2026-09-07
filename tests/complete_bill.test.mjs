@@ -1,5 +1,8 @@
-import { test, assert, assertEqual } from "./framework.mjs";
+import { test, assert, assertEqual, once } from "./framework.mjs";
 import { sql } from "./fixtures.mjs";
+import { seedTwoVendors } from "./seed.mjs";
+
+const getWorld = once(seedTwoVendors);
 
 // Builds a vendor with one item at a known stock level and a bill of the given total,
 // already advanced to 'billed'. Every case below starts from its own vendor so that
@@ -115,4 +118,35 @@ test("completing a bill that was never billed is refused", async () => {
   let threw = false;
   try { await sql(`select complete_bill($1)`, [b.id]); } catch { threw = true; }
   assert(threw, "a recording bill was completed without a token");
+});
+
+test("complete_bill uses the recomputed line-item total, not an inflated bills.total", async () => {
+  // Lines sum to 100 (issue_token already recomputes bills.total to that), then forge
+  // bills.total to 1000 -- which would earn 100 points if it were trusted.
+  const w = await billedBill({ total: 100 });
+  await sql(`update bills set total = 1000 where id = $1`, [w.billId]);
+  await sql(`select complete_bill($1)`, [w.billId]);
+  assertEqual(await points(w.vendorId), 0, "points were awarded on the forged total");
+  const { rows: [b] } = await sql(`select total from bills where id = $1`, [w.billId]);
+  assertEqual(Number(b.total), 100, "bills.total was not corrected to the line-item sum");
+});
+
+test("complete_bill refuses a bill belonging to another vendor", async () => {
+  const world = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,100,'recording') returning id`, [world.b.vendorId, world.b.customerId]);
+  await sql(`select issue_token($1)`, [b.id]);
+  const { error } = await world.a.clients.biller.rpc("complete_bill", { p_bill_id: b.id });
+  assert(error, "a biller completed another vendor's bill");
+});
+
+test("complete_bill refuses a recorder (wrong role)", async () => {
+  const world = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,100,'recording') returning id`, [world.a.vendorId, world.a.customerId]);
+  await sql(`select issue_token($1)`, [b.id]);
+  const { error } = await world.a.clients.recorder.rpc("complete_bill", { p_bill_id: b.id });
+  assert(error, "a recorder completed a bill");
 });

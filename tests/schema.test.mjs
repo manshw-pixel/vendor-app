@@ -57,10 +57,11 @@ test("bill status is constrained to the three lifecycle values", async () => {
 });
 
 test("app_users role is constrained to the three roles", async () => {
+  const { rows: [v] } = await sql(`insert into vendors (name) values ('Role Co') returning id`);
   let threw = false;
   try {
     await sql(`insert into app_users (id, vendor_id, role, name)
-               values (gen_random_uuid(), gen_random_uuid(), 'wizard', 'X')`);
+               values (gen_random_uuid(), $1, 'wizard', 'X')`, [v.id]);
   } catch { threw = true; }
   assert(threw, "an invalid role was accepted");
 });

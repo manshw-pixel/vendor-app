@@ -139,6 +139,18 @@ test("no role can write vendor_counters directly", async () => {
   }
 });
 
+test("recorder cannot append a bill_items row once the bill is billed", async () => {
+  const world = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,100,'billed') returning id`, [world.a.vendorId, world.a.customerId]);
+  const { error } = await world.a.clients.recorder.from("bill_items").insert({
+    bill_id: b.id, vendor_id: world.a.vendorId, item_id: world.a.itemId,
+    qty_kg: 1, unit_price: 40, line_total: 40,
+  });
+  assertDenied(error, "a recorder added a line to an already-billed bill");
+});
+
 test("an anonymous client sees nothing", async () => {
   const world = await getWorld();
   const { newClient } = await import("./fixtures.mjs");

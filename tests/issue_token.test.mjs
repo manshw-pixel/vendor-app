@@ -1,6 +1,9 @@
-import { test, assert, assertEqual } from "./framework.mjs";
+import { test, assert, assertEqual, once } from "./framework.mjs";
 import { sql, DB_URL } from "./fixtures.mjs";
+import { seedTwoVendors } from "./seed.mjs";
 import pg from "pg";
+
+const getWorld = once(seedTwoVendors);
 
 async function freshVendorWithBills(n) {
   const { rows: [v] } = await sql(`insert into vendors (name) values ('Token Co') returning id`);
@@ -76,4 +79,23 @@ test("concurrent issue_token calls never collide", async () => {
   } finally {
     await Promise.all(clients.map(c => c.end().catch(() => {})));
   }
+});
+
+test("issue_token refuses a bill belonging to another vendor", async () => {
+  const world = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,100,'recording') returning id`, [world.b.vendorId, world.b.customerId]);
+  // world.a's recorder holds a valid role, but the bill is vendor B's.
+  const { error } = await world.a.clients.recorder.rpc("issue_token", { p_bill_id: b.id });
+  assert(error, "a recorder issued a token for another vendor's bill");
+});
+
+test("issue_token refuses a biller (wrong role)", async () => {
+  const world = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,100,'recording') returning id`, [world.a.vendorId, world.a.customerId]);
+  const { error } = await world.a.clients.biller.rpc("issue_token", { p_bill_id: b.id });
+  assert(error, "a biller issued a token");
 });

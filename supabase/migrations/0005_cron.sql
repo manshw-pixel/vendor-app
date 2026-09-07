@@ -36,7 +36,9 @@ end $$;
 
 revoke all on function expire_points() from public, anon, authenticated;
 
--- Daily at 01:00. pg_cron lives in the extensions schema on Supabase.
-create extension if not exists pg_cron with schema extensions;
+-- Daily at 01:00. pgcrypto and pg_net live in the extensions schema on Supabase, but
+-- pg_cron is not relocatable — its control file pins schema `cron` — so naming a
+-- different schema here raises an error and aborts the migration.
+create extension if not exists pg_cron;
 
 select cron.schedule('vendor-app-points-expiry', '0 1 * * *', $$select expire_points()$$);
