@@ -4,7 +4,7 @@
 
 **Goal:** Build and prove the Postgres foundation of the vegetable & fruit vendor app — schema, RLS on every table, the billing functions, dashboard views, and the expiry job — with an automated suite that fails if vendor isolation or role separation ever breaks.
 
-**Architecture:** One self-hosted Supabase project, tenanted by `vendor_id`, with RLS as the *only* authorization layer (there is no app server). Anything unforgeable — token issuance, stock decrements, points awards — lives in `SECURITY DEFINER` functions that clients may call but whose tables clients cannot write. Outbound WhatsApp messages are queued as rows inside the originating transaction, so delivery can fail without corrupting a sale.
+**Architecture:** One Supabase Cloud project, tenanted by `vendor_id`, with RLS as the *only* authorization layer (there is no app server). Anything unforgeable — token issuance, stock decrements, points awards — lives in `SECURITY DEFINER` functions that clients may call but whose tables clients cannot write. Outbound WhatsApp messages are queued as rows inside the originating transaction, so delivery can fail without corrupting a sale.
 
 **Tech Stack:** Postgres 15 (Supabase), Supabase CLI 2.x local stack, pg_cron, Node 24 + `@supabase/supabase-js` + `pg` for the test harness.
 

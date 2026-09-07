@@ -22,6 +22,35 @@ export const newClient = () => createClient(API_URL, ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+// resetStack() drops the entire public schema and empties auth.users, and DB_URL above is
+// whatever $SUPABASE_DB_URL says. That is fine pointed at the disposable local stack and
+// catastrophic pointed anywhere else, so the destination is checked rather than trusted:
+// deploys go to Supabase Cloud, tests never do. Fails closed -- anything this cannot
+// positively identify as loopback is treated as remote.
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+export function assertLocalDb(url) {
+  let host;
+  try {
+    // WHATWG URL gets the credential/host split right; hand-rolled splitting does not,
+    // and a password containing "@127.0.0.1" is exactly the case that would fool it.
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error(
+      `Refusing to reset: could not parse a host out of SUPABASE_DB_URL (${JSON.stringify(url)}).`
+    );
+  }
+  if (!LOOPBACK.has(host)) {
+    throw new Error(
+      `Refusing to reset a NON-LOCAL database: ${host}
+This drops the public schema and deletes every auth user. It may only ever run
+against the local \`supabase start\` stack. If you are trying to deploy, that is
+\`supabase db push\` -- never this suite.
+Unset SUPABASE_DB_URL (or point it back at 127.0.0.1) and run again.`
+    );
+  }
+}
+
 let pool = null;
 
 // Direct SQL as superuser. Used to seed fixtures and to assert what is REALLY in a table,
@@ -33,6 +62,7 @@ export async function sql(text, params = []) {
 
 // Drop and rebuild public from the migrations, in filename order.
 export async function resetStack() {
+  assertLocalDb(DB_URL);
   const client = new pg.Client({ connectionString: DB_URL });
   await client.connect();
   try {

@@ -12,7 +12,7 @@ week", "which two items do people buy together", or "am I about to run out of on
 
 `SKILLVendor.md` is the authoritative product spec for the app that replaces that. This
 document is the technical design for building it. It does not re-open the decisions locked
-there — self-hosted Supabase, one project tenanted by `vendor_id`, RLS everywhere,
+there — Supabase Cloud, one project tenanted by `vendor_id`, RLS everywhere,
 three roles, pg_cron and Edge Functions instead of n8n, WhatsApp via a BSP, Drive for
 images and PDFs only. It settles how those decisions become code, and records the four
 choices the spec left to the builder.
@@ -51,7 +51,7 @@ runs the same deployment; RLS is what keeps vendor A from ever seeing vendor B.
 
 ## Architecture
 
-One self-hosted Supabase project. A single React SPA is the only client. There is no
+One Supabase Cloud project. A single React SPA is the only client. There is no
 application server of ours: the SPA talks to Postgres through PostgREST carrying the
 signed-in user's JWT.
 

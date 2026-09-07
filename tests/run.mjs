@@ -2,6 +2,7 @@
 import { CASES } from "./framework.mjs";
 import { bootstrap } from "./fixtures.mjs";
 
+import "./guard.test.mjs";
 import "./smoke.test.mjs";
 import "./schema.test.mjs";
 import "./rls.test.mjs";

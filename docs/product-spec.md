@@ -24,7 +24,9 @@ Do not re-open them unless the user explicitly asks to change one.
 
 ## Locked architecture decisions
 
-- **Backend:** Supabase, **self-hosted by the app owner** (not per-vendor hosting).
+- **Backend:** Supabase, **Supabase Cloud, one project owned by the app owner**
+  (not per-vendor hosting, and not self-hosted — this reverses the earlier
+  self-hosting decision; nothing else in this section changes).
 - **Multi-tenancy:** **one** Supabase project, tenanted by `vendor_id` (+ vendor
   name), with **Row-Level Security on every table**. RLS is the security
   boundary that keeps vendor A from ever seeing vendor B — test it hard.

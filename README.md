@@ -1,7 +1,10 @@
 # Vendor App — database foundation
 
-The Postgres foundation for a vegetable & fruit vendor management app on self-hosted
-Supabase. One project serves many vendors, tenanted by `vendor_id`.
+The Postgres foundation for a vegetable & fruit vendor management app on **Supabase
+Cloud**. One project serves many vendors, tenanted by `vendor_id`.
+
+Tests run against a local `supabase start` stack; only migrations are pushed to Cloud.
+The suite may never point at the Cloud project — see [Deploying](#deploying).
 
 - Product spec: [`docs/product-spec.md`](docs/product-spec.md)
 - Design: [`docs/design.md`](docs/design.md)
@@ -81,12 +84,39 @@ authorization layer, and the operations that must not be forgeable — token iss
 stock decrements, points awards — live in `SECURITY DEFINER` functions that carry their
 own role and tenant guards, because a definer function bypasses RLS.
 
+## Deploying
+
+**Deploys go to Cloud. Tests never do.** The suite in `tests/` begins by dropping the
+`public` schema and deleting every row in `auth.users`; against a Cloud project that is
+not a test run, it is data loss. `tests/fixtures.mjs` therefore refuses outright to reset
+any host that is not loopback, so a stale `SUPABASE_DB_URL` in a deploy shell fails
+closed instead of wiping the project. Do not weaken that guard.
+
+Migrations reach Cloud through the CLI, in a shell with no test variables exported:
+
+```bash
+supabase login                          # stores a token outside the repo
+supabase link --project-ref <your-ref>  # once per clone
+supabase db push                        # applies supabase/migrations/ in order
+```
+
+Credentials live in the CLI's own login or a gitignored `.env` — never in the repo, and
+never in `supabase/config.toml`, which is committed and describes the *local* stack only.
+
+`0005_cron.sql` needs the `pg_cron` extension enabled on the project once
+(Dashboard → Database → Extensions) before `db push` will succeed.
+
 ## Known unknowns
 
-- **pg_cron may not be available on the local CLI stack** without extra configuration
-  (`shared_preload_libraries`). If `0005_cron.sql` fails at `create extension`, split the
-  `cron.schedule` call into a deploy-only file and keep `expire_points()` in the
-  migration — the tests cover the function, not the schedule.
+- **pg_cron is the reverse risk it used to be.** On Supabase Cloud it is available and
+  supported, so the deploy target is fine. It is the *local* CLI stack that may refuse
+  `create extension pg_cron` without `shared_preload_libraries` configuration. If
+  `0005_cron.sql` fails locally, split the `cron.schedule` call into a deploy-only file
+  and keep `expire_points()` in the migration — the tests cover the function, not the
+  schedule.
+- `supabase/config.toml` pins `major_version = 15` for the local stack. If the Cloud
+  project runs a different Postgres major, local tests are exercising a different engine
+  than production. Worth aligning.
 - Points expiry is correct on *read* regardless (`customer_points_balance` filters on
   `expires_at`); the sweep exists to make the lapse an auditable ledger event.
 
