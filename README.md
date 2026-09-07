@@ -7,22 +7,47 @@ Supabase. One project serves many vendors, tenanted by `vendor_id`.
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ⚠️ Nothing here has ever been executed
+## ⚠️ Partly verified: DDL and the billing lifecycle ran; RLS did not
 
-Docker was not installed on the machine where this was written, so `supabase start` could
-not run. **No migration has been applied to a Postgres instance and no test in
-`tests/` has ever been executed.** Every file was written, read back, and reviewed by
-eye; the JavaScript passed `node --check` and nothing more.
+The full suite in `tests/` still has **never** been executed, because it needs the local
+Supabase stack (PostgREST + GoTrue) and Docker Desktop cannot start on this machine —
+WSL2 is not installed, so its Linux engine has no backend.
 
-Treat the whole of `supabase/migrations/` as unverified until the suite below runs green.
-The first run will very likely surface transcription-level errors that only a real
-Postgres can find.
+What *has* now been run, against a real PostgreSQL 17 with a thin shim supplying the
+`anon`/`authenticated`/`service_role` roles and an `auth.uid()`:
 
-### How to verify
+- **All five migrations apply cleanly** in filename order — no syntax or transcription
+  errors. Resulting objects: 10 tables (RLS enabled on all 10), 19 policies, 8 views
+  (every one `security_invoker=true`), and the three billing functions.
+  The one exception is the last two statements of `0005_cron.sql`
+  (`create extension pg_cron` + `cron.schedule`), skipped because pg_cron is not
+  available on a native Windows build. `expire_points()` itself applies and runs.
+- **The billing lifecycle behaves as designed** on the service-role path:
+  `issue_token` returns token 1, recomputes a forged `bills.total` of 99999 back down to
+  the line-item sum, and rejects a second call on the same bill; `complete_bill` moves
+  the bill to `done`, decrements stock (clamped at 0 on an over-sold line, as intended),
+  awards the vendor-configured 50 points for a ₹700 bill, and queues both the
+  `token_issued` and `points_awarded` outbound messages; `customer_points_balance`
+  reports `(50, 30 days)`; `expire_points()` writes 0 rows before the lapse, 1 after,
+  and 0 on a second run — the idempotency `is_expiry` exists for — leaving a balance of 0.
+
+What remains unverified, and needs the real stack:
+
+- **Every RLS policy.** The checks above ran as superuser, which bypasses RLS entirely.
+  Tenant isolation and the role guards are the whole security model and none of it has
+  been exercised.
+- Anything reached through PostgREST or GoTrue: the signup/session fixtures, the eight
+  dashboard views as seen by an `authenticated` session, and the grant surface.
+- The `cron.schedule` call.
+
+### How to finish verifying
+
+Install WSL2 (`wsl --install`, from an elevated prompt, then reboot) so Docker Desktop
+can start, then:
 
 ```bash
-# 1. Install Docker Desktop, and confirm it answers
-docker --version
+# 1. Confirm the engine answers — not just the client
+docker info
 
 # 2. Bring up the local stack (ports 55321 API / 55322 DB — chosen so this stack can
 #    run alongside another local Supabase project without colliding)
