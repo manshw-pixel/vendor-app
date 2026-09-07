@@ -3,9 +3,9 @@
 The Postgres foundation for a vegetable & fruit vendor management app on self-hosted
 Supabase. One project serves many vendors, tenanted by `vendor_id`.
 
-- Product spec: [`../SKILLVendor.md`](../SKILLVendor.md)
-- Design: [`../docs/superpowers/specs/2026-09-07-vegetable-vendor-app-design.md`](../docs/superpowers/specs/2026-09-07-vegetable-vendor-app-design.md)
-- Plan this implements: [`../docs/superpowers/plans/2026-09-07-vendor-app-database-foundation.md`](../docs/superpowers/plans/2026-09-07-vendor-app-database-foundation.md)
+- Product spec: [`docs/product-spec.md`](docs/product-spec.md)
+- Design: [`docs/design.md`](docs/design.md)
+- Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
 ## ⚠️ Nothing here has ever been executed
 
@@ -24,9 +24,8 @@ Postgres can find.
 # 1. Install Docker Desktop, and confirm it answers
 docker --version
 
-# 2. Bring up the local stack (ports 55321 API / 55322 DB — deliberately not the
-#    54321/54322 that the unrelated onevio-crm project in this repo uses)
-cd vendor-app
+# 2. Bring up the local stack (ports 55321 API / 55322 DB — chosen so this stack can
+#    run alongside another local Supabase project without colliding)
 supabase start
 
 # 3. Export the keys the harness needs
