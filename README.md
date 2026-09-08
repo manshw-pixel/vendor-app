@@ -89,18 +89,55 @@ on every run, so the suite is repeatable — which is also why the guard is stri
 
 | URL | What |
 |---|---|
-| https://manshw-pixel.github.io/vendor-app/ | The SPA (`web/`) — **stage 1: the shell only** |
+| https://manshw-pixel.github.io/vendor-app/ | The SPA (`web/`) — **stages 1-2** |
 | https://manshw-pixel.github.io/vendor-app/console.html | The older single-file console |
 
-Stage 1 of the SPA ships sign-in, role-based routing and the mr/hi/en language switch.
-**Every screen behind the nav is a placeholder.** The console remains the way to see
-dashboards until stage 4 builds them — see
-[`docs/superpowers/specs/2026-09-08-slice-3-spa-design.md`](docs/superpowers/specs/2026-09-08-slice-3-spa-design.md)
-for the staged plan.
+**Working today:** sign-in, role-based routing, the mr/hi/en language switch, and the whole
+billing flow — a recorder picks or creates a customer, taps item tiles, enters weights, sees a
+running total, presses Done and gets a token; a biller works the queue of billed bills,
+completes one, and sees the points that were actually awarded.
 
-Note the language switch honours the browser's language when it is one of the three
-supported; Marathi is the default only when nothing else matches. A phone set to English
-therefore opens in English, which is a stated preference rather than an absence of one.
+**Still placeholders:** items and stock admin, customers, staff, and the dashboards — stages 3
+and 4. The console remains the way to see dashboards until stage 4 builds them. See
+[the spec](docs/superpowers/specs/2026-09-08-slice-3-spa-design.md) for the staged plan.
+
+### What has and has not been proven
+
+The suite is **85 web tests plus the 65-case database suite**, both gating every push. But
+`supabase-js` is mocked at the `data.ts` boundary in every SPA test, so **no part of the SPA has
+run against real PostgREST or GoTrue.** Stage 1 shipped two Critical bugs that only a real
+sign-in would have caught; stage 2 merged before its walkthrough was done.
+
+The first thing to check against the live database, nominated independently by two reviewers:
+the `customers(name, flat_no)` **embed shape** in the biller's queue. A cast in `Pending.tsx`
+erases it, and if PostgREST returns an array rather than an object, every row silently shows
+`—` where the customer's name belongs. Silent-and-wrong, and unreachable by any mock.
+
+### Two behaviours worth knowing
+
+**The app opens in English on an English-language phone.** `resolveLang` honours a supported
+browser language, and Marathi is the default only when nothing else matches — a phone set to
+English is a stated preference, not an absence of one.
+
+**The Hindi and Marathi strings have never been read by a native speaker.** Every one was
+written by an AI. They need a Marathi speaker before shop staff use this; the words `token`,
+`basket` and `points` were deliberately left transliterated (टोकन, बास्केट, पॉइंट्स) on the
+grounds that this is how Indian retail staff speak, and that judgement in particular wants
+confirming.
+
+### Known limits in the billing flow
+
+Both are deferred deliberately, and neither needs a migration to fix later:
+
+- **Write idempotency is mitigated, not solved.** If `addLines` commits but its response is
+  lost, a retry checks for existing rows first — which narrows the window rather than closing
+  it, because check-then-insert is not atomic. The real fix is a replace-lines RPC. Note a
+  `unique (bill_id, item_id)` constraint would be **wrong**: a recorder can legitimately weigh
+  the same item twice into one basket.
+- **A reload between a failed write and its retry orphans a `recording` bill.** Inert today —
+  every consumer filters on status, and the counter, stock, points and all four dashboard views
+  were checked — but the first history screen that forgets to filter will show phantom ₹0 bills.
+  `bills_recorder_delete` already exists, so a cleanup surface needs no migration.
 
 ## What is here
 
