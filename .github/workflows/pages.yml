@@ -66,9 +66,14 @@ jobs:
       # Publish ONLY the console. `path: .` would serve the migrations, the tests and
       # every doc from the live site -- the repo is public either way, but the site
       # should be the app, not the source tree.
+      # The console is published at BOTH paths for now. /console.html is its permanent
+      # home; the copy at / is what serves the site until the Vite SPA in web/ takes
+      # that slot (slice 3, stage 1), at which point the index.html line goes away and
+      # the console keeps working at its own URL.
       - run: |
           mkdir -p _site
-          cp index.html _site/index.html
+          cp console.html _site/console.html
+          cp console.html _site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
