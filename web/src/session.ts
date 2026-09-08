@@ -11,6 +11,7 @@ export type SessionState =
   | { kind: "loading" }
   | { kind: "signedOut" }
   | { kind: "unmapped"; email: string }
+  | { kind: "error"; detail: string }
   | {
       kind: "ready";
       userId: string;

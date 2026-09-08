@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "../supabase";
 import { sessionFromRow, type AppUserRow, type SessionState } from "../session";
+import { describeError } from "../errors";
 
 const Ctx = createContext<SessionState>({ kind: "loading" });
 
@@ -29,7 +30,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // An error here is not the same as "no row": treat only a clean null as unmapped,
       // so a transient failure does not tell a real admin they are not staff.
       if (error) {
-        setState({ kind: "unmapped", email });
+        const described = describeError(error);
+        setState({ kind: "error", detail: described?.detail ?? error.message ?? "" });
         return;
       }
       setState(sessionFromRow(userId, email, (data as AppUserRow | null) ?? null));
