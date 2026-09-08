@@ -210,7 +210,7 @@ function Dashboards() {
 
 /* -------------------------------------------------------------------- items */
 
-function Items({ role }) {
+function Items({ role, vendorId }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ name_en: "", price: "", stock_kg: "" });
@@ -231,9 +231,11 @@ function Items({ role }) {
   async function add(e) {
     e.preventDefault();
     setBusy(true); setError(null);
-    // vendor_id is deliberately not sent: the insert policy's WITH CHECK ties it
-    // to current_vendor_id(), and the column defaults from there.
+    // vendor_id must be sent: the column is NOT NULL with no default. Sending it is
+    // safe rather than a trust hole -- the insert policy's WITH CHECK requires it to
+    // equal current_vendor_id(), so a forged value is refused by the database.
     const { error } = await db.from("items").insert({
+      vendor_id: vendorId,
       name_en: form.name_en,
       price: Number(form.price),
       stock_kg: Number(form.stock_kg || 0),
@@ -361,7 +363,7 @@ function App() {
                           tab === k ? "grad text-white" : "nm-btn"}`}>{label}</button>
               ))}
             </nav>
-            {tab === "dashboards" ? <Dashboards /> : <Items role={me.role} />}
+            {tab === "dashboards" ? <Dashboards /> : <Items role={me.role} vendorId={me.vendor_id} />}
           </>
         )}
       </main>
