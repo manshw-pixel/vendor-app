@@ -1,0 +1,38 @@
+import { useTranslation } from "react-i18next";
+import { runningTotal, type Draft } from "../../billing";
+
+/** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
+ *  nothing on this screen ever sends a total to the server. */
+export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove: (index: number) => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="border border-slate-200 rounded-xl bg-white">
+      <h2 className="font-semibold text-slate-800 px-3 pt-3">{t("bill.basket")}</h2>
+      {lines.length === 0 ? (
+        <p className="text-sm text-slate-500 p-3">{t("bill.empty")}</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {lines.map((l, i) => (
+            <li key={`${l.itemId}-${i}`}>
+              <button
+                onClick={() => onRemove(i)}
+                aria-label={`${t("bill.remove")} ${l.name}`}
+                className="w-full text-left px-3 py-3 min-h-[44px] active:bg-slate-100"
+              >
+                <span className="block font-medium text-slate-800">{l.name}</span>
+                <span className="block text-xs text-slate-500">
+                  {l.qtyKg} kg × ₹{l.unitPrice} · {t("bill.remove")}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex justify-between items-center border-t border-slate-200 px-3 py-3">
+        <span className="text-slate-600">{t("bill.total")}</span>
+        <span className="text-xl font-semibold text-slate-900">₹{runningTotal(lines)}</span>
+      </div>
+    </div>
+  );
+}
