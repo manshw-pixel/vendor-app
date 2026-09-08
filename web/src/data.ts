@@ -123,4 +123,13 @@ export async function completeBill(billId: string) {
   return supabase.rpc("complete_bill", { p_bill_id: billId });
 }
 
+/** What complete_bill() actually wrote to points_ledger for this bill, not a client-side
+ *  recompute of the vendor's threshold. Filtered on bill_id only -- RLS (points_read)
+ *  already scopes the read to the caller's tenant, so a second vendor filter here would
+ *  be a weaker client-side copy of the policy. Zero rows is legitimate: a bill under the
+ *  vendor's first threshold earns no points and complete_bill() writes no row for it. */
+export async function pointsForBill(billId: string) {
+  return supabase.from("points_ledger").select("points").eq("bill_id", billId);
+}
+
 export type { Customer, Draft };

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 // screen is rendered directly (by tests, and by the router) without going through
 // main.tsx.
 import "../i18n";
-import { completeBill, listPending, type PendingBill } from "../data";
+import { completeBill, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
 
 /**
@@ -22,6 +22,7 @@ export default function Pending() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [pointsAwarded, setPointsAwarded] = useState<number | null>(null);
 
   async function refresh() {
     const { data, error } = await listPending();
@@ -39,11 +40,19 @@ export default function Pending() {
     setConfirmingId(null);
     setCompletingId(id);
     setCompleted(false);
+    setPointsAwarded(null);
     const { error } = await completeBill(id);
     if (error) {
       setFailure(describeError(error));
       setCompletingId(null);
       return;
+    }
+    // What complete_bill() actually wrote, not a client-side recompute of the vendor's
+    // threshold. No rows is legitimate -- a bill under the first threshold earns no
+    // points and writes no ledger row -- so it is "no points", never an error.
+    const { data: ledgerRows, error: pointsError } = await pointsForBill(id);
+    if (!pointsError && ledgerRows && ledgerRows.length > 0) {
+      setPointsAwarded(ledgerRows.reduce((sum, row) => sum + row.points, 0));
     }
     setCompletingId(null);
     setCompleted(true);
@@ -62,7 +71,9 @@ export default function Pending() {
 
       {completed && (
         <p className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
-          {t("pending.completed")}
+          {pointsAwarded !== null && pointsAwarded > 0
+            ? t("pending.pointsAwarded", { n: pointsAwarded })
+            : t("pending.completed")}
         </p>
       )}
 
@@ -101,11 +112,13 @@ export default function Pending() {
           className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4"
         >
           <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
+            <h2 className="font-semibold text-slate-800">{t("pending.confirmTitle")}</h2>
+            <p className="text-slate-700">{t("pending.confirmBody")}</p>
             <button
               onClick={() => void confirm(confirmingId)}
               className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold"
             >
-              {t("pending.confirmBody")}
+              {t("pending.confirmAccept")}
             </button>
             <button
               onClick={() => setConfirmingId(null)}

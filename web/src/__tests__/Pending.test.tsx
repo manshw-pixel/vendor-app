@@ -7,7 +7,12 @@ const listPending = vi.fn(async (..._args: unknown[]): Promise<{ data: PendingBi
   error: null,
 }));
 const completeBill = vi.fn(async (..._args: unknown[]) => ({ error: null }));
-vi.mock("../data", () => ({ listPending: (...a: unknown[]) => listPending(...a), completeBill: (...a: unknown[]) => completeBill(...a) }));
+const pointsForBill = vi.fn(async (..._args: unknown[]) => ({ data: [] as { points: number }[], error: null }));
+vi.mock("../data", () => ({
+  listPending: (...a: unknown[]) => listPending(...a),
+  completeBill: (...a: unknown[]) => completeBill(...a),
+  pointsForBill: (...a: unknown[]) => pointsForBill(...a),
+}));
 
 const { default: Pending } = await import("../screens/Pending");
 
@@ -56,5 +61,21 @@ describe("the pending queue", () => {
     });
     render(<Pending />);
     expect(await screen.findByText(/3/)).toBeTruthy();
+  });
+
+  it("shows the points a completion actually wrote to the ledger", async () => {
+    pointsForBill.mockResolvedValueOnce({ data: [{ points: 5 }], error: null });
+    render(<Pending />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
+    expect(await screen.findByText(/5/)).toBeTruthy();
+  });
+
+  it("does not claim points for a completion that wrote none", async () => {
+    pointsForBill.mockResolvedValueOnce({ data: [], error: null });
+    render(<Pending />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
+    expect(await screen.findByText(/completed/i)).toBeTruthy();
   });
 });
