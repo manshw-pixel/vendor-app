@@ -1,0 +1,8 @@
+{
+  "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language" },
+  "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "dashboards": "Dashboards" },
+  "session": { "unmappedTitle": "Account not linked to a shop", "unmapped": "You are signed in as {{email}}, but no staff record exists for this account yet. An admin needs to add you before you can use the app." },
+  "error": { "notAllowed": "Your role does not allow this.", "customerExists": "A customer with this mobile number already exists.", "duplicate": "This already exists.", "offline": "No connection. Check the network and try again.", "unknown": "Something went wrong.", "details": "Details" },
+  "offline": { "banner": "You are offline. Changes cannot be saved." },
+  "soon": { "title": "Coming soon", "body": "This screen arrives in a later stage. Dashboards are still available in the old console." }
+}
