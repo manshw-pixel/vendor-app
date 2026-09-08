@@ -58,6 +58,10 @@ export default function Bill() {
   const [lines, setLines] = useState<Draft[]>([]);
   const [token, setToken] = useState<number | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // What of the write has already landed. A retry RESUMES from here: re-running
+  // createBill would orphan the first bill in `recording` with its lines attached, and
+  // issue_token's own guard cannot catch that -- it is a different bill.
+  const [written, setWritten] = useState<{ billId: string; linesAdded: boolean } | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
 
@@ -93,34 +97,49 @@ export default function Bill() {
     setIssuing(true);
     setFailure(null);
 
-    const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
-    if (billError || !bill) {
-      setFailure(describeError(billError) ?? { key: "error.unknown", detail: "" });
-      setIssuing(false);
-      return;
+    let billId = written?.billId ?? null;
+    if (billId === null) {
+      const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
+      if (billError || !bill) {
+        return fail(describeError(billError));
+      }
+      billId = bill.id as string;
+      setWritten({ billId, linesAdded: false });
     }
-    // addLines short-circuits an empty basket with { error: null } and NO data key, so
-    // only the error is read here.
-    const { error: linesError } = await addLines(vendorId, bill.id as string, lines);
-    if (linesError) {
-      setFailure(describeError(linesError));
-      setIssuing(false);
-      return;
+
+    if (!written?.linesAdded) {
+      // addLines short-circuits an empty basket with { error: null } and NO data key, so
+      // only the error is read here.
+      const { error: linesError } = await addLines(vendorId, billId, lines);
+      if (linesError) {
+        return fail(describeError(linesError));
+      }
+      setWritten({ billId, linesAdded: true });
     }
-    const { data: issued, error: tokenError } = await issueToken(bill.id as string);
-    setIssuing(false);
+
+    const { data: issued, error: tokenError } = await issueToken(billId);
     if (tokenError || issued == null) {
-      setFailure(describeError(tokenError) ?? { key: "error.unknown", detail: "" });
-      return;
+      return fail(describeError(tokenError));
     }
+    setIssuing(false);
     // The server's number, not one recomputed here.
     setToken(Number(issued));
     setConfirming(false);
+    setWritten(null);
     setPhase("done");
+  }
+
+  /** Every failure path closes the dialog, so the banner underneath is actually readable
+   *  -- a modal left open over an invisible error tells the recorder nothing. */
+  function fail(described: { key: string; detail: string } | null) {
+    setFailure(described ?? { key: "error.unknown", detail: "" });
+    setIssuing(false);
+    setConfirming(false);
   }
 
   function startNew() {
     setPhase("customer");
+    setWritten(null);
     setCustomer(null);
     setLines([]);
     setToken(null);
@@ -155,14 +174,17 @@ export default function Bill() {
             </p>
           )}
 
-          <ItemGrid
-            items={items}
-            lang={asLang(i18n.language)}
-            onAdd={(line) => setLines((prev) => [...prev, line])}
-          />
+          {!written?.linesAdded && (
+            <ItemGrid
+              items={items}
+              lang={asLang(i18n.language)}
+              onAdd={(line) => setLines((prev) => [...prev, line])}
+            />
+          )}
 
           <Basket
             lines={lines}
+            frozen={written?.linesAdded ?? false}
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
           />
 

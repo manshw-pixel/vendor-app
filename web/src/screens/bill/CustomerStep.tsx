@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { matchCustomers, validateCustomer, isDuplicateMobile, type Customer } from "../../customers";
-import { createCustomer } from "../../data";
+import { createCustomer, findCustomerByMobile } from "../../data";
 import { describeError } from "../../errors";
 
 /**
@@ -25,7 +25,8 @@ export function CustomerStep({
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", flat_no: "", mobile: "" });
   const [missing, setMissing] = useState(false);
-  const [duplicate, setDuplicate] = useState(false);
+  const [duplicate, setDuplicate] = useState<Customer | null>(null);
+  const [duplicateUnreachable, setDuplicateUnreachable] = useState(false);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -33,7 +34,8 @@ export function CustomerStep({
 
   async function save() {
     setMissing(false);
-    setDuplicate(false);
+    setDuplicate(null);
+    setDuplicateUnreachable(false);
     setFailure(null);
     const check = validateCustomer(form);
     if (!check.ok) {
@@ -44,11 +46,19 @@ export function CustomerStep({
     const { data, error } = await createCustomer(vendorId, form);
     setSaving(false);
     if (isDuplicateMobile(error)) {
-      // The row already exists; offer it rather than a constraint message. If it is not
-      // in the fetched list the recorder can still find it by searching.
-      setDuplicate(true);
-      const existing = customers.find((c) => c.mobile === form.mobile.trim());
-      if (existing) onPick(existing);
+      // The row already exists. Offer it -- do not silently switch the recorder to a
+      // customer they have not seen, and do not leave them with a constraint message and
+      // nowhere to go. It may not be in the fetched list at all (another recorder added
+      // it, or a policy filtered it out of this fetch), so ask for it by mobile.
+      const mobile = form.mobile.trim();
+      const known = customers.find((c) => c.mobile === mobile);
+      if (known) {
+        setDuplicate(known);
+        return;
+      }
+      const found = await findCustomerByMobile(mobile);
+      if (found.data) setDuplicate(found.data as Customer);
+      else setDuplicateUnreachable(true);
       return;
     }
     if (error || !data) {
@@ -106,7 +116,23 @@ export function CustomerStep({
             </label>
           ))}
           {missing && <p className="text-sm text-red-600">{t("bill.required")}</p>}
-          {duplicate && <p className="text-sm text-amber-700">{t("bill.customerExists")}</p>}
+          {(duplicate ?? duplicateUnreachable) && (
+            <div className="space-y-2">
+              <p className="text-sm text-amber-700">{t("bill.customerExists")}</p>
+              {duplicate && (
+                <button
+                  onClick={() => onPick(duplicate)}
+                  data-testid="duplicate-offer"
+                  className="w-full text-left border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 min-h-[44px]"
+                >
+                  <span className="block font-medium text-slate-800">{duplicate.name}</span>
+                  <span className="block text-xs text-slate-500">
+                    {duplicate.flat_no} · {duplicate.mobile}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
           {failure && (
             <p className="text-sm text-red-600">
               {t(failure.key)} <span className="text-xs text-slate-400">{failure.detail}</span>

@@ -7,7 +7,17 @@ const rupees = (n: number): string => `₹${n}`;
 
 /** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
  *  nothing on this screen ever sends a total to the server. */
-export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove: (index: number) => void }) {
+export function Basket({
+  lines,
+  onRemove,
+  frozen = false,
+}: {
+  lines: readonly Draft[];
+  onRemove: (index: number) => void;
+  /** Set once the lines are in the database and only the token is missing: editing then
+   *  would silently diverge from the rows a retry is about to have tokenised. */
+  frozen?: boolean;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -21,8 +31,9 @@ export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove:
             <li key={`${l.itemId}-${i}`}>
               <button
                 onClick={() => onRemove(i)}
+                disabled={frozen}
                 aria-label={`${t("bill.remove")} ${l.name}`}
-                className="w-full px-3 py-3 min-h-[44px] text-left active:bg-slate-100"
+                className="w-full px-3 py-3 min-h-[44px] text-left active:bg-slate-100 disabled:opacity-60"
               >
                 <span className="flex justify-between items-baseline gap-3">
                   <span className="font-medium text-slate-800">{l.name}</span>
@@ -33,7 +44,8 @@ export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove:
                   </span>
                 </span>
                 <span className="block text-xs text-slate-500">
-                  {l.qtyKg} kg × {rupees(l.unitPrice)} · {t("bill.remove")}
+                  {t("bill.qtyLine", { qty: l.qtyKg })} × {rupees(l.unitPrice)}
+                  {!frozen && ` · ${t("bill.remove")}`}
                 </span>
               </button>
             </li>

@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("../data", () => ({
   listItems: vi.fn(async () => ({ data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true }], error: null })),
   listCustomers: vi.fn(async () => ({ data: [{ id: "c1", name: "Asha", flat_no: "A-1", mobile: "+9198" }], error: null })),
   createCustomer: vi.fn(),
+  findCustomerByMobile: vi.fn(),
   createBill: vi.fn(async () => ({ data: { id: "b1" }, error: null })),
   addLines: vi.fn(async () => ({ error: null })),
   issueToken: vi.fn(async () => ({ data: 7, error: null })),
@@ -61,5 +62,158 @@ describe("the bill screen", () => {
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1.234" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     expect(await screen.findByText(/two decimal places|दोन|दो/i)).toBeTruthy();
+  });
+
+  // The four cases below guard requirements a later change could quietly undo. Each one
+  // fails on the regression it names, not merely on a rewrite.
+
+  it("creates no bill until the confirm is accepted -- an abandoned basket leaves no row", async () => {
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    // The dialog is open and nothing has been written.
+    expect(await screen.findByRole("button", { name: /issue the token/i })).toBeTruthy();
+    expect(data.createBill).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    await waitFor(() => expect(data.createBill).toHaveBeenCalledTimes(1));
+  });
+
+  it("still sells an item at zero stock -- complete_bill clamps the decrement deliberately", async () => {
+    (data.listItems as unknown as Mock).mockResolvedValueOnce({
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+
+    const tile = await screen.findByText(/Onion|कांदा/);
+    const button = tile.closest("button");
+    expect(button).toHaveProperty("disabled", false);
+
+    fireEvent.click(tile);
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
+    expect(screen.getByRole("button", { name: /done/i })).toHaveProperty("disabled", false);
+  });
+
+  it("will not issue a token while offline -- a token cannot be promised without the server", async () => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    try {
+      render(<Bill />);
+      fireEvent.click(await screen.findByText("Asha"));
+      fireEvent.click(await screen.findByText(/Onion|कांदा/));
+      fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+      await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
+      expect(screen.getByRole("button", { name: /done/i })).toHaveProperty("disabled", true);
+    } finally {
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    }
+  });
+
+  it("surfaces a failed token, and the retry resumes rather than creating a second bill", async () => {
+    (data.issueToken as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", message: "boom" },
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    // The recorder is told something true, and the dialog is out of the way of it.
+    expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /issue the token/i })).toBeNull(),
+    );
+
+    // Retry: the bill already exists, so it must be reused, and the lines must not be
+    // inserted twice.
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText("7")).toBeTruthy();
+    expect(data.createBill).toHaveBeenCalledTimes(1);
+    expect(data.addLines).toHaveBeenCalledTimes(1);
+    expect(data.issueToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("closes the basket for good once the token is issued -- the policies freeze it", async () => {
+    // Requirement 2, the one-way door. Once issue_token moves the bill to 'billed',
+    // bills_recorder_update and bill_items_write both stop applying. A basket left
+    // mounted behind the token screen would accept edits the database then refuses,
+    // silently, so assert it is genuinely gone rather than merely covered.
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText("7")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /done/i })).toBeNull();
+    expect(screen.queryByTestId("running-total")).toBeNull();
+    expect(screen.queryByLabelText(/weight/i)).toBeNull();
+  });
+
+  it("offers the existing customer when the mobile is already taken, in both branches", async () => {
+    // Requirement 9. Both branches were silently broken once: the in-list branch picked
+    // the customer without ever showing the message, and the not-in-list branch showed
+    // the message with no route to the customer at all.
+    const dupe = {
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "customers_vendor_id_mobile_key"',
+    };
+
+    // Branch A: the customer IS in the already-fetched list.
+    (data.createCustomer as Mock).mockResolvedValueOnce({ data: null, error: dupe });
+    const a = render(<Bill />);
+    fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "A-1" } });
+    fireEvent.change(screen.getByLabelText(/^mobile$/i), { target: { value: "+9198" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // Anchored selectors throughout this case: a loose /name/i also matches the search
+    // box labelled "Search by name, flat or mobile", and a loose matcher shaping a test
+    // is how the running-total assertion went wrong earlier.
+    expect(await screen.findByText(/already exists/i)).toBeTruthy();
+    // The OFFER specifically, not any occurrence of the name -- the customer list behind
+    // the form also renders "Asha", so a bare text match would pass without an offer.
+    expect((await screen.findByTestId("duplicate-offer")).textContent).toMatch(/Asha/);
+    expect(data.findCustomerByMobile).not.toHaveBeenCalled();
+    a.unmount();
+
+    // Branch B: the customer is NOT in the fetched list, so it must be fetched by mobile.
+    // This is the branch whose comment used to claim the recorder "can still find it by
+    // searching" -- which was false, since matchCustomers filters the fetched array.
+    (data.createCustomer as Mock).mockResolvedValueOnce({ data: null, error: dupe });
+    (data.findCustomerByMobile as Mock).mockResolvedValueOnce({
+      data: { id: "c9", name: "Ravi", flat_no: "B-9", mobile: "+9199" },
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Ravi" } });
+    fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "B-9" } });
+    fireEvent.change(screen.getByLabelText(/^mobile$/i), { target: { value: "+9199" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(data.findCustomerByMobile).toHaveBeenCalledWith("+9199"));
+    expect(await screen.findByText(/already exists/i)).toBeTruthy();
+    expect((await screen.findByTestId("duplicate-offer")).textContent).toMatch(/Ravi/);
   });
 });

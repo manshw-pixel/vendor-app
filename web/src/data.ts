@@ -57,6 +57,17 @@ export async function createCustomer(
     .single();
 }
 
+/** The one row a duplicate-mobile insert collided with. The recorder cannot reach it by
+ *  searching -- matchCustomers filters the list already fetched, which by definition does
+ *  not contain it -- so the screen has to ask for it by name. */
+export async function findCustomerByMobile(mobile: string) {
+  return supabase
+    .from("customers")
+    .select("id, name, flat_no, mobile")
+    .eq("mobile", mobile)
+    .maybeSingle();
+}
+
 export async function createBill(vendorId: string, customerId: string, recorderId: string) {
   // No total. issue_token recomputes it from the line items, and sending one here would
   // suggest the client's figure is authoritative when the server discards it.
