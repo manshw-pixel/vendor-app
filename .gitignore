@@ -7,3 +7,10 @@ supabase/.branches/
 *.log
 .DS_Store
 .superpowers/
+
+# Stray secret files. A token pasted into the repo root must never be committable.
+Token.txt
+token.txt
+*token*.txt
+*.key
+*.pem
