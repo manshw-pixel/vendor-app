@@ -1,0 +1,76 @@
+name: Deploy console to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # so the gate runs before a merge, not only after one. deploy is skipped on
+  # pull_request runs -- publishing a branch to the live site would defeat the point.
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # per-ref, so a PR's test run cannot cancel a main deploy
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The access-control gate. Runs against a REAL PostgreSQL rather than a mock, so a
+  # change to a policy, a function or a view fails the build instead of reaching the
+  # console silently. No Docker-in-Docker and no Supabase CLI needed: tests/shim.sql
+  # supplies the roles and auth.uid() that a plain server lacks, which is the whole
+  # reason the suite runs anywhere Postgres does.
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Match production's major (17.x) -- a suite green on a different major is not
+        # evidence about the engine this ships on.
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vendor_app_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:5432/vendor_app_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # NEVER pipe this -- run.mjs's exit code IS the gate, and a pipe replaces it.
+      - run: npm test
+
+  deploy:
+    needs: [test]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      # Publish ONLY the console. `path: .` would serve the migrations, the tests and
+      # every doc from the live site -- the repo is public either way, but the site
+      # should be the app, not the source tree.
+      - run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
