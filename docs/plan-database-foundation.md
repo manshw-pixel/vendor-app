@@ -6,14 +6,13 @@
 
 **Architecture:** One Supabase Cloud project, tenanted by `vendor_id`, with RLS as the *only* authorization layer (there is no app server). Anything unforgeable — token issuance, stock decrements, points awards — lives in `SECURITY DEFINER` functions that clients may call but whose tables clients cannot write. Outbound WhatsApp messages are queued as rows inside the originating transaction, so delivery can fail without corrupting a sale.
 
-**Tech Stack:** Postgres (Supabase Cloud), Supabase CLI 2.x, pg_cron, Node 24 + `@supabase/supabase-js` + `pg` for the test harness.
+**Tech Stack:** Postgres 17 (Supabase), Supabase CLI 2.x local stack, pg_cron, Node 24 + `@supabase/supabase-js` + `pg` for the test harness.
 
-> **Superseded in places.** This plan was written against a local `supabase start` stack.
-> The project has since moved entirely to Supabase Cloud: there is no local stack, the
-> suite runs against a second disposable Cloud project, and the reset guard pins the
-> target by project ref rather than by loopback host. Where the listings below show local
-> ports, `127.0.0.1` defaults, or `assertLocalDb`, the README and `tests/fixtures.mjs` are
-> current and this document is history.
+> **Updated in places.** Production now exists: a Supabase Cloud project in
+> `ap-northeast-1` on Postgres 17.6, with all five migrations deployed. The local stack is
+> pinned to `major_version = 17` to match it, not the 15 shown below, and the reset guard
+> additionally checks the API url and names the production project in its refusal. Where
+> this document and `README.md` / `tests/fixtures.mjs` disagree, the latter are current.
 
 **Spec:** `docs/superpowers/specs/2026-09-07-vegetable-vendor-app-design.md`
 (Product spec it derives from: `SKILLVendor.md` at the repo root.)

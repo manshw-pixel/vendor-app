@@ -1,17 +1,29 @@
-# This project runs entirely on Supabase Cloud. There is no local stack, so this file no
-# longer describes one: the local [api]/[db] port pins and major_version are gone, since
-# nothing here is ever started with `supabase start`.
+# Describes the LOCAL stack only -- the one `supabase start` brings up for the test
+# suite. It is committed, so nothing secret belongs here.
 #
-# What is left is the link for `supabase db push`. Note that `db push` sends MIGRATIONS
-# ONLY -- it does not push the [auth] settings below. Those must be set in the Cloud
-# dashboard of each project, by hand.
+# Production is a separate Supabase Cloud project reached with `supabase db push`. None
+# of the settings below are pushed to it: `db push` sends migrations and nothing else, so
+# the Cloud project's auth and extension settings are dashboard work. See README.md.
 project_id = "vendor-app"
+
+[api]
+enabled = true
+# 55321/55322 rather than the default 54321/54322, so this stack can run alongside
+# another local Supabase project without colliding.
+port = 55321
+schemas = ["public"]
+
+[db]
+port = 55322
+# Matches production, which runs Postgres 17.6. Tests that pass on a different major are
+# not evidence about the engine this ships on. Changing this needs `supabase stop` and
+# `supabase start` to reprovision the container.
+major_version = 17
 
 [auth]
 enabled = true
-# MUST also be set in the dashboard of the TEST project
-# (Authentication -> Sign In / Providers -> Confirm email: off).
-# Tests sign up real users and need a session immediately. With confirmations on, signUp
-# returns { session: null } and every downstream assertion fails on a null token.
-# Leave confirmations ON in the production project.
+site_url = "http://127.0.0.1:3000"
+# Tests sign up real users and need a session immediately. With confirmations on,
+# signUp returns { session: null } and every downstream assertion fails on a null token.
+# This is a LOCAL convenience: production keeps confirmations on.
 enable_confirmations = false

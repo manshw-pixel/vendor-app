@@ -1,83 +1,68 @@
 // The reset in fixtures.mjs drops the whole public schema and empties auth.users. Its
 // connection string comes from $SUPABASE_DB_URL, so a stray export left over from a
 // deploy shell is all that stands between `npm test` and a wiped production project.
-// Nothing local exists any more -- both the suite and the deploy target are Supabase
-// Cloud projects -- so the guard can no longer lean on "is it loopback". It pins the
-// target by project ref instead: only the project named by $SUPABASE_TEST_PROJECT_REF
-// may be reset, and $SUPABASE_PROD_PROJECT_REF may never be, whatever else matches.
-// These cases pin the refusal. They are pure -- no database, no environment -- so they
-// can also be run on their own, without a project to point at.
+//
+// Tests run against the local `supabase start` stack; production lives on Supabase
+// Cloud and is never a test target. So the guard allows loopback and refuses everything
+// else -- and refuses the production project BY NAME when it can recognise it, because
+// "postgresql://...@db.cnnqidkmcxkgwxnulvig.supabase.co" deserves a better error than
+// "not a loopback host".
+//
+// These cases are pure -- no database, no environment -- so they can also be run on
+// their own, without a stack up.
 import { test, assert } from "./framework.mjs";
-import { assertTestProject, projectRefFromDbUrl, projectRefFromApiUrl } from "./fixtures.mjs";
+import { assertLocalDb, projectRefFromDbUrl, projectRefFromApiUrl } from "./fixtures.mjs";
 
-const TEST_REF = "aaaaaaaaaaaaaaaaaaaa";
-const PROD_REF = "bbbbbbbbbbbbbbbbbbbb";
+const PROD_REF = "cnnqidkmcxkgwxnulvig";
+const OTHER_REF = "bbbbbbbbbbbbbbbbbbbb";
 
-const DIRECT = `postgresql://postgres:pw@db.${TEST_REF}.supabase.co:5432/postgres`;
-const POOLER = `postgresql://postgres.${TEST_REF}:pw@aws-0-ap-south-1.pooler.supabase.com:5432/postgres`;
-const API = `https://${TEST_REF}.supabase.co`;
+const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:55322/postgres";
+const LOCAL_API = "http://127.0.0.1:55321";
 
-const ok = (over = {}) => ({ dbUrl: DIRECT, apiUrl: API, testRef: TEST_REF, prodRef: PROD_REF, ...over });
+const ok = (over = {}) => ({ dbUrl: LOCAL_DB, apiUrl: LOCAL_API, prodRef: PROD_REF, ...over });
 
 const refuses = (over, why) => {
   let threw = false;
-  try { assertTestProject(ok(over)); } catch { threw = true; }
+  try { assertLocalDb(ok(over)); } catch { threw = true; }
   assert(threw, `expected a refusal for ${why}: ${JSON.stringify(over)}`);
 };
 
-const allows = (over = {}) => assertTestProject(ok(over));
+const allows = (over = {}) => assertLocalDb(ok(over));
 
-test("the reset guard reads a project ref out of every Cloud URL shape", () => {
-  assert(projectRefFromDbUrl(DIRECT) === TEST_REF, "direct connection host");
-  assert(projectRefFromDbUrl(POOLER) === TEST_REF, "pooler username");
-  assert(projectRefFromApiUrl(API) === TEST_REF, "api host");
-});
-
-test("the reset guard allows the designated test project", () => {
+test("the reset guard allows the local stack", () => {
   allows();
-  allows({ dbUrl: POOLER });
-  // The prod ref being unset is normal -- the ref match alone is what authorises.
+  allows({ dbUrl: "postgresql://postgres:postgres@localhost:55322/postgres" });
+  allows({ dbUrl: "postgresql://postgres:postgres@[::1]:55322/postgres" });
+  allows({ apiUrl: "http://localhost:55321" });
+  // Not naming a production project is normal; loopback is what authorises.
   allows({ prodRef: undefined });
 });
 
-test("the reset guard refuses a database that is not the test project", () => {
+test("the reset guard refuses the production project", () => {
   refuses({ dbUrl: `postgresql://postgres:pw@db.${PROD_REF}.supabase.co:5432/postgres` },
-          "a database belonging to another project");
-  refuses({ dbUrl: `postgresql://postgres.${PROD_REF}:pw@aws-0-ap-south-1.pooler.supabase.com:5432/postgres` },
-          "another project reached through the pooler");
+          "the production database");
+  refuses({ dbUrl: `postgresql://postgres.${PROD_REF}:pw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres` },
+          "production through the pooler");
 });
 
-test("the reset guard refuses when the API and the database are different projects", () => {
-  // Resetting one project while asserting against another would report green having
-  // wiped something nobody was looking at.
-  refuses({ apiUrl: `https://${PROD_REF}.supabase.co` }, "an API pointed at another project");
+test("the reset guard refuses any Supabase Cloud project, named or not", () => {
+  // Refusing only the known prod ref would let a second Cloud project through.
+  refuses({ dbUrl: `postgresql://postgres:pw@db.${OTHER_REF}.supabase.co:5432/postgres` },
+          "some other cloud project");
+  refuses({ prodRef: undefined, dbUrl: `postgresql://postgres:pw@db.${OTHER_REF}.supabase.co:5432/postgres` },
+          "a cloud project with no prod ref configured");
 });
 
-test("the reset guard refuses the production project by name", () => {
-  // Belt and braces: even if SUPABASE_TEST_PROJECT_REF is mistyped to equal prod.
-  refuses({ testRef: PROD_REF, dbUrl: `postgresql://postgres:pw@db.${PROD_REF}.supabase.co:5432/postgres`,
-            apiUrl: `https://${PROD_REF}.supabase.co` },
-          "the production ref, even when named as the test ref");
+test("the reset guard refuses any other remote host", () => {
+  refuses({ dbUrl: "postgresql://postgres:pw@10.0.0.5:5432/postgres" }, "a LAN address");
+  refuses({ dbUrl: "postgresql://postgres:pw@db.internal:5432/postgres" }, "an internal hostname");
 });
 
-test("the reset guard refuses when no test project is named", () => {
-  refuses({ testRef: undefined }, "an unset SUPABASE_TEST_PROJECT_REF");
-  refuses({ testRef: "" }, "an empty SUPABASE_TEST_PROJECT_REF");
-});
-
-test("the reset guard refuses the transaction pooler port", () => {
-  // 6543 is transaction mode: it cannot run the multi-statement DDL resetStack() sends,
-  // and fails in the middle rather than up front. Refuse it with a real explanation.
-  refuses({ dbUrl: `postgresql://postgres.${TEST_REF}:pw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres` },
-          "the transaction pooler port");
-});
-
-test("the reset guard refuses anything local", () => {
-  // Nothing local exists any more. A leftover `supabase start` export is a mistake now,
-  // not a happy path.
-  refuses({ dbUrl: "postgresql://postgres:postgres@127.0.0.1:55322/postgres" }, "loopback");
-  refuses({ dbUrl: "postgresql://postgres:postgres@localhost:55322/postgres" }, "localhost");
-  refuses({ apiUrl: "http://127.0.0.1:55321" }, "a loopback API");
+test("the reset guard refuses a remote API even with a local database", () => {
+  // Resetting the local stack while asserting against Cloud would report green having
+  // tested nothing, and would sign real users up in production.
+  refuses({ apiUrl: `https://${PROD_REF}.supabase.co` }, "the production API");
+  refuses({ apiUrl: `https://${OTHER_REF}.supabase.co` }, "a remote API");
 });
 
 test("the reset guard fails closed on input it cannot parse", () => {
@@ -85,9 +70,18 @@ test("the reset guard fails closed on input it cannot parse", () => {
   refuses({ dbUrl: "" }, "an empty string");
   refuses({ dbUrl: undefined }, "undefined");
   refuses({ apiUrl: undefined }, "an undefined API url");
-  refuses({ dbUrl: "postgresql://postgres:pw@10.0.0.5:5432/postgres" }, "a host carrying no ref");
   // Credentials may contain an @, which naive splitting gets wrong. The real host here
-  // is prod; the test ref is sitting in the password.
-  refuses({ dbUrl: `postgresql://postgres:p@db.${TEST_REF}.supabase.co@db.${PROD_REF}.supabase.co:5432/postgres` },
-          "a test ref hiding in the password");
+  // is production; the loopback address is sitting in the password.
+  refuses({ dbUrl: `postgresql://postgres:p@127.0.0.1@db.${PROD_REF}.supabase.co:5432/postgres` },
+          "a loopback string hiding in the password");
+});
+
+test("the ref readers recognise every Cloud URL shape", () => {
+  // These exist so the refusal above can name the project rather than just its host.
+  assert(projectRefFromDbUrl(`postgresql://postgres:pw@db.${PROD_REF}.supabase.co:5432/postgres`) === PROD_REF,
+         "direct connection host");
+  assert(projectRefFromDbUrl(`postgresql://postgres.${PROD_REF}:pw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`) === PROD_REF,
+         "pooler username");
+  assert(projectRefFromApiUrl(`https://${PROD_REF}.supabase.co`) === PROD_REF, "api host");
+  assert(projectRefFromDbUrl(LOCAL_DB) === null, "loopback carries no ref");
 });

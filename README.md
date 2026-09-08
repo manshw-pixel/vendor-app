@@ -3,10 +3,10 @@
 The Postgres foundation for a vegetable & fruit vendor management app on **Supabase
 Cloud**. One project serves many vendors, tenanted by `vendor_id`.
 
-**Everything runs on Supabase Cloud. Nothing runs locally** — there is no
-`supabase start` stack, no Docker requirement. That takes two Cloud projects: a
-production one, and a disposable one the test suite is allowed to wipe. See
-[Running the suite](#running-the-suite) and [Deploying](#deploying).
+**Production is a Supabase Cloud project. Tests run against a local `supabase start`
+stack.** The two never meet: the suite wipes its database on every run, so it is barred
+from ever reaching Cloud. See [Running the suite](#running-the-suite) and
+[Deploying](#deploying).
 
 - Product spec: [`docs/product-spec.md`](docs/product-spec.md)
 - Design: [`docs/design.md`](docs/design.md)
@@ -14,10 +14,10 @@ production one, and a disposable one the test suite is allowed to wipe. See
 
 ## Verification status
 
-`npm test` last ran **63 cases, 0 failures** — but against the local `supabase start`
-stack, which no longer exists in this project. **That result is historical.** The suite
-has not yet been re-run against Cloud, and until it has, treat the coverage below as
-"passed once, on a different engine" rather than as a current green.
+`npm test` ran **63 cases, 0 failures** (exit 0) against the local `supabase start`
+stack, with all five migrations applied from `supabase/migrations/` in filename order.
+That run was on **PostgreSQL 15.8**; the local stack is now pinned to **17** to match
+production, so the suite needs one re-run to be current again.
 
 What the 63 cases cover:
 
@@ -35,48 +35,31 @@ What the 63 cases cover:
   idempotency on both functions.
 - **Points expiry.** `expire_points()` offsets lapsed points, leaves unexpired ones
   alone, and is idempotent across runs.
-- **`pg_cron`.** `create extension pg_cron` and `cron.schedule` both succeeded, and both
+- **`pg_cron`.** `create extension pg_cron` and `cron.schedule` both succeed locally, and
   are available and supported on Cloud.
-
-Re-running these against the test project is what turns this section green again.
 
 ## Running the suite
 
-The suite talks to a **Supabase Cloud project set aside for tests**. It is not your
-production project, and it must not be: `tests/fixtures.mjs` begins each run by dropping
-the `public` schema and deleting every row in `auth.users`, then replaying
-`supabase/migrations/` in filename order — which is what makes the suite repeatable, and
-what makes it data loss anywhere else.
-
-**One-time setup**
-
-1. Create a second, empty Supabase Cloud project. Free tier is fine.
-2. In that project's dashboard, turn **email confirmations off**
-   (Authentication → Sign In / Providers). Tests sign up real users and need a session
-   immediately; with confirmations on, `signUp` returns `{ session: null }` and every
-   downstream assertion fails on a null token. `supabase db push` does *not* push this
-   setting — it must be set by hand. Leave it **on** in production.
-3. Enable `pg_cron` on it (Database → Extensions), which `0005_cron.sql` needs.
-4. Copy `.env.example` to `.env` and fill it in.
-
-**Each run**
+Docker Desktop must be running (it provisions its own `docker-desktop` WSL distro; a
+separate WSL distro is not needed). Then:
 
 ```bash
+supabase start              # ports 55321 API / 55322 DB, Postgres 17
+supabase status -o json     # copy anon and service_role keys into .env
 npm install
-npm test        # the exit code is the gate -- never pipe it
+npm test                    # the exit code is the gate -- never pipe it
 ```
 
-The five required variables are documented in [`.env.example`](.env.example). Two things
-the guard is strict about, both of which fail up front with an explanation:
+`tests/fixtures.mjs` drops and rebuilds the `public` schema from `supabase/migrations/`
+in filename order on every run, so the suite is repeatable.
 
-- `SUPABASE_DB_URL` must be a **session-mode** connection on port **5432** (the direct
-  connection, or the session pooler). The transaction pooler on 6543 cannot run the
-  multi-statement DDL the reset sends, and would fail halfway through a drop.
-- `SUPABASE_DB_URL` and `SUPABASE_API_URL` must name the **same** project, and it must be
-  the one in `SUPABASE_TEST_PROJECT_REF`.
+The API and DB urls default to loopback, so normally only the two keys need setting —
+see [`.env.example`](.env.example). The ports are **55321/55322** rather than the CLI's
+default 54321/54322, so this stack can run alongside another local Supabase project
+without colliding.
 
-Free-tier projects pause after inactivity; an unpaused project is a prerequisite, and a
-paused one surfaces as a connection failure.
+If you bumped `major_version` in `supabase/config.toml`, `supabase stop && supabase start`
+is required to reprovision the container — the running one keeps its old major.
 
 ## What is here
 
@@ -95,22 +78,36 @@ own role and tenant guards, because a definer function bypasses RLS.
 
 ## Deploying
 
-**Deploys go to the production project. Tests never do.** Both are on Cloud now, so
-"is it local?" can no longer tell them apart — the guard in `tests/fixtures.mjs`
-identifies the target instead. It resets the project named by `SUPABASE_TEST_PROJECT_REF`
-and refuses everything else: a different ref, a DB and API pointed at different projects,
-an unset ref, `SUPABASE_PROD_PROJECT_REF`, or anything it cannot parse a ref out of. A
-stale `SUPABASE_DB_URL` in a deploy shell therefore fails closed instead of wiping the
-project. Do not weaken that guard; `tests/guard.test.mjs` pins every one of those
-refusals and needs no database to run.
+**Deploys go to Cloud. Tests never do.** The suite in `tests/` begins by dropping the
+`public` schema and deleting every row in `auth.users`; against the Cloud project that is
+not a test run, it is data loss. `tests/fixtures.mjs` therefore refuses outright to reset
+any host that is not loopback — the database *and* the API url, since a local database
+with a Cloud API would reset the local stack, assert against production, and sign test
+users up in its auth store. Setting `SUPABASE_PROD_PROJECT_REF` additionally lets the
+refusal name the production project rather than merely calling it remote. A stale
+`SUPABASE_DB_URL` in a deploy shell fails closed instead of wiping the project.
+
+Do not weaken that guard; `tests/guard.test.mjs` pins every one of those refusals and
+needs no database to run.
 
 Migrations reach Cloud through the CLI, in a shell with no test variables exported:
 
 ```bash
 supabase login                          # stores a token outside the repo
-supabase link --project-ref <your-ref>  # once per clone
+supabase link --project-ref <prod-ref>  # once per clone
 supabase db push                        # applies supabase/migrations/ in order
 ```
+
+**Deployed:** all five migrations are live on the production project
+(`ap-northeast-1`, Postgres 17.6) and verified there — 10 tables, RLS on all 10,
+19 policies, 8 `security_invoker` views, 4 functions, and the
+`vendor-app-points-expiry` cron job at `0 1 * * *`.
+
+The project is schema-complete but **empty**, and the first admin cannot be created
+through the API: `app_users` writes require an existing admin of that vendor, and
+`current_vendor_id()` reads from `app_users`. The first vendor and admin are inserted by
+hand in the SQL editor after that person signs up — see
+[`docs/runbook-first-admin.md`](docs/runbook-first-admin.md).
 
 Credentials live in the CLI's own login or a gitignored `.env` — never in the repo, and
 never in `supabase/config.toml`, which is committed. Project refs are not secret, but
@@ -125,17 +122,15 @@ environment where you can see them.
 - **Production is in `ap-northeast-1` (Tokyo), not Mumbai.** Deliberate: the project was
   already created there and keeping it was preferred to recreating. With no app server,
   clients reach PostgREST directly, so this is roughly 100-150ms of round trip per query
-  from India rather than 20-30. It is a fixed cost of every screen, and the region cannot
-  be changed in place -- moving it would mean a new project and a re-push. Worth
-  revisiting if latency shows up in use.
-- **The suite has not yet run against Cloud.** The 63 cases passed on Postgres 15.8
-  locally; production runs **17.6**. The test project must be created on 17 to match, or
-  the suite proves something about an engine you do not ship on.
-- **Cloud is slower and shared.** The reset is a full schema drop and five migrations
-  over the network on every run, and the concurrency case in the token tests was written
-  against a loopback database. Watch for timeouts on the first Cloud run.
-- ~~pg_cron may not install locally.~~ Moot: nothing is local. It is available and
-  supported on Cloud, and must be enabled per project before `db push`.
+  from India rather than 20-30. The region cannot be changed in place — moving it would
+  mean a new project and a re-push. Worth revisiting if latency shows up in use.
+- **The 63 cases have not been re-run since the local stack was pinned to Postgres 17.**
+  They passed on 15.8. Production is 17.6, so the pin closes a real gap, but the run to
+  prove it has not happened yet.
+- **Local auth config is not production auth config.** `supabase/config.toml` turns email
+  confirmations off so tests get a session immediately; `db push` does not carry that
+  setting, and production keeps confirmations on. The two are configured independently
+  and can drift without anything failing loudly.
 - Points expiry is correct on *read* regardless (`customer_points_balance` filters on
   `expires_at`); the sweep exists to make the lapse an auditable ledger event.
 
