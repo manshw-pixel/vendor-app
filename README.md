@@ -3,63 +3,87 @@
 The Postgres foundation for a vegetable & fruit vendor management app on **Supabase
 Cloud**. One project serves many vendors, tenanted by `vendor_id`.
 
-**Production is a Supabase Cloud project. Tests run against a local `supabase start`
-stack.** The two never meet: the suite wipes its database on every run, so it is barred
-from ever reaching Cloud. See [Running the suite](#running-the-suite) and
-[Deploying](#deploying).
+**Production is a Supabase Cloud project. Tests run against the machine's native
+PostgreSQL** — no Docker, no Supabase CLI stack. The two never meet: the suite wipes its
+database on every run, so it is barred from ever reaching Cloud. See
+[Running the suite](#running-the-suite) and [Deploying](#deploying).
 
 - Product spec: [`docs/product-spec.md`](docs/product-spec.md)
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## Verification status
+## ✅ Verified: 65 cases, 0 failures
 
-`npm test` ran **63 cases, 0 failures** (exit 0) against the local `supabase start`
-stack, with all five migrations applied from `supabase/migrations/` in filename order.
-That run was on **PostgreSQL 15.8**; the local stack is now pinned to **17** to match
-production, so the suite needs one re-run to be current again.
+`npm test` runs **65 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all five migrations applied from `supabase/migrations/` in filename order,
+unmodified — the same files `supabase db push` sends to Cloud.
 
-What the 63 cases cover:
+**RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
+then `set role authenticated` with `request.jwt.claims` set, so every policy applies. This
+was confirmed by mutation rather than assumed: replacing `items_read`'s tenant check with
+`using (true)` makes a cross-tenant read start returning rows, and restoring it blocks
+them again. An earlier shim run on this project reported the schema healthy while
+testing none of the security model, because it ran as superuser — superuser bypasses RLS
+entirely.
+
+Covered:
 
 - **RLS.** Vendor A sees none of vendor B's rows on any of the nine tenant tables, and
   cannot insert or update into vendor B. The role guards hold: recorder and biller are
   refused item price changes, admin is allowed. The `points_ledger` is append-only to
   every role, `vendor_counters` is writable by none, and a recorder cannot append a line
-  to an already-billed bill. An anonymous client sees nothing on any table.
-- **Through PostgREST and GoTrue.** The signup/session fixtures, the grant surface, and
-  all eight dashboard views as seen by an `authenticated` session — including that the
-  views are `security_invoker` and do not leak across vendors.
-- **The billing lifecycle** under RLS: sequential tokens with no collision under
-  concurrency, the tenant and role guards on `issue_token` and `complete_bill`, stock
-  decrements, vendor-configured points thresholds, the recomputed line-item total, and
-  idempotency on both functions.
+  to an already-billed bill. An anonymous (`anon`) client sees nothing on any table.
+- **The billing lifecycle** under RLS: sequential tokens with no collision across 20
+  concurrent connections, the tenant and role guards on `issue_token` and `complete_bill`,
+  stock decrements, vendor-configured points thresholds, the recomputed line-item total,
+  and idempotency on both functions.
 - **Points expiry.** `expire_points()` offsets lapsed points, leaves unexpired ones
   alone, and is idempotent across runs.
-- **`pg_cron`.** `create extension pg_cron` and `cron.schedule` both succeed locally, and
-  are available and supported on Cloud.
+- **The eight dashboard views**, including that they are `security_invoker` and do not
+  leak across vendors.
+- **The reset guard** itself — six cases, no database needed.
+
+### What the local suite does not cover
+
+The stack has no PostgREST and no GoTrue, so those are stood in for by
+[`tests/shim.sql`](tests/shim.sql) and [`tests/client.mjs`](tests/client.mjs). Honest
+limits:
+
+- **GoTrue.** No real signup, session, or JWT. `createUser` inserts into a shim
+  `auth.users`; `signInWithPassword` sets claims without verifying a password. The suite
+  tests what the database does with a caller's identity, not how that identity is
+  established.
+- **PostgREST.** The grant surface and its exact error codes are not exercised. The
+  correspondence that matters does hold — a policy-blocked write raises 42501 and a
+  policy-filtered read returns zero rows, on both — so `assertDenied` and
+  `assertInvisible` keep their meanings.
+- **`pg_cron`.** Not available on a native Windows build. `create extension pg_cron` is
+  stripped and `cron.schedule` is shimmed, so the rest of `0005_cron.sql` still runs and
+  registers its job — but nothing here proves pg_cron will *fire* it. The run prints what
+  it skipped, above the results.
+- **PostgreSQL 17.9 vs production's 17.6.** Same major, minor drift.
+
+Closing these means running the suite against a disposable Supabase Cloud project, which
+needs no code changes beyond pointing it there. That remains the eventual target.
 
 ## Running the suite
 
-Docker Desktop must be running (it provisions its own `docker-desktop` WSL distro; a
-separate WSL distro is not needed). Then:
+Needs the native PostgreSQL service (`postgresql-x64-17`) running, and a
+`vendor_app_test` database. No Docker, no WSL, no Supabase CLI.
 
 ```bash
-supabase start              # ports 55321 API / 55322 DB, Postgres 17
-supabase status -o json     # copy anon and service_role keys into .env
+createdb vendor_app_test    # once; or via pgAdmin
 npm install
 npm test                    # the exit code is the gate -- never pipe it
 ```
 
+`SUPABASE_DB_URL` defaults to
+`postgresql://postgres:postgres@127.0.0.1:5432/vendor_app_test`, so normally nothing
+needs exporting at all.
+
 `tests/fixtures.mjs` drops and rebuilds the `public` schema from `supabase/migrations/`
-in filename order on every run, so the suite is repeatable.
-
-The API and DB urls default to loopback, so normally only the two keys need setting —
-see [`.env.example`](.env.example). The ports are **55321/55322** rather than the CLI's
-default 54321/54322, so this stack can run alongside another local Supabase project
-without colliding.
-
-If you bumped `major_version` in `supabase/config.toml`, `supabase stop && supabase start`
-is required to reprovision the container — the running one keeps its old major.
+on every run, so the suite is repeatable — which is also why the guard is strict about
+*which* database it may touch. Other projects keep databases on this same server.
 
 ## What is here
 
@@ -79,13 +103,17 @@ own role and tenant guards, because a definer function bypasses RLS.
 ## Deploying
 
 **Deploys go to Cloud. Tests never do.** The suite in `tests/` begins by dropping the
-`public` schema and deleting every row in `auth.users`; against the Cloud project that is
-not a test run, it is data loss. `tests/fixtures.mjs` therefore refuses outright to reset
-any host that is not loopback — the database *and* the API url, since a local database
-with a Cloud API would reset the local stack, assert against production, and sign test
-users up in its auth store. Setting `SUPABASE_PROD_PROJECT_REF` additionally lets the
-refusal name the production project rather than merely calling it remote. A stale
-`SUPABASE_DB_URL` in a deploy shell fails closed instead of wiping the project.
+`public` schema and deleting every auth user. Two independent things must hold before it
+will run, because on a shared local server neither implies the other:
+
+- the host is **loopback** — never Cloud, never a LAN box;
+- the database is **`vendor_app_test`** — because other projects' databases live on this
+  same PostgreSQL server (onevio-crm's `crm_test` among them), and the reset would drop
+  their schema just as happily.
+
+Setting `SUPABASE_PROD_PROJECT_REF` additionally lets a refusal name the production
+project rather than merely calling it remote. A stale `SUPABASE_DB_URL` fails closed
+instead of wiping something.
 
 Do not weaken that guard; `tests/guard.test.mjs` pins every one of those refusals and
 needs no database to run.
@@ -124,13 +152,13 @@ environment where you can see them.
   clients reach PostgREST directly, so this is roughly 100-150ms of round trip per query
   from India rather than 20-30. The region cannot be changed in place — moving it would
   mean a new project and a re-push. Worth revisiting if latency shows up in use.
-- **The 63 cases have not been re-run since the local stack was pinned to Postgres 17.**
-  They passed on 15.8. Production is 17.6, so the pin closes a real gap, but the run to
-  prove it has not happened yet.
-- **Local auth config is not production auth config.** `supabase/config.toml` turns email
-  confirmations off so tests get a session immediately; `db push` does not carry that
-  setting, and production keeps confirmations on. The two are configured independently
-  and can drift without anything failing loudly.
+- **The suite does not exercise PostgREST or GoTrue.** See
+  [What the local suite does not cover](#what-the-local-suite-does-not-cover). Clients
+  reach PostgREST directly in production with no app server in between, so that surface
+  is not incidental — it is the runtime. A Cloud test project closes this.
+- **`supabase/config.toml` is now vestigial.** Nothing runs `supabase start`. It is kept
+  only because `project_id` is what `supabase link` writes against; its `[api]`, `[db]`
+  and `[auth]` sections describe a stack that is never brought up.
 - Points expiry is correct on *read* regardless (`customer_points_balance` filters on
   `expires_at`); the sweep exists to make the lapse an auditable ledger event.
 

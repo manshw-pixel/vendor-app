@@ -1,6 +1,6 @@
 // The exit code IS the gate. Never pipe this.
 import { CASES } from "./framework.mjs";
-import { bootstrap } from "./fixtures.mjs";
+import { bootstrap, SKIPPED } from "./fixtures.mjs";
 
 import "./guard.test.mjs";
 import "./smoke.test.mjs";
@@ -18,13 +18,23 @@ try {
   console.error("\nBootstrap failed, so no test ran.\n");
   console.error(e.stack || e.message);
   console.error(
-    "\nThis suite runs against the LOCAL `supabase start` stack -- never the Cloud\n" +
-    "project. If that reads as a connection failure: is Docker Desktop running, and did\n" +
-    "you run `supabase start` inside vendor-app/? Keys come from `supabase status -o json`.\n" +
-    "If it reads as a refusal instead, the guard is doing its job: it resets loopback\n" +
-    "databases and nothing else."
+    "\nThis suite runs against the machine's NATIVE PostgreSQL -- no Docker, no Supabase\n" +
+    "CLI stack. If that reads as a connection failure, check:\n" +
+    "  - the postgresql-x64-17 service is running;\n" +
+    "  - the vendor_app_test database exists;\n" +
+    "  - SUPABASE_DB_URL points at it, if you set it at all.\n" +
+    "If it reads as a refusal instead, the guard is doing its job: it resets\n" +
+    "vendor_app_test on a loopback server, and nothing else."
   );
   process.exit(2);
+}
+
+// Printed before the results, not after: a green run must not be read as covering more
+// than it did.
+if (SKIPPED.length) {
+  console.log("Not applied on this stack:");
+  for (const line of SKIPPED) console.log("  -", line);
+  console.log();
 }
 
 let pass = 0, fail = 0;

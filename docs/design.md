@@ -203,10 +203,12 @@ therefore rate-limited and opt-in only. Neither blocks slice one.
 
 ## Testing
 
-The RLS suite is a deliverable of slice one, not a follow-up. It runs against a real local
-`supabase start` — real Postgres, real GoTrue, real policies — because a mocked Supabase
-cannot test the one thing that matters here. The suite wipes its database on every run,
-so it is guarded against ever reaching the production Cloud project. See the README.
+The RLS suite is a deliverable of slice one, not a follow-up. It runs against a real
+PostgreSQL with the real policies applied and real role-switched sessions, because a
+mocked database cannot test the one thing that matters here. It runs on the machine's
+native PostgreSQL rather than a container; PostgREST and GoTrue are stood in for, which
+is a named gap rather than a hidden one — see the README. The suite wipes its database on
+every run, so it is guarded against ever reaching the production Cloud project.
 
 It seeds **two vendors × three roles** and asserts table by table that:
 

@@ -154,7 +154,7 @@ test("recorder cannot append a bill_items row once the bill is billed", async ()
 test("an anonymous client sees nothing", async () => {
   const world = await getWorld();
   const { newClient } = await import("./fixtures.mjs");
-  const anon = newClient();
+  const anon = await newClient();
   for (const table of TENANT_TABLES) {
     const { data } = await anon.from(table).select("*");
     assertInvisible(data, `${table}: anonymous read returned rows`);

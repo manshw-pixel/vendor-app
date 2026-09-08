@@ -1,17 +1,17 @@
 // Builds two complete vendors, each with all three roles signed in. Everything the RLS
 // suite asserts is "can A's session see or touch B's rows", so both worlds must be fully
 // populated before a single assertion runs.
-import { createClient } from "@supabase/supabase-js";
-import { API_URL, ANON_KEY, SERVICE_KEY, PASSWORD, sql, newClient } from "./fixtures.mjs";
+import { PASSWORD, sql, newClient, serviceClient } from "./fixtures.mjs";
 
-const admin = () => createClient(API_URL, SERVICE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+// One service_role client for the whole seed: it only creates users, and creating a
+// connection per user is pure overhead.
+let admin = null;
+const getAdmin = async () => (admin ??= await serviceClient());
 
 async function makeUser(email, vendorId, role, name) {
-  // Create through GoTrue's admin API so the user is real and can sign in, then map them
-  // to a vendor and role in app_users.
-  const { data, error } = await admin().auth.admin.createUser({
+  // Stands in for GoTrue's admin API: creates the auth.users row the session will claim
+  // to be, then maps them to a vendor and role in app_users.
+  const { data, error } = await (await getAdmin()).auth.admin.createUser({
     email, password: PASSWORD, email_confirm: true,
   });
   if (error) throw new Error(`createUser(${email}): ${error.message}`);
@@ -19,14 +19,14 @@ async function makeUser(email, vendorId, role, name) {
   await sql(`insert into app_users (id, vendor_id, role, name) values ($1,$2,$3,$4)`,
     [id, vendorId, role, name]);
 
-  const client = newClient();
+  const client = await newClient();
   const { error: signInError } = await client.auth.signInWithPassword({ email, password: PASSWORD });
   if (signInError) throw new Error(`signIn(${email}): ${signInError.message}`);
   return { id, client };
 }
 
 // Emails must be unique across the whole run: seedTwoVendors() is called by more than one
-// test file, and GoTrue rejects a duplicate address.
+// test file, and auth.users.email is unique -- as it is in GoTrue.
 let seq = 0;
 
 async function makeVendor(tag) {
