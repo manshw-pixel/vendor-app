@@ -66,7 +66,7 @@ export function Shell({ role, vendorName, name, children }:
           {routesForRole(role).map((r) => (
             <NavLink key={r.path} to={r.path}
                      className={({ isActive }) =>
-                       `px-3 py-2 text-sm whitespace-nowrap border-b-2 ${
+                       `px-3 py-2 text-sm whitespace-nowrap border-b-2 min-h-[44px] flex items-center ${
                          isActive ? "border-green-600 text-green-700 font-medium" : "border-transparent text-slate-600"}`}>
               {t(r.labelKey)}
             </NavLink>
