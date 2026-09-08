@@ -247,6 +247,68 @@ and `/console.html`; stage 1 drops the `/` copy.
 
 ---
 
+## 11a. Stage 2 screen design
+
+Added 2026-09-08, after stage 1 shipped. §5 settles the data flow and the constraints the
+database imposes; this settles the screens, which is where the ergonomics live.
+
+### Bill (recorder, and admin — the policies permit both)
+
+One screen, three phases.
+
+**1. Customer.** Search by mobile or name. No match offers an inline create form: name,
+flat no and mobile, all mandatory (#11). `(vendor_id, mobile)` is unique, so a duplicate
+must be reported as "this customer already exists" with an offer to use that customer —
+never as a raw constraint violation.
+
+**2. Items.** A grid of large tiles, each showing the item name in the active language via
+`itemName()`, the price per kg, and the **current stock**. Tap a tile, a numeric input
+takes the weight, confirm, and the line is appended.
+
+The weight field is a real `inputMode="decimal"` input, not a stepper or a custom keypad.
+Scales produce 1.35kg; fixed-step controls cannot express that without irritating the
+person holding the bag.
+
+**3. Basket.** The lines with a running total. Tapping a line edits its weight or removes
+it — free editing while the bill is `recording` is requirement #12, and the policies allow
+it precisely until `issue_token` runs. **Done** raises a confirm, then calls
+`issue_token`, then shows the token number full-screen, large enough to read across a
+counter. The only action on that screen is "start new bill": a recorder is working a
+queue, not filing a document.
+
+### Pending (biller)
+
+Bills at `status='billed'`, newest first, each row showing token number, customer name and
+total. Tap a row, confirm, `complete_bill` runs, and the result shows the points awarded
+and the stock movement. `complete_bill` is idempotent so a double tap is harmless, but the
+button still disables on submit — a spinner is cheaper than explaining idempotency to a
+biller mid-queue.
+
+### Stock is shown, not enforced
+
+Tiles display current stock and colour a low or zero one. The UI does **not** block adding
+more than the stock on hand.
+
+`complete_bill` clamps the decrement at zero deliberately. A client-side block would be a
+second, weaker copy of a rule the database already owns — and it would be wrong in the
+real case it appears to protect against, where the shop genuinely has produce the stock
+figure has not caught up with. The database is the authority; the tile is information.
+
+### Not built in stage 2
+
+- Deleting a bill. The policy permits it while `recording`, but nothing in the spec asks
+  for it. Abandoning a bill leaves a `recording` row, which is harmless, invisible to the
+  dashboards (they count completed bills) and available later if cleanup is ever wanted.
+- Redemption. See §12.
+
+### Testing
+
+Pure logic — line totals, the running total, weight validation, duplicate-mobile
+detection — is Vitest with no mocks, as in stage 1. The flow itself gets component tests
+with a mocked `supabase` client, mocking confined to those files. The E2E gap of §10 is
+unchanged: still no PostgREST or GoTrue in the test environment, still closed only by a
+Cloud test project.
+
 ## 12. Out of scope
 
 - The billing flow's WhatsApp *delivery* — slice 2 owns the sender. The SPA's writes queue
