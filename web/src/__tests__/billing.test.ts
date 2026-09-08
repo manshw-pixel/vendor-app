@@ -22,9 +22,10 @@ describe("runningTotal", () => {
   });
 
   it("sums the line totals, not the raw products", () => {
-    // Summing unrounded products then rounding once gives a different answer from the
-    // sum of rounded lines -- and the stored rows are the rounded ones.
-    expect(runningTotal([line(40.5, 1.315), line(12.5, 0.335)])).toBe(53.26 + 4.19);
+    // Sum of rounded lines (53.26 + 4.19), then rounded to paise to avoid float artifacts
+    // on the screen. Without the final rounding, 53.26 + 4.19 would display as
+    // ₹57.449999999999996 on a recorder's phone, not ₹57.45.
+    expect(runningTotal([line(40.5, 1.315), line(12.5, 0.335)])).toBe(57.45);
   });
 });
 

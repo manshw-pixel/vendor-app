@@ -16,7 +16,7 @@ export function lineTotal(unitPrice: number, qtyKg: number): number {
 export function runningTotal(lines: readonly Draft[]): number {
   // Sum of the ROUNDED lines, matching what bill_items will hold. Summing the raw
   // products and rounding once would drift from the stored rows by a paisa or two.
-  return lines.reduce((sum, l) => sum + lineTotal(l.unitPrice, l.qtyKg), 0);
+  return paise(lines.reduce((sum, l) => sum + lineTotal(l.unitPrice, l.qtyKg), 0));
 }
 
 export function validateWeight(
