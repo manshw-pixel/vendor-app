@@ -31,8 +31,9 @@ describe("the bill screen", () => {
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
-    // the running total is feedback for the recorder
-    expect(await screen.findByText(/80/)).toBeTruthy();
+    // the running total is feedback for the recorder. Targeted by test id, because the
+    // basket also shows each line's own amount -- a bare /80/ would match either.
+    await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
 
     // 3. Done is guarded by a confirm, because the basket freezes afterwards
     fireEvent.click(screen.getByRole("button", { name: /done/i }));

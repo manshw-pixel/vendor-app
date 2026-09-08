@@ -1,5 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { runningTotal, type Draft } from "../../billing";
+import { lineTotal, runningTotal, type Draft } from "../../billing";
+
+/** One formatter for both the lines and the total, so a row reads as an explanation of
+ *  the figure below it rather than a differently-shaped number. */
+const rupees = (n: number): string => `₹${n}`;
 
 /** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
  *  nothing on this screen ever sends a total to the server. */
@@ -18,11 +22,18 @@ export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove:
               <button
                 onClick={() => onRemove(i)}
                 aria-label={`${t("bill.remove")} ${l.name}`}
-                className="w-full text-left px-3 py-3 min-h-[44px] active:bg-slate-100"
+                className="w-full px-3 py-3 min-h-[44px] text-left active:bg-slate-100"
               >
-                <span className="block font-medium text-slate-800">{l.name}</span>
+                <span className="flex justify-between items-baseline gap-3">
+                  <span className="font-medium text-slate-800">{l.name}</span>
+                  {/* Read back to the customer line by line; do not make the recorder
+                      multiply while holding a bag of onions. */}
+                  <span className="font-medium text-slate-800 tabular-nums">
+                    {rupees(lineTotal(l.unitPrice, l.qtyKg))}
+                  </span>
+                </span>
                 <span className="block text-xs text-slate-500">
-                  {l.qtyKg} kg × ₹{l.unitPrice} · {t("bill.remove")}
+                  {l.qtyKg} kg × {rupees(l.unitPrice)} · {t("bill.remove")}
                 </span>
               </button>
             </li>
@@ -31,7 +42,9 @@ export function Basket({ lines, onRemove }: { lines: readonly Draft[]; onRemove:
       )}
       <div className="flex justify-between items-center border-t border-slate-200 px-3 py-3">
         <span className="text-slate-600">{t("bill.total")}</span>
-        <span className="text-xl font-semibold text-slate-900">₹{runningTotal(lines)}</span>
+        <span data-testid="running-total" className="text-xl font-semibold text-slate-900 tabular-nums">
+          {rupees(runningTotal(lines))}
+        </span>
       </div>
     </div>
   );
