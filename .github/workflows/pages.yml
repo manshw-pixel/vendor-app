@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read           # download-artifact@v4 reads the run's artifacts via the API
   pages: write
   id-token: write
 
@@ -53,8 +54,32 @@ jobs:
       # NEVER pipe this -- run.mjs's exit code IS the gate, and a pipe replaces it.
       - run: npm test
 
+  # The SPA's own gate. Separate from `test` so a frontend failure reads as a frontend
+  # failure, not as a mystery in the database suite.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      # NEVER pipe this -- the exit code is the gate.
+      - run: npm test
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 1
+
   deploy:
-    needs: [test]
+    needs: [test, web]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
@@ -63,17 +88,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
-      # Publish ONLY the console. `path: .` would serve the migrations, the tests and
-      # every doc from the live site -- the repo is public either way, but the site
-      # should be the app, not the source tree.
-      # The console is published at BOTH paths for now. /console.html is its permanent
-      # home; the copy at / is what serves the site until the Vite SPA in web/ takes
-      # that slot (slice 3, stage 1), at which point the index.html line goes away and
-      # the console keeps working at its own URL.
-      - run: |
-          mkdir -p _site
-          cp console.html _site/console.html
-          cp console.html _site/index.html
+      # Publish the TESTED build, not a rebuild: never let the bytes that ship differ
+      # from the bytes the gate approved. `path: .` would serve the migrations, the
+      # tests and every doc -- the repo is public either way, but the site should be the
+      # app, not the source tree.
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: _site
+      # The console keeps its own URL. It still has dashboards the SPA does not, so it
+      # stays reachable until stage 4 builds them.
+      - run: cp console.html _site/console.html
+      # Pages serves 404.html (with a 404 status) for any unmatched path; the SPA boots
+      # from it so a deep-link reload resolves client-side instead of hitting a real 404.
+      - run: cp _site/index.html _site/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
