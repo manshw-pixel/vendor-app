@@ -7,6 +7,10 @@ import "../i18n";
 import { completeBill, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
 
+// Every other money figure in this app goes through a rupees() formatter (see
+// bill/Basket.tsx); this screen shows one too, so it gets the same treatment.
+const rupees = (n: number): string => `₹${n}`;
+
 /**
  * The biller's queue: bills already `billed`, waiting for a customer to pay at the
  * counter. Completing one is a one-way door (stock and points move server-side, #14/#15)
@@ -23,6 +27,10 @@ export default function Pending() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [pointsAwarded, setPointsAwarded] = useState<number | null>(null);
+  // Distinct from "zero points" -- a failed read must never look like an absence of
+  // data. The completion itself already happened server-side, so this note sits
+  // alongside the completed message rather than replacing it.
+  const [pointsReadFailed, setPointsReadFailed] = useState(false);
 
   async function refresh() {
     const { data, error } = await listPending();
@@ -41,6 +49,7 @@ export default function Pending() {
     setCompletingId(id);
     setCompleted(false);
     setPointsAwarded(null);
+    setPointsReadFailed(false);
     const { error } = await completeBill(id);
     if (error) {
       setFailure(describeError(error));
@@ -49,9 +58,14 @@ export default function Pending() {
     }
     // What complete_bill() actually wrote, not a client-side recompute of the vendor's
     // threshold. No rows is legitimate -- a bill under the first threshold earns no
-    // points and writes no ledger row -- so it is "no points", never an error.
+    // points and writes no ledger row -- so it is "no points". A failed READ is not the
+    // same thing and must not be conflated with it: the bill still completed (stock and
+    // any points already moved server-side), so the completion message stands, but the
+    // read failure is surfaced on its own, never silently rendered as "no points".
     const { data: ledgerRows, error: pointsError } = await pointsForBill(id);
-    if (!pointsError && ledgerRows && ledgerRows.length > 0) {
+    if (pointsError) {
+      setPointsReadFailed(true);
+    } else if (ledgerRows && ledgerRows.length > 0) {
       setPointsAwarded(ledgerRows.reduce((sum, row) => sum + row.points, 0));
     }
     setCompletingId(null);
@@ -77,6 +91,10 @@ export default function Pending() {
         </p>
       )}
 
+      {completed && pointsReadFailed && (
+        <p className="text-xs text-amber-700">{t("pending.pointsUnknown")}</p>
+      )}
+
       {bills !== null && bills.length === 0 && !failure && (
         <p className="text-slate-500 text-sm">{t("pending.empty")}</p>
       )}
@@ -92,7 +110,7 @@ export default function Pending() {
               <p className="text-sm text-slate-500">
                 {bill.customers ? `${bill.customers.name} · ${bill.customers.flat_no}` : "—"}
               </p>
-              <p className="text-sm text-slate-700">{bill.total}</p>
+              <p className="text-sm text-slate-700">{rupees(bill.total)}</p>
             </div>
             <button
               onClick={() => setConfirmingId(bill.id)}

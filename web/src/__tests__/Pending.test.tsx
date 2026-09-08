@@ -7,7 +7,10 @@ const listPending = vi.fn(async (..._args: unknown[]): Promise<{ data: PendingBi
   error: null,
 }));
 const completeBill = vi.fn(async (..._args: unknown[]) => ({ error: null }));
-const pointsForBill = vi.fn(async (..._args: unknown[]) => ({ data: [] as { points: number }[], error: null }));
+const pointsForBill = vi.fn(async (..._args: unknown[]): Promise<{
+  data: { points: number }[] | null;
+  error: { message?: string; code?: string } | null;
+}> => ({ data: [], error: null }));
 vi.mock("../data", () => ({
   listPending: (...a: unknown[]) => listPending(...a),
   completeBill: (...a: unknown[]) => completeBill(...a),
@@ -77,5 +80,22 @@ describe("the pending queue", () => {
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/completed/i)).toBeTruthy();
+    expect(screen.queryByText(/checked/i)).toBeNull();
+  });
+
+  it("tells the biller when the points read fails, and never as 'no points'", async () => {
+    // A failed READ is not an absence of data. The bill genuinely completed -- stock and
+    // any points already moved server-side -- so the completion message must still show,
+    // but the read failure must be visible too, and must not look like the legitimate
+    // zero-points case above.
+    pointsForBill.mockResolvedValueOnce({ data: null, error: { message: "network down" } });
+    render(<Pending />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
+    expect(await screen.findByText(/checked/i)).toBeTruthy();
+    // Still tells the biller the bill completed -- the write already happened.
+    expect(screen.getByText(/completed/i)).toBeTruthy();
+    // Must not read like the legitimate zero-points case: no points-awarded count shown.
+    expect(screen.queryByText(/points awarded/i)).toBeNull();
   });
 });
