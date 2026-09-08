@@ -55,4 +55,16 @@ describe("validateWeight", () => {
     // a weight nobody agreed to.
     expect(validateWeight("1.234")).toEqual({ ok: false, reason: "tooPrecise" });
   });
+
+  it("rejects exponential notation to prevent silent truncation", () => {
+    // "1e-3" is 0.001, which Postgres silently truncates to "0.00" on insert into
+    // numeric(10,2), defeating the precision guarantee. Exponential notation is caught
+    // by rejecting anything that is not a plain decimal (only digits, optional dot).
+    expect(validateWeight("1e-3")).toEqual({ ok: false, reason: "notANumber" });
+    expect(validateWeight("2.5e-2")).toEqual({ ok: false, reason: "notANumber" });
+    expect(validateWeight("1.2e2")).toEqual({ ok: false, reason: "notANumber" });
+    // Plain decimals and negatives still work as before
+    expect(validateWeight("1.35")).toEqual({ ok: true, value: 1.35 });
+    expect(validateWeight("-1")).toEqual({ ok: false, reason: "notPositive" });
+  });
 });

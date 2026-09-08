@@ -24,6 +24,9 @@ export function validateWeight(
 ): { ok: true; value: number } | { ok: false; reason: "empty" | "notANumber" | "notPositive" | "tooPrecise" } {
   const text = raw.trim();
   if (text === "") return { ok: false, reason: "empty" };
+  // Reject exponential notation and other non-plain-decimal formats. "1e-3" would be
+  // silently truncated by Postgres to "0.00", defeating the precision guarantee.
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return { ok: false, reason: "notANumber" };
   const value = Number(text);
   if (!Number.isFinite(value)) return { ok: false, reason: "notANumber" };
   if (value <= 0) return { ok: false, reason: "notPositive" };
