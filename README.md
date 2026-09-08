@@ -85,6 +85,23 @@ needs exporting at all.
 on every run, so the suite is repeatable — which is also why the guard is strict about
 *which* database it may touch. Other projects keep databases on this same server.
 
+## Live
+
+| URL | What |
+|---|---|
+| https://manshw-pixel.github.io/vendor-app/ | The SPA (`web/`) — **stage 1: the shell only** |
+| https://manshw-pixel.github.io/vendor-app/console.html | The older single-file console |
+
+Stage 1 of the SPA ships sign-in, role-based routing and the mr/hi/en language switch.
+**Every screen behind the nav is a placeholder.** The console remains the way to see
+dashboards until stage 4 builds them — see
+[`docs/superpowers/specs/2026-09-08-slice-3-spa-design.md`](docs/superpowers/specs/2026-09-08-slice-3-spa-design.md)
+for the staged plan.
+
+Note the language switch honours the browser's language when it is one of the three
+supported; Marathi is the default only when nothing else matches. A phone set to English
+therefore opens in English, which is a stated preference rather than an absence of one.
+
 ## What is here
 
 | Migration | Contents |
@@ -94,6 +111,12 @@ on every run, so the suite is repeatable — which is also why the guard is stri
 | `0003_functions.sql` | `issue_token`, `complete_bill`, `customer_points_balance` |
 | `0004_views.sql` | Eight dashboard views, all `security_invoker = true` |
 | `0005_cron.sql` | `expire_points()` and its daily pg_cron schedule |
+
+| Directory | Contents |
+|---|---|
+| `web/` | The React + Vite + TypeScript SPA (slice 3) |
+| `console.html` | The single-file console that preceded it |
+| `tests/` | The 65-case database suite, run against native PostgreSQL |
 
 The security model in one line: **there is no application server**, so RLS is the entire
 authorization layer, and the operations that must not be forgeable — token issuance,
