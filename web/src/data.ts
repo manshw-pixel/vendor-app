@@ -111,6 +111,14 @@ export async function issueToken(billId: string) {
   return supabase.rpc("issue_token", { p_bill_id: billId });
 }
 
+/** What the server actually recorded for this bill. Used only after a token attempt
+ *  failed: issue_token may have committed and had its response lost, in which case the
+ *  bill is already `billed` with a real token AND the customer has already been sent it
+ *  (0003_functions.sql:54-56). Reading back a server-written row is not a recompute. */
+export async function billToken(billId: string) {
+  return supabase.from("bills").select("token_no, status").eq("id", billId).maybeSingle();
+}
+
 export async function listPending() {
   return supabase
     .from("bills")

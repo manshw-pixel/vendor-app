@@ -10,6 +10,7 @@ vi.mock("../data", () => ({
   addLines: vi.fn(async () => ({ error: null })),
   billHasLines: vi.fn(async () => ({ data: [], error: null })),
   issueToken: vi.fn(async () => ({ data: 7, error: null })),
+  billToken: vi.fn(async () => ({ data: null, error: null })),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -151,6 +152,62 @@ describe("the bill screen", () => {
     expect(data.issueToken).toHaveBeenCalledTimes(2);
   });
 
+  it("shows the token when a lost issue_token response actually committed -- read back, not a duplicate", async () => {
+    // The scenario Important 1 fixes: issue_token committed server-side (the bill moved
+    // to billed with a real token, and the customer was already sent it), but the
+    // response was lost. Without the read-back, the recorder sees a failure and a retry
+    // would record a second, duplicate bill behind the first.
+    (data.issueToken as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", message: "response lost" },
+    });
+    (data.billToken as unknown as Mock).mockResolvedValueOnce({
+      data: { token_no: 7, status: "billed" },
+      error: null,
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText("7")).toBeTruthy();
+    expect(data.billToken).toHaveBeenCalledWith("b1");
+    // No second attempt at issuing a token for a bill the server already billed --
+    // exactly the duplicate-bill risk this fix exists to remove.
+    expect(data.issueToken).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/something went wrong/i)).toBeNull();
+  });
+
+  it("says the token is unknown, rather than claiming failure, when the read-back itself fails", async () => {
+    (data.issueToken as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", message: "boom" },
+    });
+    (data.billToken as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", message: "read failed" },
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText(/token could not be confirmed|टोकन की पुष्टि|टोकनची खात्री/i)).toBeTruthy();
+    // written stays intact so a retry re-runs issueToken and the read-back.
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    await waitFor(() => expect(data.issueToken).toHaveBeenCalledTimes(2));
+    expect(data.createBill).toHaveBeenCalledTimes(1);
+  });
+
   it("does not insert lines twice on retry when the first addLines actually committed", async () => {
     // The scenario the client-side check exists for: addLines committed in the database
     // but the response was lost, so the client reports failure and linesAdded stays
@@ -250,5 +307,31 @@ describe("the bill screen", () => {
     await waitFor(() => expect(data.findCustomerByMobile).toHaveBeenCalledWith("+9199"));
     expect(await screen.findByText(/already exists/i)).toBeTruthy();
     expect((await screen.findByTestId("duplicate-offer")).textContent).toMatch(/Ravi/);
+  });
+
+  it("tells the recorder the lookup failed, not that the customer is absent", async () => {
+    // Important 2: found.error was never read, so a failed lookup rendered identically to
+    // an absent row. Mutating the fix back to `if (found.data) ... else absent` must make
+    // this fail -- the absent-row message must not appear, and an error must.
+    const dupe = {
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "customers_vendor_id_mobile_key"',
+    };
+    (data.createCustomer as Mock).mockResolvedValueOnce({ data: null, error: dupe });
+    (data.findCustomerByMobile as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", message: "boom" },
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Ravi" } });
+    fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "B-9" } });
+    fireEvent.change(screen.getByLabelText(/^mobile$/i), { target: { value: "+9199" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
+    expect(screen.queryByText(/cannot be shown here|यहां नहीं दिखाया|इथे दाखवता येत नाही/i)).toBeNull();
+    expect(screen.queryByTestId("duplicate-offer")).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import type { Customer } from "../customers";
 import {
   addLines,
   billHasLines,
+  billToken,
   createBill,
   issueToken,
   listCustomers,
@@ -72,6 +73,10 @@ export default function Bill() {
   const [written, setWritten] = useState<{ billId: string; linesAdded: boolean } | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
+  // Set only when a token failure's read-back itself failed: we genuinely do not know
+  // whether the bill billed. Rendered alongside the failure banner, never in place of it
+  // -- see the read-back handling in confirm() below.
+  const [tokenUnknown, setTokenUnknown] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -104,6 +109,7 @@ export default function Bill() {
     if (!customer) return;
     setIssuing(true);
     setFailure(null);
+    setTokenUnknown(false);
 
     // Only a resumed call (a bill already held from an earlier attempt) needs the
     // has-it-already-landed check below; a fresh bill this call just created cannot
@@ -147,6 +153,27 @@ export default function Bill() {
 
     const { data: issued, error: tokenError } = await issueToken(billId);
     if (tokenError || issued == null) {
+      // issue_token may have committed and had its response lost -- the bill is then
+      // already `billed` with a real token, and the customer has already been sent it
+      // (0003_functions.sql:54-56). Read back what the server actually wrote rather than
+      // trust the lost response; see billToken's doc comment in data.ts.
+      const { data: readBack, error: readError } = await billToken(billId);
+      if (!readError && readBack && readBack.token_no !== null &&
+          (readBack.status === "billed" || readBack.status === "done")) {
+        setToken(Number(readBack.token_no));
+        setIssuing(false);
+        setConfirming(false);
+        setWritten(null);
+        setFailure(null);
+        setPhase("done");
+        return;
+      }
+      if (readError) {
+        // The same problem one layer down: we genuinely do not know whether the bill
+        // billed. Do not claim it failed and do not invent a token -- say so, and keep
+        // `written` intact so pressing Done again retries both the token and the read-back.
+        setTokenUnknown(true);
+      }
       return fail(describeError(tokenError));
     }
     // The server's number, not one recomputed here.
@@ -181,6 +208,8 @@ export default function Bill() {
           {t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span>
         </p>
       )}
+
+      {failure && tokenUnknown && <p className="text-xs text-amber-700">{t("bill.tokenUnknown")}</p>}
 
       {phase === "customer" && (
         <CustomerStep
@@ -229,7 +258,7 @@ export default function Bill() {
       )}
 
       {confirming && (
-        <div role="dialog" aria-modal="true"
+        <div role="dialog" aria-modal="true" aria-label={t("bill.confirmTitle")}
              className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
             <p className="text-slate-700">{t("bill.confirmBody")}</p>
