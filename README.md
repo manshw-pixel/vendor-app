@@ -122,10 +122,15 @@ environment where you can see them.
 
 ## Known unknowns
 
+- **Production is in `ap-northeast-1` (Tokyo), not Mumbai.** Deliberate: the project was
+  already created there and keeping it was preferred to recreating. With no app server,
+  clients reach PostgREST directly, so this is roughly 100-150ms of round trip per query
+  from India rather than 20-30. It is a fixed cost of every screen, and the region cannot
+  be changed in place -- moving it would mean a new project and a re-push. Worth
+  revisiting if latency shows up in use.
 - **The suite has not yet run against Cloud.** The 63 cases passed on Postgres 15.8
-  locally; the two Cloud projects may well be on a different major. Confirm the test and
-  production projects run the *same* major as each other — that is the comparison that
-  matters now, and `supabase/config.toml` no longer pins one.
+  locally; production runs **17.6**. The test project must be created on 17 to match, or
+  the suite proves something about an engine you do not ship on.
 - **Cloud is slower and shared.** The reset is a full schema drop and five migrations
   over the network on every run, and the concurrency case in the token tests was written
   against a loopback database. Watch for timeouts on the first Cloud run.
