@@ -203,9 +203,11 @@ therefore rate-limited and opt-in only. Neither blocks slice one.
 
 ## Testing
 
-The RLS suite is a deliverable of slice one, not a follow-up. It runs against a real local
-`supabase start` — real Postgres, real GoTrue, real policies — because a mocked Supabase
-cannot test the one thing that matters here.
+The RLS suite is a deliverable of slice one, not a follow-up. It runs against a real
+Supabase Cloud project — real Postgres, real GoTrue, real policies — because a mocked
+Supabase cannot test the one thing that matters here. Nothing in this project runs
+locally, so that is a *second*, disposable Cloud project reserved for tests; the suite
+wipes it on every run and is guarded against reaching any other. See the README.
 
 It seeds **two vendors × three roles** and asserts table by table that:
 
@@ -221,7 +223,7 @@ Function tests cover the two races that actually bite:
 - **Double `complete_bill`** — calling it twice on one bill awards points once and
   decrements stock once.
 
-Both are SQL tests runnable against the local stack, wired into CI so a dropped policy
+Both are SQL tests runnable against the test project, wired into CI so a dropped policy
 turns the suite red rather than shipping.
 
 ## Build slices

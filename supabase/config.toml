@@ -1,17 +1,17 @@
+# This project runs entirely on Supabase Cloud. There is no local stack, so this file no
+# longer describes one: the local [api]/[db] port pins and major_version are gone, since
+# nothing here is ever started with `supabase start`.
+#
+# What is left is the link for `supabase db push`. Note that `db push` sends MIGRATIONS
+# ONLY -- it does not push the [auth] settings below. Those must be set in the Cloud
+# dashboard of each project, by hand.
 project_id = "vendor-app"
-
-[api]
-enabled = true
-port = 55321
-schemas = ["public"]
-
-[db]
-port = 55322
-major_version = 15
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:3000"
-# Tests sign up real users and need a session immediately. With confirmations on,
-# signUp returns { session: null } and every downstream assertion fails on a null token.
+# MUST also be set in the dashboard of the TEST project
+# (Authentication -> Sign In / Providers -> Confirm email: off).
+# Tests sign up real users and need a session immediately. With confirmations on, signUp
+# returns { session: null } and every downstream assertion fails on a null token.
+# Leave confirmations ON in the production project.
 enable_confirmations = false

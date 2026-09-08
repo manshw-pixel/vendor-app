@@ -17,7 +17,17 @@ try {
 } catch (e) {
   console.error("\nBootstrap failed, so no test ran.\n");
   console.error(e.stack || e.message);
-  console.error("\nIf that reads as a connection failure: is Docker running, and did you run `supabase start` inside vendor-app/?");
+  console.error(
+    "\nThis suite runs against a Supabase Cloud project set aside for tests -- there is\n" +
+    "no local stack. If that reads as a connection failure, check:\n" +
+    "  - the five variables in .env.example are exported (SUPABASE_DB_URL, SUPABASE_API_URL,\n" +
+    "    SUPABASE_TEST_PROJECT_REF, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY);\n" +
+    "  - SUPABASE_DB_URL is a session-mode connection on port 5432, not the transaction\n" +
+    "    pooler on 6543 -- the reset sends multi-statement DDL;\n" +
+    "  - the test project is not paused (free-tier projects pause after inactivity).\n" +
+    "If it reads as a refusal instead, the guard is doing its job: it will only reset the\n" +
+    "project named by SUPABASE_TEST_PROJECT_REF."
+  );
   process.exit(2);
 }
 

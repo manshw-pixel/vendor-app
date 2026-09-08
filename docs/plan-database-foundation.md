@@ -6,7 +6,14 @@
 
 **Architecture:** One Supabase Cloud project, tenanted by `vendor_id`, with RLS as the *only* authorization layer (there is no app server). Anything unforgeable — token issuance, stock decrements, points awards — lives in `SECURITY DEFINER` functions that clients may call but whose tables clients cannot write. Outbound WhatsApp messages are queued as rows inside the originating transaction, so delivery can fail without corrupting a sale.
 
-**Tech Stack:** Postgres 15 (Supabase), Supabase CLI 2.x local stack, pg_cron, Node 24 + `@supabase/supabase-js` + `pg` for the test harness.
+**Tech Stack:** Postgres (Supabase Cloud), Supabase CLI 2.x, pg_cron, Node 24 + `@supabase/supabase-js` + `pg` for the test harness.
+
+> **Superseded in places.** This plan was written against a local `supabase start` stack.
+> The project has since moved entirely to Supabase Cloud: there is no local stack, the
+> suite runs against a second disposable Cloud project, and the reset guard pins the
+> target by project ref rather than by loopback host. Where the listings below show local
+> ports, `127.0.0.1` defaults, or `assertLocalDb`, the README and `tests/fixtures.mjs` are
+> current and this document is history.
 
 **Spec:** `docs/superpowers/specs/2026-09-07-vegetable-vendor-app-design.md`
 (Product spec it derives from: `SKILLVendor.md` at the repo root.)
@@ -39,12 +46,10 @@
 
 ## Prerequisites (do these before Task 1)
 
-- **Docker Desktop is not installed on this machine.** `supabase start` cannot run without
-  it. Install Docker Desktop for Windows and confirm `docker --version` answers before
-  starting Task 0, or every test step in this plan will fail at bootstrap.
-- **This directory is not a git repository.** The commit steps below assume one. Either run
-  `git init` in `D:/AI Project/Vendor App` first, or skip every "Commit" step and let the
-  reviewer gate each task instead.
+- ~~Docker Desktop is not installed.~~ Resolved: Docker Desktop is installed and its
+  engine runs (29.7.2). It provisions its own `docker-desktop` WSL distro, so no separate
+  WSL distro is required. Confirm with `docker info` before `supabase start`.
+- ~~This directory is not a git repository.~~ Resolved: it is now a standalone repo.
 - Supabase CLI is present (2.114.0 via `supabase`, or use `npx supabase`).
 
 ---
