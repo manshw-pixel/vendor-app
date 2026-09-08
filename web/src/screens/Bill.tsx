@@ -6,7 +6,15 @@ import "../i18n";
 import { useSession } from "../components/SessionProvider";
 import { type Draft } from "../billing";
 import type { Customer } from "../customers";
-import { addLines, createBill, issueToken, listCustomers, listItems, type Item } from "../data";
+import {
+  addLines,
+  billHasLines,
+  createBill,
+  issueToken,
+  listCustomers,
+  listItems,
+  type Item,
+} from "../data";
 import { describeError } from "../errors";
 import { LANGS, type Lang } from "../i18n/locales";
 import { CustomerStep } from "./bill/CustomerStep";
@@ -97,6 +105,10 @@ export default function Bill() {
     setIssuing(true);
     setFailure(null);
 
+    // Only a resumed call (a bill already held from an earlier attempt) needs the
+    // has-it-already-landed check below; a fresh bill this call just created cannot
+    // possibly have lines yet, so there is nothing to check.
+    const resuming = written !== null;
     let billId = written?.billId ?? null;
     if (billId === null) {
       const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
@@ -108,11 +120,27 @@ export default function Bill() {
     }
 
     if (!written?.linesAdded) {
-      // addLines short-circuits an empty basket with { error: null } and NO data key, so
-      // only the error is read here.
-      const { error: linesError } = await addLines(vendorId, billId, lines);
-      if (linesError) {
-        return fail(describeError(linesError));
+      // Mitigation, not a fix, for a lost response after a committed addLines: a retry
+      // that never learned the first insert succeeded would insert the same lines again,
+      // and issue_token would recompute a doubled total. Checking for existing rows first
+      // narrows that window to a request still genuinely in flight -- it is not atomic
+      // with the check, so the race survives in principle. The proper fix is a
+      // replace-lines RPC (delete then insert in one transaction) for a later slice.
+      let alreadyLanded = false;
+      if (resuming) {
+        const { data: existing, error: checkError } = await billHasLines(billId);
+        if (checkError) {
+          return fail(describeError(checkError));
+        }
+        alreadyLanded = (existing?.length ?? 0) > 0;
+      }
+      if (!alreadyLanded) {
+        // addLines short-circuits an empty basket with { error: null } and NO data key, so
+        // only the error is read here.
+        const { error: linesError } = await addLines(vendorId, billId, lines);
+        if (linesError) {
+          return fail(describeError(linesError));
+        }
       }
       setWritten({ billId, linesAdded: true });
     }
@@ -121,9 +149,9 @@ export default function Bill() {
     if (tokenError || issued == null) {
       return fail(describeError(tokenError));
     }
-    setIssuing(false);
     // The server's number, not one recomputed here.
     setToken(Number(issued));
+    setIssuing(false);
     setConfirming(false);
     setWritten(null);
     setPhase("done");

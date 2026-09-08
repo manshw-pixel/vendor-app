@@ -116,7 +116,7 @@ export function CustomerStep({
             </label>
           ))}
           {missing && <p className="text-sm text-red-600">{t("bill.required")}</p>}
-          {(duplicate ?? duplicateUnreachable) && (
+          {(duplicate !== null || duplicateUnreachable) && (
             <div className="space-y-2">
               <p className="text-sm text-amber-700">{t("bill.customerExists")}</p>
               {duplicate && (

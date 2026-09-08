@@ -8,6 +8,7 @@ vi.mock("../data", () => ({
   findCustomerByMobile: vi.fn(),
   createBill: vi.fn(async () => ({ data: { id: "b1" }, error: null })),
   addLines: vi.fn(async () => ({ error: null })),
+  billHasLines: vi.fn(async () => ({ data: [], error: null })),
   issueToken: vi.fn(async () => ({ data: 7, error: null })),
 }));
 
@@ -148,6 +149,40 @@ describe("the bill screen", () => {
     expect(data.createBill).toHaveBeenCalledTimes(1);
     expect(data.addLines).toHaveBeenCalledTimes(1);
     expect(data.issueToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not insert lines twice on retry when the first addLines actually committed", async () => {
+    // The scenario the client-side check exists for: addLines committed in the database
+    // but the response was lost, so the client reports failure and linesAdded stays
+    // false. Without the pre-insert check, the retry would call addLines a second time
+    // and issue_token would double the total. With it, the retry sees the bill already
+    // has lines and skips straight to issuing the token.
+    (data.addLines as unknown as Mock).mockResolvedValueOnce({
+      error: { code: "XX000", message: "response lost" },
+    });
+    (data.billHasLines as unknown as Mock).mockResolvedValueOnce({
+      data: [{ id: "existing-line" }],
+      error: null,
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
+
+    // Retry: the check sees rows already there and must not insert again.
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText("7")).toBeTruthy();
+    expect(data.createBill).toHaveBeenCalledTimes(1);
+    expect(data.billHasLines).toHaveBeenCalledWith("b1");
+    expect(data.addLines).toHaveBeenCalledTimes(1);
   });
 
   it("closes the basket for good once the token is issued -- the policies freeze it", async () => {
