@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { validateWeight, type Draft } from "../../billing";
 import type { Item } from "../../data";
 import { itemName, type Lang } from "../../i18n/locales";
+import { rupees } from "../../money";
 
 /**
  * Stock is SHOWN, never enforced. complete_bill clamps the decrement at zero on purpose,
@@ -66,7 +67,7 @@ export function ItemGrid({
             }`}
           >
             <span className="block font-medium text-slate-800">{itemName(item, lang)}</span>
-            <span className="block text-sm text-slate-600">₹{item.price}</span>
+            <span className="block text-sm text-slate-600">{rupees(item.price)}</span>
             <span className={`block text-xs ${stockClass(item.stock_kg)}`}>
               {item.stock_kg <= 0 ? t("bill.outOfStock") : t("bill.stock", { kg: item.stock_kg })}
             </span>
