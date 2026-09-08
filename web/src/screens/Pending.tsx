@@ -6,10 +6,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { completeBill, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
-
-// Every other money figure in this app goes through a rupees() formatter (see
-// bill/Basket.tsx); this screen shows one too, so it gets the same treatment.
-const rupees = (n: number): string => `₹${n}`;
+import { rupees } from "../money";
 
 /**
  * The biller's queue: bills already `billed`, waiting for a customer to pay at the

@@ -1,9 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { lineTotal, runningTotal, type Draft } from "../../billing";
-
-/** One formatter for both the lines and the total, so a row reads as an explanation of
- *  the figure below it rather than a differently-shaped number. */
-const rupees = (n: number): string => `₹${n}`;
+import { rupees } from "../../money";
 
 /** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
  *  nothing on this screen ever sends a total to the server. */
