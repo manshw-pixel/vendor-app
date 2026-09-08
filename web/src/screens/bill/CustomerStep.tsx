@@ -25,8 +25,17 @@ export function CustomerStep({
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", flat_no: "", mobile: "" });
   const [missing, setMissing] = useState(false);
-  const [duplicate, setDuplicate] = useState<Customer | null>(null);
-  const [duplicateUnreachable, setDuplicateUnreachable] = useState(false);
+  // The three outcomes of a duplicate-mobile collision, made structural rather than two
+  // booleans that can both be false: a found row (offer it), an absent row (no error, but
+  // this caller cannot see it -- describe that, do not pretend it is the same as "found"),
+  // or a failed read (the duplicate is real, the lookup just did not complete -- describe
+  // the error, since retrying is worth it here in a way it is not for "absent").
+  const [duplicateLookup, setDuplicateLookup] = useState<
+    | { kind: "found"; customer: Customer }
+    | { kind: "absent" }
+    | { kind: "failed"; described: { key: string; detail: string } }
+    | null
+  >(null);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -34,8 +43,7 @@ export function CustomerStep({
 
   async function save() {
     setMissing(false);
-    setDuplicate(null);
-    setDuplicateUnreachable(false);
+    setDuplicateLookup(null);
     setFailure(null);
     const check = validateCustomer(form);
     if (!check.ok) {
@@ -53,12 +61,20 @@ export function CustomerStep({
       const mobile = form.mobile.trim();
       const known = customers.find((c) => c.mobile === mobile);
       if (known) {
-        setDuplicate(known);
+        setDuplicateLookup({ kind: "found", customer: known });
         return;
       }
       const found = await findCustomerByMobile(mobile);
-      if (found.data) setDuplicate(found.data as Customer);
-      else setDuplicateUnreachable(true);
+      // found.error is not the same as "no such row" -- a network or policy failure must
+      // not be rendered as an absent customer, the exact conflation Task 6 fixed in
+      // Pending and this file was never re-checked for.
+      if (found.error) {
+        setDuplicateLookup({ kind: "failed", described: describeError(found.error) ?? { key: "error.unknown", detail: "" } });
+      } else if (found.data) {
+        setDuplicateLookup({ kind: "found", customer: found.data as Customer });
+      } else {
+        setDuplicateLookup({ kind: "absent" });
+      }
       return;
     }
     if (error || !data) {
@@ -116,20 +132,29 @@ export function CustomerStep({
             </label>
           ))}
           {missing && <p className="text-sm text-red-600">{t("bill.required")}</p>}
-          {(duplicate !== null || duplicateUnreachable) && (
+          {duplicateLookup !== null && (
             <div className="space-y-2">
               <p className="text-sm text-amber-700">{t("bill.customerExists")}</p>
-              {duplicate && (
+              {duplicateLookup.kind === "found" && (
                 <button
-                  onClick={() => onPick(duplicate)}
+                  onClick={() => onPick(duplicateLookup.customer)}
                   data-testid="duplicate-offer"
                   className="w-full text-left border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 min-h-[44px]"
                 >
-                  <span className="block font-medium text-slate-800">{duplicate.name}</span>
+                  <span className="block font-medium text-slate-800">{duplicateLookup.customer.name}</span>
                   <span className="block text-xs text-slate-500">
-                    {duplicate.flat_no} · {duplicate.mobile}
+                    {duplicateLookup.customer.flat_no} · {duplicateLookup.customer.mobile}
                   </span>
                 </button>
+              )}
+              {duplicateLookup.kind === "absent" && (
+                <p className="text-sm text-slate-600">{t("bill.customerNotShown")}</p>
+              )}
+              {duplicateLookup.kind === "failed" && (
+                <p className="text-sm text-red-600">
+                  {t(duplicateLookup.described.key)}{" "}
+                  <span className="text-xs text-slate-400">{duplicateLookup.described.detail}</span>
+                </p>
               )}
             </div>
           )}
