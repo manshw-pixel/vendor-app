@@ -124,10 +124,13 @@ export default function Pending() {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="pending-confirm-title"
           className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4"
         >
           <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-            <h2 className="font-semibold text-slate-800">{t("pending.confirmTitle")}</h2>
+            <h2 id="pending-confirm-title" className="font-semibold text-slate-800">
+              {t("pending.confirmTitle")}
+            </h2>
             <p className="text-slate-700">{t("pending.confirmBody")}</p>
             <button
               onClick={() => void confirm(confirmingId)}
