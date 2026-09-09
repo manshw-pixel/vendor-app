@@ -94,6 +94,27 @@ describe("the loyalty settings screen", () => {
     expect(screen.queryByTestId("settings-saved")).toBeNull();
   });
 
+  it("clears a stale policy-refusal banner on the next, client-rejected save", async () => {
+    // A prior save failed at the server with 42501, so `problem` is set. The admin then
+    // edits a field into something validateSettings rejects and saves again -- that save
+    // never reaches the server, so the old "Your role does not allow this." must not
+    // still be sitting there implying the server refused a write it never received.
+    updateVendorConfig.mockResolvedValueOnce({
+      error: { code: "42501", message: "row-level security" },
+    });
+    render(<Settings />);
+    await screen.findByTestId("settings-points_threshold_1");
+    fireEvent.click(screen.getByTestId("settings-save"));
+    expect(await screen.findByTestId("settings-problem")).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId("settings-points_reward_1"), {
+      target: { value: "2.5" },
+    });
+    fireEvent.click(screen.getByTestId("settings-save"));
+    await waitFor(() => expect(screen.queryByTestId("settings-problem")).toBeNull());
+    expect(screen.getByTestId("settings-error-points_reward_1")).toBeTruthy();
+  });
+
   it("refuses to let a null config (RLS filtered the vendor row) present as a blank, savable form", async () => {
     // loadVendorConfig uses .maybeSingle(): zero rows come back as { data: null, error:
     // null }, not as a raised error. If the screen quietly rendered blank inputs, an

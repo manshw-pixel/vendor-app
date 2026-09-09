@@ -65,6 +65,7 @@ export default function Settings() {
 
   async function save() {
     setSaved(false);
+    setProblem(null);
     const result = validateSettings(input);
     if (!result.ok) { setErrors(result.errors); return; }
     setErrors({});
