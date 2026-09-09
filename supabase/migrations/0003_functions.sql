@@ -112,8 +112,8 @@ begin
    where i.id = agg.item_id;
 
   -- Points (#15). Thresholds and rewards are this vendor's config, never constants.
-  -- Note the asymmetry the spec fixes: strictly ABOVE threshold 1, but AT OR ABOVE
-  -- threshold 2.
+  -- NOTE: superseded by 0006, which makes threshold 1 inclusive as well. This body is
+  -- kept as the historical record of what was deployed; the live definition is 0006's.
   if v_total >= v_vendor.points_threshold_2 then
     v_points := v_vendor.points_reward_2;
   elsif v_total > v_vendor.points_threshold_1 then

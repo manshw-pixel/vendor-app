@@ -89,8 +89,11 @@ absent. Two thresholds are fixed: see #8 and #15.
 13. Customer receives a **WhatsApp** message with the order/token number and
     total to pay.
 14. Biller completes billing; **customer history is stored**.
-15. **Points:** spend **above 600 → 50 points**; spend **1000 or above →
-    100 points**. Thresholds/rewards are read from vendor config (#5). Compute
+15. **Points:** spend **600 or above → 50 points**; spend **1000 or above →
+    100 points**. Both tiers are inclusive: a spend that reaches a target earns
+    that target's reward. (Corrected 2026-09-09. This read "above 600" until a
+    vendor reported a 600 sale earning nothing while an identical 1000 rule paid
+    out; see `supabase/migrations/0006_points_threshold_inclusive.sql`.) Thresholds/rewards are read from vendor config (#5). Compute
     inside the same DB transaction as the bill and write to an append-only
     points ledger with an `expires_at` = now + redeem-days.
 16. Customer gets a WhatsApp message (via bot) once billing is done and points
