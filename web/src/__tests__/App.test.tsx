@@ -28,6 +28,8 @@ vi.mock("../screens/Items", () => ({ default: () => <div data-testid="screen-ite
 vi.mock("../screens/Customers", () => ({ default: () => <div data-testid="screen-customers" /> }));
 vi.mock("../screens/Staff", () => ({ default: () => <div data-testid="screen-staff" /> }));
 vi.mock("../screens/Settings", () => ({ default: () => <div data-testid="screen-settings" /> }));
+vi.mock("../screens/Completed", () => ({ default: () => <div data-testid="screen-completed" /> }));
+vi.mock("../screens/Dashboards", () => ({ default: () => <div data-testid="screen-dashboards" /> }));
 
 afterEach(() => {
   cleanup();
@@ -54,6 +56,19 @@ describe("App", () => {
     // "coming soon" copy cannot quietly outlive the screens, as the README's did
     // until c1d2f1e. /dashboards is still a placeholder and is reached only by
     // navigating to it, so the default landing route must show none.
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "u1", email: "admin@shop.test" } } },
+    });
+    appUserRow.value = { name: "Admin", role: "admin", vendor_id: "v1", vendors: { name: "Shop" } };
+
+    render(<App />);
+
+    expect(screen.queryByText(/coming soon|लवकरच|जल्द/i)).toBeNull();
+  });
+
+  it("no longer serves a placeholder for dashboards", async () => {
+    // /dashboards was the last stub. The README's stage-3 claim that it is the only
+    // remaining placeholder stops being true in this slice.
     getSession.mockResolvedValue({
       data: { session: { user: { id: "u1", email: "admin@shop.test" } } },
     });

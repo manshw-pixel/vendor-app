@@ -53,27 +53,33 @@ export function ItemGrid({
     <div className="space-y-3">
       <h2 className="font-semibold text-slate-800">{t("bill.addItem")}</h2>
 
-      <div className="grid grid-cols-2 gap-2">
+      <ul className="space-y-2">
         {items.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => {
-              setSelected(item);
-              setWeight("");
-              setReason(null);
-            }}
-            className={`rounded-xl border p-3 min-h-[44px] text-left bg-white ${
-              selected?.id === item.id ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"
-            }`}
-          >
-            <span className="block font-medium text-slate-800">{itemName(item, lang)}</span>
-            <span className="block text-sm text-slate-600">{rupees(item.price)}</span>
-            <span className={`block text-xs ${stockClass(item.stock_kg)}`}>
-              {item.stock_kg <= 0 ? t("bill.outOfStock") : t("bill.stock", { kg: item.stock_kg })}
-            </span>
-          </button>
+          <li key={item.id}>
+            <button
+              data-testid={`item-row-${item.id}`}
+              onClick={() => {
+                setSelected(item);
+                setWeight("");
+                setReason(null);
+              }}
+              className={`w-full flex items-center gap-3 rounded-xl border p-3 min-h-[44px] text-left bg-white ${
+                selected?.id === item.id
+                  ? "border-emerald-500 ring-2 ring-emerald-200"
+                  : "border-slate-200"
+              }`}
+            >
+              <span className="flex-1 min-w-0 font-medium text-slate-800 truncate">
+                {itemName(item, lang)}
+              </span>
+              <span className="text-sm text-slate-600 whitespace-nowrap">{rupees(item.price)}</span>
+              <span className={`text-xs whitespace-nowrap ${stockClass(item.stock_kg)}`}>
+                {item.stock_kg <= 0 ? t("bill.outOfStock") : t("bill.stock", { kg: item.stock_kg })}
+              </span>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {selected && (
         <div className="space-y-2 border border-slate-200 rounded-xl bg-white p-3">
@@ -81,6 +87,7 @@ export function ItemGrid({
             {t("bill.weightKg")}
             {/* Scales report values like 1.35, so this is a decimal keypad, not a stepper. */}
             <input
+              data-testid="weight-input"
               type="text"
               inputMode="decimal"
               value={weight}

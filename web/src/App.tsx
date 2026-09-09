@@ -4,12 +4,12 @@ import { SessionProvider, useSession } from "./components/SessionProvider";
 import { Login } from "./components/Login";
 import { Shell } from "./components/Shell";
 import { Guard } from "./components/Guard";
-import { Placeholder } from "./screens/Placeholder";
 import Bill from "./screens/Bill";
 import Pending from "./screens/Pending";
 import Items from "./screens/Items";
 import Customers from "./screens/Customers";
-import Staff from "./screens/Staff";
+import Completed from "./screens/Completed";
+import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
 import { homeFor } from "./routes";
 
@@ -59,9 +59,10 @@ function Inner() {
           <Route path="/pending" element={<Pending />} />
           <Route path="/items" element={<Items />} />
           <Route path="/customers" element={<Customers />} />
-          <Route path="/staff" element={<Staff />} />
+          <Route path="/completed" element={<Completed />} />
+          <Route path="/dashboards" element={<Dashboards />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/dashboards" element={<Placeholder titleKey="nav.dashboards" />} />
+          <Route path="/staff" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<Navigate to={homeFor(s.role)} replace />} />
         </Routes>
       </Guard>
