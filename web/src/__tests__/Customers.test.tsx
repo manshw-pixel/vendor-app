@@ -71,6 +71,29 @@ describe("the customers screen", () => {
     expect(screen.queryByText(/could not be checked|तपासता आले नाहीं|जांचे नहीं/i)).toBeNull();
   });
 
+  it("drops a stale points response when a second customer is opened first", async () => {
+    // Regression for a stale-response race: opening A, then B before A's points call
+    // resolves, must not let A's late answer land on B.
+    let resolveA: (v: { data: { balance: number; days_left: number | null }[] | null;
+      error: { code?: string; message?: string } | null }) => void;
+    const aPromise = new Promise<{
+      data: { balance: number; days_left: number | null }[] | null;
+      error: { code?: string; message?: string } | null;
+    }>((resolve) => { resolveA = resolve; });
+    customerPoints.mockImplementationOnce(() => aPromise);
+    customerPoints.mockResolvedValueOnce({ data: [{ balance: 50, days_left: 10 }], error: null });
+
+    render(<Customers />);
+    fireEvent.click(await screen.findByTestId("customer-c1"));
+    fireEvent.click(await screen.findByTestId("customer-c2"));
+    await screen.findByText(/50/);
+
+    resolveA!({ data: [{ balance: 999, days_left: 1 }], error: null });
+    await waitFor(() => expect(customerPoints).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/999/)).toBeNull();
+    expect(screen.getByText(/50/)).toBeTruthy();
+  });
+
   it("saves an edit by id", async () => {
     render(<Customers />);
     fireEvent.click(await screen.findByTestId("customer-c1"));

@@ -1,5 +1,5 @@
 import "../i18n";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listCustomers } from "../data";
 import { updateCustomer, customerPoints } from "../admin";
@@ -26,6 +26,7 @@ export default function Customers() {
   const [duplicate, setDuplicate] = useState(false);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const openId = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await listCustomers();
@@ -40,7 +41,14 @@ export default function Customers() {
     setDraft({ name: c.name, flat_no: c.flat_no, mobile: c.mobile });
     setIncomplete(false); setDuplicate(false); setProblem(null);
     setPoints(null); setPointsFailed(false);
+    // A recorder can tap a second customer before the first one's points call resolves --
+    // an ordinary double-tap on a slow shop connection, not an exotic sequence. Without
+    // this guard the stale response lands on whoever is open by the time it arrives, and a
+    // wrong balance looks exactly like a right one. Track the id we asked for and drop the
+    // answer if it's no longer the one on screen.
+    openId.current = c.id;
     const { data, error } = await customerPoints(c.id);
+    if (openId.current !== c.id) return;
     // customer_points_balance() is declared `returns table (...)`, so PostgREST always
     // hands back an array of rows -- never a scalar. Zero rows is a real answer (a
     // customer under the vendor's first spend threshold has earned nothing and the
