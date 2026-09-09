@@ -34,6 +34,13 @@ export default function Settings() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Items and Staff gate on useSession()'s own `session.kind !== "ready"`; Customers needs
+  // no vendorId at all. Settings uses a vendorId ternary plus this separate `loaded` flag
+  // because loadVendorConfig uses .maybeSingle(), which returns { data: null, error: null }
+  // rather than raising when RLS filters the vendor row out -- rendering the form over that
+  // would invite an admin to save blanks over their real loyalty configuration. The other
+  // screens don't need this because a filtered list read there is legitimately "nothing
+  // yet", not a form waiting to clobber real data.
   const vendorId = session.kind === "ready" ? session.vendorId : null;
 
   useEffect(() => {
@@ -101,7 +108,12 @@ export default function Settings() {
               <input
                 id={`settings-${field}`} data-testid={`settings-${field}`}
                 value={input[field]} inputMode="decimal"
-                onChange={(e) => setInput({ ...input, [field]: e.target.value })}
+                onChange={(e) => {
+                  // Any edit retracts the "Saved." claim below -- it was true of the
+                  // form as submitted, not of the form as it now reads.
+                  setSaved(false);
+                  setInput({ ...input, [field]: e.target.value });
+                }}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
               />
               {errors[field] && (

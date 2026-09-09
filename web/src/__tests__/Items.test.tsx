@@ -11,7 +11,9 @@ const listAllItems = vi.fn(async (..._a: unknown[]): Promise<{ data: AdminItem[]
   ({ data: rows, error: null }));
 const createItem = vi.fn(async (..._a: unknown[]) => ({ data: { id: "i3" }, error: null }));
 const updateItem = vi.fn(async (..._a: unknown[]) => ({ error: null }));
-const setItemActive = vi.fn(async (..._a: unknown[]) => ({ error: null }));
+const setItemActive = vi.fn(async (..._a: unknown[]): Promise<{
+  error: { code?: string; message?: string } | null;
+}> => ({ error: null }));
 
 vi.mock("../admin", () => ({
   listAllItems: (...a: unknown[]) => listAllItems(...a),
@@ -103,5 +105,16 @@ describe("the items screen", () => {
     listAllItems.mockResolvedValueOnce({ data: [], error: null });
     render(<Items />);
     expect(await screen.findByText(/no items yet|अजून माल नाही|कोई सामान नहीं/i)).toBeTruthy();
+  });
+
+  it("shows a problem banner when a toggle is rejected", async () => {
+    // Regression: toggle() used to call setProblem() BEFORE load(), so load()'s own
+    // (null) error clobbered the message and a rejected toggle was completely silent.
+    setItemActive.mockResolvedValueOnce({
+      error: { code: "42501", message: "new row violates row-level security policy" },
+    });
+    render(<Items />);
+    fireEvent.click((await screen.findAllByTestId(/^item-toggle-/))[0]!);
+    expect(await screen.findByText(/does not allow|परवानगी नाही|अनुमति नहीं/i)).toBeTruthy();
   });
 });

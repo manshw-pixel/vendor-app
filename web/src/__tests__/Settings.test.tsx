@@ -115,6 +115,20 @@ describe("the loyalty settings screen", () => {
     expect(screen.getByTestId("settings-error-points_reward_1")).toBeTruthy();
   });
 
+  it("retracts the saved confirmation when a field is edited afterward", async () => {
+    // The green "Saved." banner claims the form matches the server. An edit made after a
+    // successful save, without resubmitting, breaks that claim, so it must go away.
+    render(<Settings />);
+    await screen.findByTestId("settings-points_threshold_1");
+    fireEvent.click(screen.getByTestId("settings-save"));
+    expect(await screen.findByTestId("settings-saved")).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId("settings-points_threshold_1"), {
+      target: { value: "800" },
+    });
+    expect(screen.queryByTestId("settings-saved")).toBeNull();
+  });
+
   it("refuses to let a null config (RLS filtered the vendor row) present as a blank, savable form", async () => {
     // loadVendorConfig uses .maybeSingle(): zero rows come back as { data: null, error:
     // null }, not as a raised error. If the screen quietly rendered blank inputs, an

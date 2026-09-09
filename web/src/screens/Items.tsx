@@ -68,8 +68,11 @@ export default function Items() {
     setBusy(true);
     const { error } = await setItemActive(it.id, !it.is_active);
     setBusy(false);
-    setProblem(describeError(error));
+    // load() runs before the problem is set, because listAllItems's own (null) error
+    // would otherwise clobber the message we are about to show -- same reasoning as
+    // Staff.remove().
     await load();
+    setProblem(describeError(error));
   }
 
   return (
