@@ -21,6 +21,13 @@ export function describeError(
   if (error.code === "23505") {
     return { key: "error.duplicate", detail };
   }
+  // recorder_id/biller_id on bill_items reference app_users with no ON DELETE clause
+  // (0001_schema.sql:75-76), i.e. NO ACTION -- a restrict. Deleting anyone who has ever
+  // recorded or completed a bill fails here, which is the common case in a working shop,
+  // not an edge case, so it needs its own message rather than falling through to unknown.
+  if (error.code === "23503") {
+    return { key: "error.staffHasHistory", detail };
+  }
   if (/failed to fetch|networkerror|load failed/i.test(detail)) {
     return { key: "error.offline", detail };
   }

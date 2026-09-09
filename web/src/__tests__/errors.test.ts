@@ -25,6 +25,13 @@ describe("describeError", () => {
     expect(d?.key).toBe("error.offline");
   });
 
+  it("names a foreign-key restriction as staff history in the way", () => {
+    // 23503 is what deleting an app_users row raises when they have ever recorded or
+    // completed a bill (bill_items.recorder_id/biller_id have no ON DELETE clause).
+    const d = describeError({ code: "23503", message: 'update or delete on table "app_users" violates foreign key constraint' });
+    expect(d?.key).toBe("error.staffHasHistory");
+  });
+
   it("falls back to a generic key, keeping the raw message", () => {
     const d = describeError({ message: "something odd" });
     expect(d?.key).toBe("error.unknown");
