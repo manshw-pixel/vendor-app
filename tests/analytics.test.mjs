@@ -99,12 +99,49 @@ test("bought_together_between drops a pair that only qualifies outside the windo
   assertEqual(rows.length, 0, "a pair under the threshold was returned");
 });
 
-test("neither function is SECURITY DEFINER", async () => {
+test("collected_between sums only completed bills inside the window", async () => {
+  const w = await getW();
+  const { rows } = await sql(
+    `select * from collected_between($1::timestamptz, $2::timestamptz)`, SEP);
+  assertEqual(rows.length, 1, "expected exactly one aggregate row");
+  // Three September bills at 100 each. August's is outside the window and the 'recording'
+  // one is not done. Other suites' vendors are visible here because sql() is superuser and
+  // RLS does not apply, so assert on THIS vendor via the per-vendor variant below instead
+  // of the global figure.
+  assert(Number(rows[0].total) >= 300, `expected at least this vendor's 300, got ${rows[0].total}`);
+});
+
+test("collected_between returns a zero row rather than nothing for an empty window", async () => {
+  // A period with no sales must still render as 0, not as a missing row the caller has to
+  // special-case into "no data".
+  const { rows } = await sql(
+    `select * from collected_between('1990-01-01T00:00:00Z'::timestamptz,
+                                     '1990-01-02T00:00:00Z'::timestamptz)`);
+  assertEqual(rows.length, 1, "expected one row even with no bills");
+  assertEqual(Number(rows[0].total), 0, "expected zero, not null");
+  assertEqual(Number(rows[0].bill_count), 0, "expected a zero count");
+});
+
+test("one vendor's admin cannot sum another vendor's takings", async () => {
+  const world = await once(seedTwoVendors)();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status, completed_at)
+     values ($1,$2,777,'done', now()) returning id`, [world.b.vendorId, world.b.customerId]);
+  assert(b.id, "seed bill was not created");
+  const { data, error } = await world.a.clients.admin.rpc("collected_between", {
+    p_from: "2000-01-01T00:00:00Z", p_to: "2100-01-01T00:00:00Z",
+  });
+  assert(!error, `rpc failed: ${error?.message}`);
+  const total = Number(data?.[0]?.total ?? 0);
+  assert(total !== 777, "vendor A summed vendor B's bill");
+});
+
+test("no analytics function is SECURITY DEFINER", async () => {
   // A definer function would bypass RLS and hand every vendor everyone else's numbers.
   const { rows } = await sql(
     `select proname, prosecdef from pg_proc
-      where proname in ('top_items_between','bought_together_between')`);
-  assertEqual(rows.length, 2, "expected both functions to exist");
+      where proname in ('top_items_between','bought_together_between','collected_between')`);
+  assertEqual(rows.length, 3, "expected all three functions to exist");
   for (const r of rows) assert(r.prosecdef === false, `${r.proname} is SECURITY DEFINER`);
 });
 

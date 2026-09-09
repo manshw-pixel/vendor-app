@@ -54,9 +54,15 @@ describe("listCompleted", () => {
 
   it("pages with a keyset, not an offset", async () => {
     await listCompleted(RANGE, { completedAt: "2026-09-09T10:00:00.000Z", id: "b9" });
+    // Asserted whole, not by fragments. The BROKEN clause
+    // "completed_at.lt.X,id.lt.Y" contains both fragments too, and it drops every bill
+    // with a smaller id at any earlier instant -- sales silently missing from history.
+    // Only the full string pins the disjunction's structure.
     const clause = chain.or.mock.calls[0]?.[0] as string;
-    expect(clause).toContain("completed_at.lt.2026-09-09T10:00:00.000Z");
-    expect(clause).toContain("id.lt.b9");
+    expect(clause).toBe(
+      "completed_at.lt.2026-09-09T10:00:00.000Z," +
+        "and(completed_at.eq.2026-09-09T10:00:00.000Z,id.lt.b9)",
+    );
   });
 });
 
@@ -69,15 +75,18 @@ describe("billLines", () => {
 });
 
 describe("collectedBetween", () => {
-  it("aggregates bills directly rather than through the daily view", async () => {
-    // v_payments_daily buckets with date_trunc in the SERVER's timezone (UTC on
-    // Supabase). The shops are at UTC+5:30, so a UTC day boundary would attribute the
-    // first 5.5 hours of every Indian day to the day before. Comparing instants is
-    // correct in any zone.
+  it("aggregates in the database instead of summing rows in the browser", async () => {
+    // Two things this must not be. Not v_payments_daily: that view buckets with
+    // date_trunc in the SERVER's timezone (UTC on Supabase) while the shops are at
+    // UTC+5:30, so a UTC day boundary would push the first 5.5 hours of every Indian day
+    // into the day before. And not a select-then-sum: PostgREST truncates at db-max-rows
+    // (1000) with NO error, so a busy month's takings would silently stop growing.
     await collectedBetween(RANGE);
-    expect(from).toHaveBeenCalledWith("bills");
+    expect(rpc).toHaveBeenCalledWith("collected_between", {
+      p_from: expect.any(String), p_to: expect.any(String),
+    });
     expect(from).not.toHaveBeenCalledWith("v_payments_daily");
-    expect(chain.eq).toHaveBeenCalledWith("status", "done");
+    expect(from).not.toHaveBeenCalledWith("bills");
   });
 });
 

@@ -104,4 +104,19 @@ describe("the completed bills screen", () => {
     await waitFor(() => expect(listCompleted).toHaveBeenCalledTimes(2));
     expect(listCompleted.mock.calls[1]?.[1]).toBeNull();
   });
+
+  it("ignores a slow page for a range the user has already moved off", async () => {
+    // Same sequence as the dashboard: the slower earlier request must not append the old
+    // period's bills to the new one.
+    let releaseOld: (v: { data: CompletedBill[] | null; error: null }) => void = () => {};
+    listCompleted
+      .mockImplementationOnce(() => new Promise((r) => { releaseOld = r; }))
+      .mockResolvedValueOnce({ data: [bill(42)], error: null });
+    render(<Completed />);
+    fireEvent.click(screen.getByTestId("range-month"));
+    await screen.findByTestId("completed-row-b42");
+    releaseOld({ data: [bill(7)], error: null });
+    await waitFor(() => expect(screen.queryByTestId("completed-row-b7")).toBeNull());
+    expect(screen.getByTestId("completed-row-b42")).toBeTruthy();
+  });
 });

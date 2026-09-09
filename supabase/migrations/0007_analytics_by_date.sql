@@ -37,7 +37,11 @@ create function top_items_between(p_from timestamptz, p_to timestamptz)
                 and b.completed_at <  p_to
     join items i on i.id = bi.item_id
    group by bi.item_id, i.name_en, i.name_hi, i.name_mr
-   order by sum(bi.qty_kg) desc;
+   -- item_id breaks ties so the order is deterministic. Without it two items with equal
+   -- weight sold can swap places between requests, and a "top items" card that reshuffles
+   -- while the numbers stay identical reads as a bug.
+   order by sum(bi.qty_kg) desc, bi.item_id
+   limit 10;
 $$;
 
 -- The 3-bill threshold is the product spec's (#8) and is applied WITHIN the window: a
@@ -64,10 +68,36 @@ create function bought_together_between(p_from timestamptz, p_to timestamptz)
     join items ib on ib.id = b.item_id
    group by a.item_id, b.item_id, ia.name_en, ib.name_en
   having count(distinct a.bill_id) >= 3
-   order by count(distinct a.bill_id) desc;
+   order by count(distinct a.bill_id) desc, a.item_id, b.item_id
+   limit 10;
+$$;
+
+-- The dashboard's headline figure.
+--
+-- This exists because the obvious client-side version is silently wrong. Selecting the
+-- bills and summing them in the browser works until a shop crosses PostgREST's
+-- db-max-rows cap (1000 on Supabase Cloud), at which point the response is TRUNCATED with
+-- no error: the money collected simply stops growing partway through a busy month, and
+-- nothing on screen says so. A shop doing sixty bills a day crosses that in under three
+-- weeks -- and a busy month is exactly the month someone checks.
+--
+-- coalesce so an empty period returns a row of zeroes rather than a null the caller has
+-- to special-case. Invoker rights, like its two siblings: RLS is what stops one vendor
+-- summing another's takings.
+create function collected_between(p_from timestamptz, p_to timestamptz)
+  returns table (total numeric, bill_count bigint)
+  language sql stable as $$
+  select coalesce(sum(b.total), 0) as total,
+         count(*)                  as bill_count
+    from bills b
+   where b.status = 'done'
+     and b.completed_at >= p_from
+     and b.completed_at <  p_to;
 $$;
 
 revoke all on function top_items_between(timestamptz, timestamptz) from public, anon;
+revoke all on function collected_between(timestamptz, timestamptz) from public, anon;
+grant execute on function collected_between(timestamptz, timestamptz) to authenticated, service_role;
 revoke all on function bought_together_between(timestamptz, timestamptz) from public, anon;
 grant execute on function top_items_between(timestamptz, timestamptz) to authenticated, service_role;
 grant execute on function bought_together_between(timestamptz, timestamptz) to authenticated, service_role;

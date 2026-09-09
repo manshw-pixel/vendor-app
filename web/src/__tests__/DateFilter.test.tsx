@@ -54,4 +54,18 @@ describe("the date filter", () => {
     expect(screen.queryByTestId("range-error")).toBeNull();
     expect(onChange).toHaveBeenCalledWith({ from: "2026-09-01", to: "2026-09-09" });
   });
+
+  it("does not emit a stale one-day range after the parent changes the value", () => {
+    // The bug this pins: tap a preset, open Custom, press Apply without editing. With the
+    // inputs frozen at their mount values it emitted today..today, silently narrowing the
+    // range to a single day while the preset buttons showed no change.
+    const { rerender } = render(<DateFilter value={initial} onChange={onChange} />);
+    const moved = { from: "2026-09-01", to: "2026-09-30" };
+    rerender(<DateFilter value={moved} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId("range-custom"));
+    expect((screen.getByTestId("range-from") as HTMLInputElement).value).toBe("2026-09-01");
+    expect((screen.getByTestId("range-to") as HTMLInputElement).value).toBe("2026-09-30");
+    fireEvent.click(screen.getByTestId("range-apply"));
+    expect(onChange).toHaveBeenCalledWith(moved);
+  });
 });

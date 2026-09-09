@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listCompleted, billLines, PAGE_SIZE,
@@ -21,12 +21,20 @@ export default function Completed() {
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** Which range the newest request was for. Tapping "This month" then "Today" fires two
+   *  overlapping fetches; without this guard the slower month response lands last and
+   *  appends the previous period's bills to the new one. Same idiom as Customers.tsx. */
+  const wanted = useRef<string>("");
+
   const lang = i18n.language as Lang;
 
   /** after=null starts a fresh period; a cursor appends the next page. */
   const load = useCallback(async (r: Range, after: Cursor | null) => {
+    const key = `${r.from}..${r.to}`;
+    wanted.current = key;
     setBusy(true);
     const { data, error } = await listCompleted(r, after);
+    if (wanted.current !== key) return;   // superseded; a later range owns the screen now
     setBusy(false);
     const described = describeError(error);
     setProblem(described);

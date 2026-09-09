@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  collectedBetween, topItemsBetween, pairsBetween, type TopItem, type Pair,
+  collectedBetween, topItemsBetween, pairsBetween,
+  type TopItem, type Pair, type Collected,
 } from "../history";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
@@ -30,22 +31,35 @@ export default function Dashboards() {
   const [top, setTop] = useState<TopItem[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
+  const [busy, setBusy] = useState(true);
+
+  /** Which range the newest request was for. Tapping "This month" then "Today" fires two
+   *  overlapping fetches, and the month one is the slower; without this guard it lands
+   *  last and paints a month's totals under a Today filter. Same idiom as Customers.tsx. */
+  const wanted = useRef<string>("");
 
   const lang = i18n.language as Lang;
 
   const load = useCallback(async (r: Range) => {
+    const key = `${r.from}..${r.to}`;
+    wanted.current = key;
+    setBusy(true);
     const [money, items, together] = await Promise.all([
       collectedBetween(r), topItemsBetween(r), pairsBetween(r),
     ]);
+    if (wanted.current !== key) return;   // superseded; a later range owns the screen now
+    setBusy(false);
     // First error wins: three cards failing for one reason should say it once.
     setProblem(
       describeError(money.error) ?? describeError(items.error) ?? describeError(together.error),
     );
-    const bills = money.data ?? [];
-    setCollected(bills.reduce((sum, b) => sum + Number(b.total), 0));
-    setBillCount(bills.length);
-    setTop(items.data ?? []);
-    setPairs(together.data ?? []);
+    // collected_between returns exactly one row. `total` is a Postgres numeric, which
+    // PostgREST serialises as a STRING -- Number() it or rupees() renders a concatenation.
+    const row = (money.data as Collected[] | null)?.[0];
+    setCollected(Number(row?.total ?? 0));
+    setBillCount(Number(row?.bill_count ?? 0));
+    setTop((items.data ?? []) as TopItem[]);
+    setPairs((together.data ?? []) as Pair[]);
   }, []);
 
   useEffect(() => { void load(range); }, [range, load]);
@@ -55,6 +69,12 @@ export default function Dashboards() {
       <h2 className="font-semibold text-slate-800">{t("dash.title")}</h2>
 
       <DateFilter value={range} onChange={setRange} />
+
+      {busy && (
+        <p data-testid="dash-loading" className="text-sm text-slate-500">
+          {t("completed.loading")}
+        </p>
+      )}
 
       {problem && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

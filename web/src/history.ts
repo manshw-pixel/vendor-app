@@ -45,6 +45,10 @@ export type Pair = {
   bill_count: number;
 };
 
+/** One row. `total` arrives as a STRING: it is a Postgres numeric, and PostgREST
+ *  serialises numeric as text to avoid float rounding. Coerce before arithmetic. */
+export type Collected = { total: string | number; bill_count: number };
+
 /** The keyset a "load more" resumes from. completed_at alone is not unique. */
 export type Cursor = { completedAt: string; id: string };
 
@@ -77,6 +81,11 @@ export async function listCompleted(range: Range, after: Cursor | null) {
   if (after) {
     // Lexicographic on (completed_at, id): strictly earlier, or the same instant with a
     // smaller id.
+    //
+    // Both values are interpolated into PostgREST's filter grammar unescaped, which is
+    // safe ONLY because neither is user input: completed_at is an ISO timestamp and id a
+    // uuid, both round-tripped from a previous response of this same query. Thread a
+    // user-supplied cursor through here and that stops being true.
     q = q.or(
       `completed_at.lt.${after.completedAt},` +
         `and(completed_at.eq.${after.completedAt},id.lt.${after.id})`,
@@ -97,23 +106,24 @@ export async function billLines(billId: string) {
 }
 
 /**
- * Money collected and bill count for the window.
+ * Money collected and bill count for the window, aggregated in SQL.
  *
- * Deliberately NOT v_payments_daily. That view buckets with date_trunc('day',
+ * Two reasons it is an RPC rather than a select.
+ *
+ * It must not be v_payments_daily: that view buckets with date_trunc('day',
  * completed_at), which resolves in the database server's timezone -- UTC on Supabase --
  * while the shops are at UTC+5:30. A sale at 02:00 IST is 20:30 the previous day in UTC,
  * so UTC buckets would attribute the first five and a half hours of every Indian day to
  * yesterday, and nobody would notice until the dashboard disagreed with the cash drawer.
- * Comparing instants is correct in any timezone.
+ *
+ * And it must not select the rows and sum them here: PostgREST caps a response at
+ * db-max-rows (1000 on Supabase Cloud) and returns the truncated page with NO error, so a
+ * shop doing sixty bills a day would watch its month's takings stop growing partway
+ * through, silently. Summing in the database has no such ceiling.
  */
 export async function collectedBetween(range: Range) {
   const { fromTs, toTs } = toBounds(range);
-  return supabase
-    .from("bills")
-    .select("total")
-    .eq("status", "done")
-    .gte("completed_at", fromTs)
-    .lt("completed_at", toTs);
+  return supabase.rpc("collected_between", { p_from: fromTs, p_to: toTs });
 }
 
 /** Parameter names must match 0007_analytics_by_date.sql exactly; PostgREST resolves the

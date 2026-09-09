@@ -5,9 +5,11 @@
  * question would get two answers depending on which screen you asked. So the boundaries
  * live here and the screens hold only a Range.
  *
- * Dates are plain YYYY-MM-DD strings, interpreted in the DEVICE's timezone. That is the
- * shop's timezone in practice, and it is the only one the person reading the screen
- * thinks in. toBounds() converts to instants for the query, so the comparison the
+ * Dates are plain YYYY-MM-DD strings, interpreted in the DEVICE's timezone -- the only
+ * one the person reading the screen thinks in. The failure mode, named rather than
+ * hidden: a phone left on UTC will see days shifted by five and a half hours, so its
+ * "today" starts at 05:30 local. Hardcoding Asia/Kolkata would fix that and was rejected,
+ * because it bakes a single region into a product that may not stay in one. toBounds() converts to instants for the query, so the comparison the
  * database performs is on the instant and is correct regardless of the server's zone --
  * which matters, because Supabase runs in UTC and the shops are at UTC+5:30.
  */

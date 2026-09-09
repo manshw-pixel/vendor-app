@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PRESETS, presetRange, validateRange, type Preset, type Range } from "../dateRange";
 import "../i18n";
@@ -17,6 +17,15 @@ export function DateFilter({
   const [from, setFrom] = useState(value.from);
   const [to, setTo] = useState(value.to);
   const [error, setError] = useState<string | null>(null);
+
+  // Resync when the parent changes the range. Without this the inputs keep whatever they
+  // were seeded with at mount, so tapping "This month" and then opening Custom and
+  // pressing Apply unchanged would EMIT today..today -- silently narrowing the range to a
+  // single day while the preset buttons showed no change. Not cosmetic: it emits wrong data.
+  useEffect(() => {
+    setFrom(value.from);
+    setTo(value.to);
+  }, [value.from, value.to]);
 
   function pick(p: Preset) {
     setCustom(false);

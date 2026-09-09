@@ -15,7 +15,7 @@ database on every run, so it is barred from ever reaching Cloud. See
 ## ✅ Verified: 65 cases, 0 failures
 
 `npm test` runs **65 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all five migrations applied from `supabase/migrations/` in filename order,
+with all seven migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
@@ -150,9 +150,11 @@ and `app_users` are written from the client, and the policies those writes depen
 (`vendors_admin_update`, `items_admin_write`, `users_admin_write`) are covered by
 `tests/rls.test.mjs` against a real database, but — like everything else in this list —
 have never been exercised through PostgREST or GoTrue. **Slice 4 widens the gap again**:
-`top_items_between` and `bought_together_between` (migration `0007`) are two new RPCs the
-dashboards call directly, and neither has ever been called through PostgREST — only
-mocked, in `Dashboards.test.tsx`.
+migration `0007` adds three RPCs the dashboards call directly. Two of them,
+`top_items_between` and `collected_between`, ARE exercised through a real PostgREST client
+in `tests/analytics.test.mjs` — those are the cross-tenant isolation tests, and they are
+the most load-bearing checks on the branch. `bought_together_between` is not: it is only
+ever called through a mock in `Dashboards.test.tsx`.
 
 The first thing to check against the live database, nominated independently by two reviewers:
 the `customers(name, flat_no)` **embed shape** in the biller's queue. A cast in `Pending.tsx`
@@ -172,6 +174,12 @@ with every stage. They need a Marathi speaker before shop staff use this;
 the words `token`, `basket` and `points` were deliberately left transliterated (टोकन,
 बास्केट, पॉइंट्स) on the grounds that this is how Indian retail staff speak, and that
 judgement in particular wants confirming.
+
+One open question for that reviewer, noted rather than guessed at: **the Marathi sentence
+terminator.** `mr.json` ends its sentences with a full stop, `hi.json` with a danda (।).
+Slice 4 briefly introduced two danda-terminated Marathi strings and they were normalised
+back to full stops for consistency with the other forty-five — but consistency is not the
+same as correctness, and nobody on this project can say which is right.
 
 ### Known limits in the billing flow
 
@@ -236,14 +244,14 @@ supabase link --project-ref <prod-ref>  # once per clone
 supabase db push                        # applies supabase/migrations/ in order
 ```
 
-**Deployed:** all five migrations are live on the production project
+**Deployed:** the first five migrations are live on the production project
 (`ap-northeast-1`, Postgres 17.6) and verified there — 10 tables, RLS on all 10,
 19 policies, 8 `security_invoker` views, 4 functions, and the
 `vendor-app-points-expiry` cron job at `0 1 * * *`.
 
 **Migration `0007` must be pushed** (`supabase db push`) for the dashboards screen to work
-at all — it adds the `top_items_between` and `bought_together_between` RPCs the dashboards
-call directly, and the Pages workflow deploys only the SPA, never migrations. `0006` (the
+at all — it adds the `top_items_between`, `bought_together_between` and `collected_between`
+RPCs the dashboards call directly, and the Pages workflow deploys only the SPA, never migrations. `0006` (the
 points threshold) may still be unpushed too; check before assuming either has landed.
 
 The project is schema-complete but **empty**, and the first admin cannot be created
