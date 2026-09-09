@@ -87,7 +87,8 @@
     "from": "From",
     "to": "To",
     "apply": "Apply",
-    "backwards": "The start date is after the end date."
+    "backwards": "The start date is after the end date.",
+    "badDate": "Enter a valid date."
   },
   "completed": {
     "title": "Completed bills",
