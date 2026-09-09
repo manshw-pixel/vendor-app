@@ -23,6 +23,27 @@ const data = await import("../data");
 beforeEach(() => vi.clearAllMocks());
 
 describe("the bill screen", () => {
+  it("shows items as one row each, not a two-column grid", async () => {
+    // The vendor asked for a list. The grid class is the thing being replaced, so this
+    // asserts its absence rather than a vaguer 'renders items'.
+    const { container } = render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    await screen.findByText(/Onion|कांदा|प्याज/);
+    expect(container.querySelector(".grid-cols-2")).toBeNull();
+    expect(container.querySelectorAll("[data-testid^='item-row-']").length).toBeGreaterThan(0);
+  });
+
+  it("still takes a decimal weight after tapping a row", async () => {
+    // Scales report 1.35. The layout changed; the keypad must not.
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.click(await screen.findByTestId(/^item-row-/));
+    const input = screen.getByTestId("weight-input") as HTMLInputElement;
+    expect(input.getAttribute("inputmode")).toBe("decimal");
+    fireEvent.change(input, { target: { value: "1.35" } });
+    expect(input.value).toBe("1.35");
+  });
+
   it("issues a token through the full flow", async () => {
     render(<Bill />);
 
