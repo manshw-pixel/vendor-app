@@ -72,7 +72,7 @@ export default function Dashboards() {
 
       {busy && (
         <p data-testid="dash-loading" className="text-sm text-slate-500">
-          {t("completed.loading")}
+          {t("dash.loading")}
         </p>
       )}
 

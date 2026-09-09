@@ -101,6 +101,7 @@
     "noCustomer": "No customer"
   },
   "dash": {
+    "loading": "Loading…",
     "title": "Dashboards",
     "collected": "Money collected",
     "billCount": "Completed bills",
