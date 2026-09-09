@@ -77,9 +77,16 @@ export default function Dashboards() {
       )}
 
       {problem && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-          {t(problem.key)}
-        </p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-sm text-red-700">{t(problem.key)}</p>
+          {/* The raw message, not just a category. Withholding it is what turned a
+              missing migration into a guessing game. */}
+          {problem.detail && (
+            <p data-testid="dash-problem-detail" className="text-xs text-red-600 mt-1 break-words">
+              {t("error.details")}: {problem.detail}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">

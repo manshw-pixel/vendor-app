@@ -31,6 +31,14 @@ export function describeError(
   if (error.code === "23503" && /app_users/.test(detail)) {
     return { key: "error.staffHasHistory", detail };
   }
+  // A function the database does not have. This is what every dashboard card returned in
+  // production while migration 0007 sat unpushed: three identical "something went wrong"
+  // messages for a cause with a one-command remedy. Matched on the message as well as the
+  // code, because PostgREST has not always used PGRST202 for it and the wording has
+  // outlived the code across versions.
+  if (error.code === "PGRST202" || /could not find the function/i.test(detail)) {
+    return { key: "error.migrationMissing", detail };
+  }
   if (/failed to fetch|networkerror|load failed/i.test(detail)) {
     return { key: "error.offline", detail };
   }

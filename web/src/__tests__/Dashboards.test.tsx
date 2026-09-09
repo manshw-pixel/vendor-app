@@ -113,4 +113,20 @@ describe("the dashboard", () => {
     await waitFor(() => expect(screen.queryByText(/9,999/)).toBeNull());
     expect(screen.getByText(/₹11\.00/)).toBeTruthy();
   });
+
+  it("shows the underlying message instead of discarding it", async () => {
+    // The screen had PostgREST's own words -- "Could not find the function
+    // public.collected_between" -- and rendered only "Something went wrong", so the one
+    // string that identified the cause never reached the person who could act on it.
+    collectedBetween.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "PGRST202",
+        message: "Could not find the function public.collected_between(p_from, p_to) in the schema cache",
+      },
+    });
+    render(<Dashboards />);
+    expect(await screen.findByTestId("dash-problem-detail")).toBeTruthy();
+    expect(screen.getByTestId("dash-problem-detail").textContent).toContain("collected_between");
+  });
 });
