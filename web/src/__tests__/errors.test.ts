@@ -45,4 +45,30 @@ describe("describeError", () => {
     expect(d?.key).toBe("error.unknown");
     expect(d?.detail).toBe("something odd");
   });
+
+  it("recognises a function PostgREST cannot find", () => {
+    // What the dashboards actually returned in production when migration 0007 had not
+    // been pushed: every card said "Something went wrong", which is true and useless.
+    // The cause is specific and the remedy is a single command, so it gets its own key.
+    const d = describeError({
+      code: "PGRST202",
+      message: "Could not find the function public.collected_between(p_from, p_to) in the schema cache",
+    });
+    expect(d?.key).toBe("error.migrationMissing");
+    expect(d?.detail).toContain("collected_between");
+  });
+
+  it("recognises the same failure when only the message names the schema cache", () => {
+    // PostgREST has not always used PGRST202 for this, and a Supabase upgrade could
+    // change it again. The message is the more durable signal of the two.
+    const d = describeError({
+      message: "Could not find the function public.top_items_between in the schema cache",
+    });
+    expect(d?.key).toBe("error.migrationMissing");
+  });
+
+  it("does not claim a missing migration for an unrelated PostgREST error", () => {
+    const d = describeError({ code: "PGRST116", message: "JSON object requested, multiple rows returned" });
+    expect(d?.key).toBe("error.unknown");
+  });
 });
