@@ -99,16 +99,48 @@ test("bought_together_between drops a pair that only qualifies outside the windo
   assertEqual(rows.length, 0, "a pair under the threshold was returned");
 });
 
+// A window in 2099 that no other suite writes into, so the global aggregate this
+// superuser connection sees IS exactly this vendor's contribution. That is what makes the
+// assertions below falsifiable: drop the status filter and the total becomes 800, widen
+// the upper bound and it becomes 1200.
+async function futureVendor() {
+  const { rows: [v] } = await sql(`insert into vendors (name) values ('Future Co') returning id`);
+  const { rows: [c] } = await sql(
+    `insert into customers (vendor_id, name, flat_no, mobile)
+     values ($1,'Fut','F-9','+91977770' || floor(random()*10000)::text) returning id`, [v.id]);
+  const bill = async (total, status, when) => {
+    await sql(
+      `insert into bills (vendor_id, customer_id, total, status, completed_at)
+       values ($1,$2,$3,$4,$5::timestamptz)`, [v.id, c.id, total, status, when]);
+  };
+  await bill(100, "done",      "2099-01-10T04:00:00Z");   // in window
+  await bill(200, "done",      "2099-01-20T04:00:00Z");   // in window
+  await bill(500, "recording", "2099-01-15T04:00:00Z");   // in window, NOT done
+  await bill(400, "done",      "2099-02-01T04:00:00Z");   // done, at the exclusive bound
+  return { vendorId: v.id };
+}
+const getFuture = once(futureVendor);
+const JAN99 = ["2099-01-01T00:00:00Z", "2099-02-01T00:00:00Z"];
+
 test("collected_between sums only completed bills inside the window", async () => {
-  const w = await getW();
+  await getFuture();
   const { rows } = await sql(
-    `select * from collected_between($1::timestamptz, $2::timestamptz)`, SEP);
+    `select * from collected_between($1::timestamptz, $2::timestamptz)`, JAN99);
   assertEqual(rows.length, 1, "expected exactly one aggregate row");
-  // Three September bills at 100 each. August's is outside the window and the 'recording'
-  // one is not done. Other suites' vendors are visible here because sql() is superuser and
-  // RLS does not apply, so assert on THIS vendor via the per-vendor variant below instead
-  // of the global figure.
-  assert(Number(rows[0].total) >= 300, `expected at least this vendor's 300, got ${rows[0].total}`);
+  // 100 + 200. The 500 is still 'recording'; the 400 sits exactly on the exclusive upper
+  // bound and must be excluded by it.
+  assertEqual(Number(rows[0].total), 300, "wrong total: a status or window filter is off");
+  assertEqual(Number(rows[0].bill_count), 2, "wrong bill_count");
+});
+
+test("collected_between's upper bound is exclusive", async () => {
+  await getFuture();
+  // Widen by one day and the 400 at exactly 2099-02-01 joins the sum. If the function
+  // used <= instead of <, the previous test's window would already have counted it.
+  const { rows } = await sql(
+    `select * from collected_between($1::timestamptz, '2099-02-02T00:00:00Z'::timestamptz)`,
+    [JAN99[0]]);
+  assertEqual(Number(rows[0].total), 700, "expected the boundary bill to be included now");
 });
 
 test("collected_between returns a zero row rather than nothing for an empty window", async () => {
@@ -132,8 +164,11 @@ test("one vendor's admin cannot sum another vendor's takings", async () => {
     p_from: "2000-01-01T00:00:00Z", p_to: "2100-01-01T00:00:00Z",
   });
   assert(!error, `rpc failed: ${error?.message}`);
+  // Vendor A is freshly seeded and has no bills of its own, so the ONLY correct answer is
+  // zero. Asserting `!== 777` would have passed even with RLS bypassed, because a bypass
+  // returns 777 plus every other suite's bills -- never exactly 777.
   const total = Number(data?.[0]?.total ?? 0);
-  assert(total !== 777, "vendor A summed vendor B's bill");
+  assertEqual(total, 0, "vendor A saw takings that are not its own");
 });
 
 test("no analytics function is SECURITY DEFINER", async () => {
