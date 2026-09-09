@@ -67,10 +67,13 @@ test("spend of exactly 1000 earns 100 points", async () => {
   assertEqual(await points(w.vendorId), 100, "expected 100 points at exactly 1000");
 });
 
-test("spend of exactly 600 earns nothing", async () => {
+test("spend of exactly 600 earns 50 points", async () => {
+  // Both tiers are inclusive. The original spec said "above 600" but "1000 or above",
+  // and a shop that sets a 600 target and watches a 600 sale pay nothing reads that as
+  // broken -- the more so because the 1000 tier does pay out. See 0006.
   const w = await billedBill({ total: 600 });
   await sql(`select complete_bill($1)`, [w.billId]);
-  assertEqual(await points(w.vendorId), 0, "600 is not ABOVE 600");
+  assertEqual(await points(w.vendorId), 50, "expected 50 points at exactly 600");
 });
 
 test("points rules come from vendor config, not constants", async () => {
