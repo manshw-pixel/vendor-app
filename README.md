@@ -89,24 +89,50 @@ on every run, so the suite is repeatable — which is also why the guard is stri
 
 | URL | What |
 |---|---|
-| https://manshw-pixel.github.io/vendor-app/ | The SPA (`web/`) — **stages 1-2** |
+| https://manshw-pixel.github.io/vendor-app/ | The SPA (`web/`) — **stages 1-3** |
 | https://manshw-pixel.github.io/vendor-app/console.html | The older single-file console |
 
-**Working today:** sign-in, role-based routing, the mr/hi/en language switch, and the whole
+**Working today:** sign-in, role-based routing, the mr/hi/en language switch, the whole
 billing flow — a recorder picks or creates a customer, taps item tiles, enters weights, sees a
 running total, presses Done and gets a token; a biller works the queue of billed bills,
-completes one, and sees the points that were actually awarded.
+completes one, and sees the points that were actually awarded — and, as of stage 3, admin
+screens for items and stock, customers, staff, and loyalty settings.
 
-**Still placeholders:** items and stock admin, customers, staff, and the dashboards — stages 3
-and 4. The console remains the way to see dashboards until stage 4 builds them. See
+**Still a placeholder:** the dashboards, at `/dashboards` — stage 4. The console at
+`console.html` remains the way to see them until stage 4 builds the SPA version. See
 [the spec](docs/superpowers/specs/2026-09-08-slice-3-spa-design.md) for the staged plan.
+
+**What stage 3 does not do, on purpose:**
+
+- **Staff cannot be invited from the SPA.** A person signs up on their own, then an admin
+  links their `app_users` row by hand in the SQL editor — see
+  [`docs/runbook-first-admin.md`](docs/runbook-first-admin.md). Self-service account
+  creation is slice 2's Edge Function, and it does not exist yet.
+- **Removing someone from the Staff screen deletes only their `app_users` row.** Their
+  sign-in account is not touched; they simply stop resolving to a shop and land on the
+  "not linked" screen. And because `bills.recorder_id` and `bills.biller_id` reference
+  `app_users` with no `ON DELETE` clause, removing anyone who has ever recorded or
+  completed a bill fails with a foreign-key violation — the UI reports this with a
+  specific message telling the admin to change the person's role instead of removing
+  them. In a shop that has been running a while, that's most of the staff.
+- **Stock is set as an absolute figure, and a save overwrites.** A save landing while a
+  bill is completing overwrites that bill's decrement. Accepted deliberately, not
+  overlooked: `complete_bill()` remains the sole authority for decrements, and the fix if
+  the race is ever actually observed is a delta RPC, not a lock.
+- **Loyalty settings apply only to bills completed from now on.** `points_ledger` is
+  append-only; changing a threshold does not recompute points already awarded.
 
 ### What has and has not been proven
 
-The suite is **85 web tests plus the 65-case database suite**, both gating every push. But
+The suite is **162 web tests plus the 65-case database suite**, both gating every push. But
 `supabase-js` is mocked at the `data.ts` boundary in every SPA test, so **no part of the SPA has
 run against real PostgREST or GoTrue.** Stage 1 shipped two Critical bugs that only a real
-sign-in would have caught; stage 2 merged before its walkthrough was done.
+sign-in would have caught; stage 2 merged before its walkthrough was done. Stage 3 widens
+what this leaves uncovered rather than closing it: `vendors`, `items` and `app_users` are
+now written from the client for the first time, and the policies those writes depend on
+(`vendors_admin_update`, `items_admin_write`, `users_admin_write`) are covered by
+`tests/rls.test.mjs` against a real database, but — like everything else in this list —
+have never been exercised through PostgREST or GoTrue.
 
 The first thing to check against the live database, nominated independently by two reviewers:
 the `customers(name, flat_no)` **embed shape** in the biller's queue. A cast in `Pending.tsx`
@@ -120,10 +146,11 @@ browser language, and Marathi is the default only when nothing else matches — 
 English is a stated preference, not an absence of one.
 
 **The Hindi and Marathi strings have never been read by a native speaker.** Every one was
-written by an AI. They need a Marathi speaker before shop staff use this; the words `token`,
-`basket` and `points` were deliberately left transliterated (टोकन, बास्केट, पॉइंट्स) on the
-grounds that this is how Indian retail staff speak, and that judgement in particular wants
-confirming.
+written by an AI, including the stage-3 strings for items, customers, staff and settings —
+the backlog grows with every stage. They need a Marathi speaker before shop staff use this;
+the words `token`, `basket` and `points` were deliberately left transliterated (टोकन,
+बास्केट, पॉइंट्स) on the grounds that this is how Indian retail staff speak, and that
+judgement in particular wants confirming.
 
 ### Known limits in the billing flow
 
