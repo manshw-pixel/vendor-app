@@ -158,7 +158,13 @@ Two decisions it must make explicitly rather than by accident:
 ## 7. Testing
 
 The shape slice 3 settled: pure logic with no mocks, screens stubbing only their data
-module, component tests querying by `data-testid` because the suite runs in Marathi.
+module, component tests querying by `data-testid`.
+
+(Corrected 2026-09-09: this section previously said the suite runs in Marathi. It does
+not. jsdom reports `navigator.languages = ["en-US","en"]`, so `resolveLang` returns `en`
+and the tests run in English; Marathi is the production fallback for a browser matching
+none of the three. The `data-testid` convention stays regardless, on the better reason:
+it does not couple a test to translated copy that is AI-written and expected to change.)
 
 The two places bugs will actually live get real cases:
 

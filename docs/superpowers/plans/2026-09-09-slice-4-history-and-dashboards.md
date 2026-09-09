@@ -21,7 +21,7 @@
 - **All money renders through `rupees()`** from `web/src/money.ts`.
 - **Every user-facing string gets a key in all three of** `web/src/i18n/{en,hi,mr}.json`. The `hi`/`mr` values are AI-written and unreviewed — a documented debt.
 - **Tap targets are `min-h-[44px]`.**
-- **The test suite runs in Marathi** (`resolveLang(null, [])` returns `mr`), so component tests query by `data-testid` and match copy with three-language alternations. Never change the app's default language to make a test pass.
+- **Component tests query by `data-testid`, not by visible copy.** (Corrected 2026-09-09: earlier drafts of this plan claimed the suite runs in Marathi. Measured, it does not — jsdom reports `navigator.languages = ["en-US","en"]`, so `resolveLang` returns `en`. Marathi is the PRODUCTION fallback for a browser with no matching language.) The convention stands on its own merit: `data-testid` does not couple a test to translated strings that are AI-written and expected to change.
 - **CI is the verifier, not a local run.** There is no Postgres on the dev machine, so `tests/` runs only in CI. TypeScript 7 ships as a per-platform native binary and the Windows build has already passed code the Linux build rejects. A local green is a smoke test.
 - **Web tests:** `cd web && npm test` (currently 165 across 21 files — must not go down). **DB tests:** `npm test` at the repo root, CI only.
 
