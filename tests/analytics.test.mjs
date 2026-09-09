@@ -77,8 +77,12 @@ test("top_items_between returns all three names for the language the UI needs", 
 
 test("bought_together_between applies the 3-bill threshold inside the window", async () => {
   const w = await getW();
+  // sql() connects as a superuser, so RLS does not scope this query -- other suites'
+  // vendors show up too. Scope to this vendor's onion/tomato pair as a set: the SQL
+  // emits a.item_id < b.item_id, so which uuid lands in item_a is not knowable here.
   const { rows } = await sql(
-    `select * from bought_together_between($1::timestamptz, $2::timestamptz)`, SEP);
+    `select * from bought_together_between($1::timestamptz, $2::timestamptz)
+      where item_a in ($3,$4) and item_b in ($3,$4)`, [...SEP, w.onion, w.tomato]);
   assertEqual(rows.length, 1, "expected exactly the onion/tomato pair");
   assertEqual(Number(rows[0].bill_count), 3, "expected three co-occurrences");
 });
@@ -86,9 +90,12 @@ test("bought_together_between applies the 3-bill threshold inside the window", a
 test("bought_together_between drops a pair that only qualifies outside the window", async () => {
   const w = await getW();
   // One day of the three: the pair now co-occurs once, below the threshold of 3.
+  // Scoped the same way -- a global count would pass by luck if no other suite happens
+  // to seed a qualifying pair inside this one-hour window.
   const { rows } = await sql(
     `select * from bought_together_between('2026-09-09T03:30:00Z'::timestamptz,
-                                           '2026-09-09T04:30:00Z'::timestamptz)`);
+                                           '2026-09-09T04:30:00Z'::timestamptz)
+      where item_a in ($1,$2) and item_b in ($1,$2)`, [w.onion, w.tomato]);
   assertEqual(rows.length, 0, "a pair under the threshold was returned");
 });
 
