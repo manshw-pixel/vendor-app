@@ -19,8 +19,17 @@ describe("routesForRole", () => {
       "/items",
       "/customers",
       "/staff",
+      "/settings",
       "/dashboards",
     ]);
+  });
+
+  it("keeps loyalty settings away from recorders and billers", () => {
+    // Politeness, not protection: vendors_admin_update is what actually refuses the
+    // write. See the header comment in routes.ts.
+    expect(canAccess("recorder", "/settings")).toBe(false);
+    expect(canAccess("biller", "/settings")).toBe(false);
+    expect(canAccess("admin", "/settings")).toBe(true);
   });
 });
 

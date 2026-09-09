@@ -21,6 +21,7 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
     { path: "/items", labelKey: "nav.items" },
     { path: "/customers", labelKey: "nav.customers" },
     { path: "/staff", labelKey: "nav.staff" },
+    { path: "/settings", labelKey: "nav.settings" },
     { path: "/dashboards", labelKey: "nav.dashboards" },
   ],
 };
