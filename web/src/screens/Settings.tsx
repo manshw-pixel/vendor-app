@@ -6,6 +6,7 @@ import { loadVendorConfig, updateVendorConfig } from "../admin";
 import { validateSettings, type SettingsInput, type SettingsField } from "../adminRules";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
+import Staff from "./Staff";
 
 const FIELDS = [
   ["points_threshold_1", "settings.threshold1"],
@@ -85,57 +86,64 @@ export default function Settings() {
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-md">
-      <h2 className="font-semibold text-slate-800">{t("settings.title")}</h2>
-      <p data-testid="settings-future-only" className="text-sm text-slate-600">
-        {t("settings.futureOnly")}
-      </p>
+    <div className="space-y-6">
+      <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-md">
+        <h2 className="font-semibold text-slate-800">{t("settings.loyaltySection")}</h2>
+        <p data-testid="settings-future-only" className="text-sm text-slate-600">
+          {t("settings.futureOnly")}
+        </p>
 
-      {problem && (
-        <p data-testid="settings-problem" className="text-sm text-red-700">{t(problem.key)}</p>
-      )}
+        {problem && (
+          <p data-testid="settings-problem" className="text-sm text-red-700">{t(problem.key)}</p>
+        )}
 
-      {loaded && (
-        <form
-          onSubmit={(e) => { e.preventDefault(); void save(); }}
-          className="space-y-3"
-        >
-          {FIELDS.map(([field, labelKey]) => (
-            <div key={field}>
-              <label className="block text-sm text-slate-600 mb-1" htmlFor={`settings-${field}`}>
-                {t(labelKey)}
-              </label>
-              <input
-                id={`settings-${field}`} data-testid={`settings-${field}`}
-                value={input[field]} inputMode="decimal"
-                onChange={(e) => {
-                  // Any edit retracts the "Saved." claim below -- it was true of the
-                  // form as submitted, not of the form as it now reads.
-                  setSaved(false);
-                  setInput({ ...input, [field]: e.target.value });
-                }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
-              />
-              {errors[field] && (
-                <p data-testid={`settings-error-${field}`} className="text-xs text-red-700 mt-1">
-                  {t(errors[field]!)}
-                </p>
-              )}
-            </div>
-          ))}
-
-          {saved && (
-            <p data-testid="settings-saved" className="text-sm text-green-700">{t("settings.saved")}</p>
-          )}
-
-          <button
-            type="submit" data-testid="settings-save" disabled={busy}
-            className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
+        {loaded && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); void save(); }}
+            className="space-y-3"
           >
-            {t("settings.save")}
-          </button>
-        </form>
-      )}
+            {FIELDS.map(([field, labelKey]) => (
+              <div key={field}>
+                <label className="block text-sm text-slate-600 mb-1" htmlFor={`settings-${field}`}>
+                  {t(labelKey)}
+                </label>
+                <input
+                  id={`settings-${field}`} data-testid={`settings-${field}`}
+                  value={input[field]} inputMode="decimal"
+                  onChange={(e) => {
+                    // Any edit retracts the "Saved." claim below -- it was true of the
+                    // form as submitted, not of the form as it now reads.
+                    setSaved(false);
+                    setInput({ ...input, [field]: e.target.value });
+                  }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+                />
+                {errors[field] && (
+                  <p data-testid={`settings-error-${field}`} className="text-xs text-red-700 mt-1">
+                    {t(errors[field]!)}
+                  </p>
+                )}
+              </div>
+            ))}
+
+            {saved && (
+              <p data-testid="settings-saved" className="text-sm text-green-700">{t("settings.saved")}</p>
+            )}
+
+            <button
+              type="submit" data-testid="settings-save" disabled={busy}
+              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
+            >
+              {t("settings.save")}
+            </button>
+          </form>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-semibold text-slate-800">{t("settings.staffSection")}</h2>
+        <Staff />
+      </section>
     </div>
   );
 }

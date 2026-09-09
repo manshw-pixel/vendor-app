@@ -25,6 +25,12 @@ vi.mock("../components/SessionProvider", () => ({
   }),
 }));
 
+// This screen now folds Staff in beneath the loyalty form. Staff has its own test file
+// (Staff.test.tsx) exercising its behaviour in full; here it is stubbed to a bare marker
+// so this file's mocks stay scoped to the loyalty form, exactly as App.test.tsx stubs
+// every screen it doesn't test.
+vi.mock("../screens/Staff", () => ({ default: () => <div data-testid="screen-staff" /> }));
+
 const { default: Settings } = await import("../screens/Settings");
 
 beforeEach(() => vi.clearAllMocks());

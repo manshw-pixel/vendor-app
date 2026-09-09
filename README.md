@@ -96,11 +96,13 @@ on every run, so the suite is repeatable — which is also why the guard is stri
 billing flow — a recorder picks or creates a customer, taps item tiles, enters weights, sees a
 running total, presses Done and gets a token; a biller works the queue of billed bills,
 completes one, and sees the points that were actually awarded — and, as of stage 3, admin
-screens for items and stock, customers, staff, and loyalty settings.
-
-**Still a placeholder:** the dashboards, at `/dashboards` — stage 4. The console at
-`console.html` remains the way to see them until stage 4 builds the SPA version. See
-[the spec](docs/superpowers/specs/2026-09-08-slice-3-spa-design.md) for the staged plan.
+screens for items and stock, customers, and loyalty settings. As of slice 4, the SPA also
+has a completed-bill history at `/completed` (date-filtered, paged) and a dashboards screen
+at `/dashboards` (money collected, bill count, top items, bought-together pairs, all
+governed by the same date filter). Staff management is folded into `/settings` rather than
+its own screen; `/staff` now redirects there. **No screen in the SPA is a placeholder any
+more.** `console.html` stays published at `/console.html` — it is not retired in this
+slice; whether to retire it is a judgement to make after the vendor has used both.
 
 **What stage 3 does not do, on purpose:**
 
@@ -122,17 +124,35 @@ screens for items and stock, customers, staff, and loyalty settings.
 - **Loyalty settings apply only to bills completed from now on.** `points_ledger` is
   append-only; changing a threshold does not recompute points already awarded.
 
+**What slice 4 does not do, on purpose:**
+
+- **Staff still cannot be invited from the SPA**, even now that Staff lives inside
+  `/settings` rather than its own screen — the form and its rules are unchanged, only its
+  location moved. Self-service account creation still waits on the Edge Function slice.
+- **Item names still require all three languages typed by hand** at `/items`; nothing in
+  this slice adds translation help.
+- **Dashboard money totals are computed by comparing instants against `bills`, not by
+  reading `v_payments_daily`.** That view buckets with `date_trunc('day', completed_at)`,
+  which resolves in the database server's timezone — UTC on Supabase — while the shops are
+  at UTC+5:30. A sale at 02:00 IST is 20:30 the previous day in UTC, so a UTC-bucketed view
+  would attribute the first five and a half hours of every Indian day to the day before.
+  The three payment views (`v_payments_daily` among them) remain, and still serve
+  `console.html`.
+
 ### What has and has not been proven
 
-The suite is **162 web tests plus the 65-case database suite**, both gating every push. But
-`supabase-js` is mocked at the `data.ts` boundary in every SPA test, so **no part of the SPA has
-run against real PostgREST or GoTrue.** Stage 1 shipped two Critical bugs that only a real
-sign-in would have caught; stage 2 merged before its walkthrough was done. Stage 3 widens
-what this leaves uncovered rather than closing it: `vendors`, `items` and `app_users` are
-now written from the client for the first time, and the policies those writes depend on
+The suite is **210 web tests plus the 65-case database suite**, both gating every push. But
+`supabase-js` is mocked at the `data.ts` / `history.ts` boundary in every SPA test, so **no
+part of the SPA has run against real PostgREST or GoTrue.** Stage 1 shipped two Critical
+bugs that only a real sign-in would have caught; stage 2 merged before its walkthrough was
+done. Stage 3 widened what this leaves uncovered rather than closing it: `vendors`, `items`
+and `app_users` are written from the client, and the policies those writes depend on
 (`vendors_admin_update`, `items_admin_write`, `users_admin_write`) are covered by
 `tests/rls.test.mjs` against a real database, but — like everything else in this list —
-have never been exercised through PostgREST or GoTrue.
+have never been exercised through PostgREST or GoTrue. **Slice 4 widens the gap again**:
+`top_items_between` and `bought_together_between` (migration `0007`) are two new RPCs the
+dashboards call directly, and neither has ever been called through PostgREST — only
+mocked, in `Dashboards.test.tsx`.
 
 The first thing to check against the live database, nominated independently by two reviewers:
 the `customers(name, flat_no)` **embed shape** in the biller's queue. A cast in `Pending.tsx`
@@ -146,8 +166,9 @@ browser language, and Marathi is the default only when nothing else matches — 
 English is a stated preference, not an absence of one.
 
 **The Hindi and Marathi strings have never been read by a native speaker.** Every one was
-written by an AI, including the stage-3 strings for items, customers, staff and settings —
-the backlog grows with every stage. They need a Marathi speaker before shop staff use this;
+written by an AI, including the stage-3 strings for items, customers, staff and settings,
+and now the slice-4 strings for completed-bill history and dashboards — the backlog grows
+with every stage. They need a Marathi speaker before shop staff use this;
 the words `token`, `basket` and `points` were deliberately left transliterated (टोकन,
 बास्केट, पॉइंट्स) on the grounds that this is how Indian retail staff speak, and that
 judgement in particular wants confirming.
@@ -175,6 +196,8 @@ Both are deferred deliberately, and neither needs a migration to fix later:
 | `0003_functions.sql` | `issue_token`, `complete_bill`, `customer_points_balance` |
 | `0004_views.sql` | Eight dashboard views, all `security_invoker = true` |
 | `0005_cron.sql` | `expire_points()` and its daily pg_cron schedule |
+| `0006_points_threshold_inclusive.sql` | Fixes the points-threshold comparison to be inclusive |
+| `0007_analytics_by_date.sql` | `top_items_between` and `bought_together_between` RPCs — the date dimension `v_top_items` / `v_bought_together` never had |
 
 | Directory | Contents |
 |---|---|
@@ -217,6 +240,11 @@ supabase db push                        # applies supabase/migrations/ in order
 (`ap-northeast-1`, Postgres 17.6) and verified there — 10 tables, RLS on all 10,
 19 policies, 8 `security_invoker` views, 4 functions, and the
 `vendor-app-points-expiry` cron job at `0 1 * * *`.
+
+**Migration `0007` must be pushed** (`supabase db push`) for the dashboards screen to work
+at all — it adds the `top_items_between` and `bought_together_between` RPCs the dashboards
+call directly, and the Pages workflow deploys only the SPA, never migrations. `0006` (the
+points threshold) may still be unpushed too; check before assuming either has landed.
 
 The project is schema-complete but **empty**, and the first admin cannot be created
 through the API: `app_users` writes require an existing admin of that vendor, and
