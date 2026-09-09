@@ -1,6 +1,6 @@
 {
   "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language" },
-  "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards" },
+  "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards", "completed": "Completed" },
   "session": { "unmappedTitle": "Account not linked to a shop", "unmapped": "You are signed in as {{email}}, but no staff record exists for this account yet. An admin needs to add you before you can use the app.", "errorTitle": "Could not check your account", "error": "Something went wrong while checking your staff record. This is not the same as being unregistered -- try again.", "retry": "Retry" },
   "error": { "notAllowed": "Your role does not allow this.", "customerExists": "A customer with this mobile number already exists.", "duplicate": "This already exists.", "offline": "No connection. Check the network and try again.", "unknown": "Something went wrong.", "staffHasHistory": "This person has recorded or completed bills, so their record cannot be removed. Change their role instead.", "details": "Details" },
   "offline": { "banner": "You are offline. Changes cannot be saved." },
@@ -75,6 +75,40 @@
     "badNumber": "Enter a number between 0 and 99,999,999.99.",
     "notPositive": "Enter a number above zero.",
     "notWhole": "Enter a whole number.",
-    "outOfOrder": "The second target must be larger than the first."
+    "outOfOrder": "The second target must be larger than the first.",
+    "loyaltySection": "Loyalty",
+    "staffSection": "Staff"
+  },
+  "range": {
+    "today": "Today",
+    "week": "This week",
+    "month": "This month",
+    "custom": "Custom",
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "backwards": "The start date is after the end date."
+  },
+  "completed": {
+    "title": "Completed bills",
+    "empty": "No completed bills in this period.",
+    "token": "Token {{n}}",
+    "loadMore": "Load more",
+    "loading": "Loading…",
+    "lines": "Items",
+    "qtyLine": "{{qty}} kg",
+    "noCustomer": "No customer"
+  },
+  "dash": {
+    "title": "Dashboards",
+    "collected": "Money collected",
+    "billCount": "Completed bills",
+    "topItems": "Top items",
+    "topItemsSub": "By weight sold",
+    "together": "Bought together",
+    "togetherSub": "Pairs seen 3 or more times",
+    "empty": "Nothing in this period.",
+    "kg": "{{kg}} kg",
+    "pairCount": "{{n}} bills"
   }
 }

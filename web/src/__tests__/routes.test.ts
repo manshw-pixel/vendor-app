@@ -6,24 +6,40 @@ describe("routesForRole", () => {
     expect(routesForRole("recorder").map((r) => r.path)).toEqual(["/bill", "/customers"]);
   });
 
-  it("gives the biller only the completion queue", () => {
-    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending"]);
+  it("gives the biller the queue and the history", () => {
+    // A biller completes bills and sees each total as they do it, so the record of what
+    // they completed is theirs too. bills_read would permit more; this is nav, not policy.
+    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending", "/completed"]);
   });
 
-  it("gives admin the full set, including billing", () => {
-    // The policies permit ('admin','recorder') to create bills and issue tokens, so the
-    // UI follows the policy rather than narrowing it.
+  it("gives admin the full set, with staff folded into settings", () => {
     expect(routesForRole("admin").map((r) => r.path)).toEqual([
       "/bill",
       "/pending",
+      "/completed",
       "/items",
       "/customers",
-      "/staff",
       "/settings",
       "/dashboards",
     ]);
   });
 
+  it("no longer lists /staff anywhere", () => {
+    // The screen still exists, as a section of /settings. The route survives as a
+    // redirect (App.tsx) because it has been linkable since stage 3.
+    for (const role of ["admin", "recorder", "biller"] as const) {
+      expect(routesForRole(role).some((r) => r.path === "/staff")).toBe(false);
+    }
+  });
+
+  it("keeps the history away from recorders", () => {
+    expect(canAccess("recorder", "/completed")).toBe(false);
+    expect(canAccess("biller", "/completed")).toBe(true);
+    expect(canAccess("admin", "/completed")).toBe(true);
+  });
+});
+
+describe("canAccess", () => {
   it("keeps loyalty settings away from recorders and billers", () => {
     // Politeness, not protection: vendors_admin_update is what actually refuses the
     // write. See the header comment in routes.ts.
@@ -31,9 +47,7 @@ describe("routesForRole", () => {
     expect(canAccess("biller", "/settings")).toBe(false);
     expect(canAccess("admin", "/settings")).toBe(true);
   });
-});
 
-describe("canAccess", () => {
   it("permits a route the role owns", () => {
     expect(canAccess("biller", "/pending")).toBe(true);
   });
