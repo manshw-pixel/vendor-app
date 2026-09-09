@@ -7,6 +7,10 @@ import { Guard } from "./components/Guard";
 import { Placeholder } from "./screens/Placeholder";
 import Bill from "./screens/Bill";
 import Pending from "./screens/Pending";
+import Items from "./screens/Items";
+import Customers from "./screens/Customers";
+import Staff from "./screens/Staff";
+import Settings from "./screens/Settings";
 import { homeFor } from "./routes";
 
 function Unmapped({ email }: { email: string }) {
@@ -53,9 +57,10 @@ function Inner() {
         <Routes>
           <Route path="/bill" element={<Bill />} />
           <Route path="/pending" element={<Pending />} />
-          <Route path="/items" element={<Placeholder titleKey="nav.items" />} />
-          <Route path="/customers" element={<Placeholder titleKey="nav.customers" />} />
-          <Route path="/staff" element={<Placeholder titleKey="nav.staff" />} />
+          <Route path="/items" element={<Items />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/staff" element={<Staff />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/dashboards" element={<Placeholder titleKey="nav.dashboards" />} />
           <Route path="*" element={<Navigate to={homeFor(s.role)} replace />} />
         </Routes>

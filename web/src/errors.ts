@@ -21,6 +21,16 @@ export function describeError(
   if (error.code === "23505") {
     return { key: "error.duplicate", detail };
   }
+  // bills.recorder_id/biller_id reference app_users with no ON DELETE clause
+  // (0001_schema.sql:75-76), i.e. NO ACTION -- a restrict. Deleting anyone who has ever
+  // recorded or completed a bill fails here, which is the common case in a working shop,
+  // not an edge case, so it needs its own message rather than falling through to unknown.
+  // Gated on "app_users" the same way the 23505 branch above is gated on "customers" --
+  // describeError is shared with the billing flow, and any OTHER foreign-key violation
+  // (e.g. a bill_items insert racing a vanished item row) must not claim staff history.
+  if (error.code === "23503" && /app_users/.test(detail)) {
+    return { key: "error.staffHasHistory", detail };
+  }
   if (/failed to fetch|networkerror|load failed/i.test(detail)) {
     return { key: "error.offline", detail };
   }

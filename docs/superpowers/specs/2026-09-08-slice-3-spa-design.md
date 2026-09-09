@@ -309,6 +309,137 @@ with a mocked `supabase` client, mocking confined to those files. The E2E gap of
 unchanged: still no PostgREST or GoTrue in the test environment, still closed only by a
 Cloud test project.
 
+## 11b. Stage 3 screen design
+
+Added 2026-09-09, after stage 2 shipped. Four admin screens. §5 settles the data flow;
+this settles what each screen owns and, more usefully, what it deliberately does not.
+
+### Where the code lives
+
+`data.ts` stays the billing flow's file — its header says so, and the rule it states (no
+client-side vendor filter, because RLS already scopes every read) carries over unchanged.
+Admin calls go in a new `web/src/admin.ts` with the same shape. The split is not
+ceremony: two focused files are easier to hold in one head than one file doing both, and
+the screens stub `admin.ts` in tests exactly as the billing screens stub `data.ts`.
+
+`/items`, `/customers` and `/staff` already exist in `routes.ts` as `Placeholder`s.
+Stage 3 adds `/settings`, admin-only.
+
+`/customers` stays in the recorder's nav as well as the admin's. `customers_write` really
+does permit `('admin','recorder')` (0002_rls.sql), so this is one screen for both roles,
+not two screens with a role branch. As always, the nav guard is politeness; the policy is
+the authorization.
+
+### Items and stock
+
+The list shows **all** items, inactive ones included. `listItems()` filters
+`is_active = true` for the bill grid on purpose, so admin needs its own `listAllItems()`
+— an admin who cannot see a deactivated item cannot bring it back. Each row carries the
+three names, price, stock and active state, with low and zero stock coloured as the bill
+tiles colour them.
+
+The create/edit form takes `name_en`, `name_hi`, `name_mr`, `price` and `stock_kg`.
+
+**All three names are mandatory**, though the columns default to `''`. Two reasons. A
+shopkeeper typing कोथिंबीर is the only native-quality Indian-language text this
+application will ever contain — every other `hi` and `mr` string in `web/src/i18n/` is
+AI-written and has never been reviewed by a speaker. And `itemName()` has no honest
+fallback for a blank: showing the English name to a Marathi-speaking customer is the
+failure the three columns exist to prevent, and a blank filled in "later" never is.
+
+**Stock is an absolute figure that overwrites**, not a delta. The vendor weighs what is on
+the table; asking them to subtract is asking them to redo arithmetic the scale already
+did.
+
+This means a save that lands while a bill is completing overwrites that bill's decrement.
+That is accepted, not overlooked. `complete_bill()` remains the authority for decrements;
+this screen is a correction, and a vendor recounting a crate is not racing a biller in
+any real shop. The fix, if it ever matters, is an RPC that applies a delta inside one
+transaction — worth building when the race is observed, not before.
+
+Items are **deactivated, never deleted**. `bill_items.item_id` references them, so a
+delete would either fail on the FK or destroy the history the dashboards read.
+
+### Customers
+
+Searchable list, reusing `matchCustomers()` from `customers.ts` rather than growing a
+second search with different behaviour. Tapping a row opens name, flat no and mobile for
+editing, and shows the customer's balance from `customer_points_balance(id)`.
+
+A duplicate mobile is reported the way `CustomerStep` already reports it — "this customer
+already exists", with an offer to open that customer — never as a raw constraint
+violation. `(vendor_id, mobile)` is unique and the edit path can collide with it just as
+the create path can.
+
+No delete. A customer carries bills and an append-only ledger; `customers_write` would
+permit the delete, and it would cascade `points_ledger` and orphan `bills.customer_id`.
+One mistap is not an acceptable price for a feature nothing asked for.
+
+### Staff
+
+The `app_users` roster: name and role, with an admin able to rename someone or change
+their role.
+
+**No invite, and the screen says why.** `app_users.id` must equal an existing
+`auth.users.id`, and creating auth accounts is slice 2's Edge Function (§6), which does
+not exist. A screen that appeared to invite someone and silently could not would be worse
+than one that admits the seam. The note points at `docs/runbook-first-admin.md`, which
+already describes the sign-up-then-link procedure.
+
+Two guards:
+
+- An admin cannot demote or remove **themselves**. This is the single action that locks a
+  vendor out of its own tenant — `users_admin_write` needs `current_user_role() = 'admin'`,
+  so the last admin who demotes themselves leaves nobody able to undo it, and the repair
+  is hand-written SQL against production.
+- Removal raises a confirm.
+
+Removing an `app_users` row does not delete the auth account; the person simply stops
+resolving to a vendor. That is the correct behaviour here and the screen's wording should
+not imply otherwise.
+
+### Settings
+
+The vendor's own row: `points_threshold_1`, `points_reward_1`, `points_threshold_2`,
+`points_reward_2`, `redeem_days`. All required, all numeric, thresholds positive, and
+`points_threshold_2 > points_threshold_1`.
+
+The screen states that changes apply to bills completed **from now on**. `points_ledger`
+is append-only and nothing recomputes past awards — a vendor who raises a reward and
+expects yesterday's customers to benefit is going to be wrong, and the place to tell them
+is the screen, not a support conversation.
+
+`/settings` is a route rather than a panel on `/items` because the next piece of
+per-vendor configuration — the vendor name, at minimum — has nowhere else to go, and
+loyalty rules filed under produce read as misplaced.
+
+### Not built in stage 3
+
+- Inviting or creating staff accounts. Slice 2's Edge Function owns it.
+- Deleting customers or items. See above; deactivation covers the real case.
+- Redemption. Unchanged from §12 — no requirement numbers a redemption screen.
+- Stock requests. `stock_requests` has a read policy, an admin delete policy and a
+  counts view, but no requirement in this slice asks for a screen; it belongs with the
+  dashboards in stage 4.
+
+### Testing
+
+Pure logic — settings validation, item form validation, the self-demotion check, search
+filtering — is Vitest with no mocks, as in stages 1 and 2. Each screen gets a component
+test with `admin.ts` stubbed, mocking confined to those files.
+
+The E2E gap of §10 is unchanged: still no PostgREST and no GoTrue in the test
+environment, still closed only by a Cloud test project. Stage 3 writes to `vendors`,
+`items` and `app_users` for the first time from the client, so the policies those writes
+depend on (`vendors_admin_update`, `items_admin_write`, `users_admin_write`) are covered
+by `tests/rls.test.mjs` against a real database but have never been exercised through
+PostgREST.
+
+The new `hi` and `mr` strings are AI-written and unreviewed, like every other string in
+those files.
+
+---
+
 ## 12. Out of scope
 
 - The billing flow's WhatsApp *delivery* — slice 2 owns the sender. The SPA's writes queue
