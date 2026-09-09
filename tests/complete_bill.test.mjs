@@ -61,7 +61,7 @@ test("spend above 600 earns 50 points", async () => {
 });
 
 test("spend of exactly 1000 earns 100 points", async () => {
-  // The spec's boundary: "above 600", but "1000 or above".
+  // Both tiers are inclusive since 0006; this pins the upper one.
   const w = await billedBill({ total: 1000 });
   await sql(`select complete_bill($1)`, [w.billId]);
   assertEqual(await points(w.vendorId), 100, "expected 100 points at exactly 1000");
