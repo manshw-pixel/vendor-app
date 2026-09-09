@@ -7,7 +7,7 @@ const all: Customer[] = [
   { id: "c2", name: "Bhau", flat_no: "B-2", mobile: "+919000000002" },
 ];
 
-const listCustomers = vi.fn(async (): Promise<{ data: Customer[] | null; error: null }> =>
+const listCustomers = vi.fn(async (..._a: unknown[]): Promise<{ data: Customer[] | null; error: null }> =>
   ({ data: all, error: null }));
 const updateCustomer = vi.fn(async (..._a: unknown[]): Promise<{
   error: { code?: string; message?: string } | null;
