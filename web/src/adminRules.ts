@@ -27,6 +27,9 @@ export type ItemValue = {
 /** At or below this many kg, a row is coloured. Matches the bill grid's threshold. */
 export const LOW_STOCK_KG = 2;
 
+/** Maximum value for numeric(10,2) columns in 0001_schema.sql. */
+const MAX_NUMERIC = 99999999.99;
+
 export function stockLevel(kg: number): "out" | "low" | "ok" {
   if (kg <= 0) return "out";
   return kg <= LOW_STOCK_KG ? "low" : "ok";
@@ -37,7 +40,9 @@ function nonNegative(raw: string): number | null {
   const s = raw.trim();
   if (s === "" || !/^\d+(\.\d+)?$/.test(s)) return null;
   const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  if (n > MAX_NUMERIC) return null;
+  return n;
 }
 
 export function validateItem(

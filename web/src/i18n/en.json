@@ -28,8 +28,8 @@
     "stockNote": "Type the stock you counted. This replaces the current figure; completing a bill still subtracts from it.",
     "namesNote": "All three names are required. Customers see the name in their own language.",
     "required": "This field is required.",
-    "badPrice": "Enter a price of zero or more.",
-    "badStock": "Enter a stock figure of zero or more."
+    "badPrice": "Enter a price between 0 and 99,999,999.99.",
+    "badStock": "Enter a stock figure between 0 and 99,999,999.99."
   },
   "customersScreen": {
     "title": "Customers",
@@ -72,7 +72,7 @@
     "saved": "Saved.",
     "futureOnly": "These rules apply to bills completed from now on. Points already awarded are never recalculated.",
     "required": "This field is required.",
-    "badNumber": "Enter a number.",
+    "badNumber": "Enter a number between 0 and 99,999,999.99.",
     "notPositive": "Enter a number above zero.",
     "notWhole": "Enter a whole number.",
     "outOfOrder": "The second target must be larger than the first."

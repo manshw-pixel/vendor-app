@@ -44,6 +44,18 @@ describe("validateItem", () => {
     const r = validateItem({ ...item, name_en: "  Onion  " });
     if (r.ok) expect(r.value.name_en).toBe("Onion");
   });
+
+  it("rejects a 20-digit price", () => {
+    expect(validateItem({ ...item, price: "12345678901234567890" }).ok).toBe(false);
+  });
+
+  it("accepts the maximum numeric(10,2) value for price", () => {
+    expect(validateItem({ ...item, price: "99999999.99" }).ok).toBe(true);
+  });
+
+  it("rejects a price exceeding the maximum numeric(10,2) value", () => {
+    expect(validateItem({ ...item, price: "100000000" }).ok).toBe(false);
+  });
 });
 
 describe("validateSettings", () => {
@@ -92,6 +104,18 @@ describe("validateSettings", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort())
       .toEqual(["points_reward_2", "points_threshold_1"]);
+  });
+
+  it("rejects a 20-digit threshold", () => {
+    expect(validateSettings({ ...ok, points_threshold_1: "12345678901234567890" }).ok).toBe(false);
+  });
+
+  it("accepts the maximum numeric(10,2) value for threshold", () => {
+    expect(validateSettings({ ...ok, points_threshold_2: "99999999.99" }).ok).toBe(true);
+  });
+
+  it("rejects a threshold exceeding the maximum numeric(10,2) value", () => {
+    expect(validateSettings({ ...ok, points_threshold_2: "100000000" }).ok).toBe(false);
   });
 });
 
