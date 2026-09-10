@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { SessionProvider, useSession } from "./components/SessionProvider";
@@ -13,13 +14,53 @@ import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
 import { homeFor } from "./routes";
 
-function Unmapped({ email }: { email: string }) {
+/**
+ * The screen a person sees between signing up and an admin linking them.
+ *
+ * It shows their user id because it is the ONLY place in the app that id can be read,
+ * and Settings -> Staff -> Add staff asks an admin to paste exactly this value. Until an
+ * Edge Function can invite by email, a panel here that said only "an admin needs to add
+ * you" would leave both sides stuck: the admin has a form, and nobody can obtain what it
+ * wants except through the Supabase dashboard -- which is the database access the form
+ * exists to avoid.
+ */
+function Unmapped({ userId, email }: { userId: string; email: string }) {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(userId);
+      setCopied(true);
+    } catch {
+      // clipboard is HTTPS-only and can be refused outright. The id is selectable text
+      // above, so failing to copy costs the reader a manual select, not the value --
+      // which is why this swallows rather than reporting.
+      setCopied(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white border border-amber-200 rounded-xl p-6 max-w-md">
-        <h1 className="font-semibold text-slate-800 mb-2">{t("session.unmappedTitle")}</h1>
+      <div className="bg-white border border-amber-200 rounded-xl p-6 max-w-md space-y-3">
+        <h1 className="font-semibold text-slate-800">{t("session.unmappedTitle")}</h1>
         <p className="text-sm text-slate-600">{t("session.unmapped", { email })}</p>
+
+        <div className="space-y-2 border-t border-slate-200 pt-3">
+          <p className="text-sm text-slate-700">{t("session.sendIdToAdmin")}</p>
+          <p
+            data-testid="session-user-id"
+            className="font-mono text-xs break-all select-all bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800"
+          >
+            {userId}
+          </p>
+          <button
+            data-testid="session-copy-id" onClick={() => void copy()}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+          >
+            {copied ? t("session.copied") : t("session.copyId")}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -48,7 +89,7 @@ function Inner() {
   const s = useSession();
   if (s.kind === "loading") return <div className="p-8 text-slate-400">…</div>;
   if (s.kind === "signedOut") return <Login />;
-  if (s.kind === "unmapped") return <Unmapped email={s.email} />;
+  if (s.kind === "unmapped") return <Unmapped userId={s.userId} email={s.email} />;
   if (s.kind === "error") return <SessionError detail={s.detail} />;
 
   return (

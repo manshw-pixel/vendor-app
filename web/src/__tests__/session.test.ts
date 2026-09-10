@@ -25,7 +25,10 @@ describe("sessionFromRow", () => {
     // This is the real state of every new staff member before an admin maps them.
     // Without naming it, every query returns empty and the app looks broken.
     const s = sessionFromRow("u1", "new@b.test", null);
-    expect(s).toEqual({ kind: "unmapped", email: "new@b.test" });
+    // userId is part of the state, not incidental: the unmapped screen is the only
+    // place in the app a person can read their own id, and an admin needs it to link
+    // them. Dropping it here would leave that screen with nothing to show.
+    expect(s).toEqual({ kind: "unmapped", userId: "u1", email: "new@b.test" });
   });
 
   it("falls back when the vendor embed is missing", () => {
