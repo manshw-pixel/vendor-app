@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 // do. The screen is rendered directly (by tests, and by the router) without going
 // through main.tsx.
 import "../i18n";
-import { listStaff, updateStaff, removeStaff, type StaffRow } from "../admin";
-import { canEditStaff } from "../adminRules";
+import { createStaff, listStaff, updateStaff, removeStaff, type StaffRow } from "../admin";
+import { canEditStaff, validateNewStaff, type NewStaffInput, type NewStaffField } from "../adminRules";
 import { ROLES, type Role } from "../config";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
@@ -17,10 +17,14 @@ const ROLE_KEY: Record<Role, string> = {
 };
 
 /**
- * The staff roster: §11b's admin-only view of app_users for this vendor. Nobody can be
- * invited from here -- creating an auth account is a later slice's Edge Function, so the
- * screen says so plainly (docs/runbook-first-admin.md) rather than offering a button that
- * would silently fail.
+ * The staff roster: §11b's admin-only view of app_users for this vendor.
+ *
+ * Adding someone LINKS an account that already exists; it does not invite one. Creating
+ * the auth.users row needs auth.admin.createUser and so the service_role key, which
+ * config.ts forbids in this bundle -- that is still the Edge Function slice. So the form
+ * takes a user id the person reads off their own sign-up, which is exactly what
+ * docs/runbook-first-admin.md previously had an admin do by hand in SQL. The screen says
+ * that plainly rather than offering an invite button that would silently fail.
  *
  * canEditStaff blocks the signed-in admin from touching their own row: self-demotion or
  * self-removal is the one action that can lock a vendor out of its own tenant, since
@@ -33,6 +37,9 @@ export default function Staff() {
   const [rows, setRows] = useState<StaffRow[]>([]);
   const [editing, setEditing] = useState<{ id: string; name: string; role: Role } | null>(null);
   const [confirming, setConfirming] = useState<StaffRow | null>(null);
+  const [adding, setAdding] = useState<NewStaffInput | null>(null);
+  const [addErrors, setAddErrors] = useState<Partial<Record<NewStaffField, string>>>({});
+  const [added, setAdded] = useState(false);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,6 +53,28 @@ export default function Staff() {
 
   if (session.kind !== "ready") return null;
   const selfId = session.userId;
+  const vendorId = session.vendorId;
+
+  async function add() {
+    if (!adding) return;
+    setAdded(false);
+    setProblem(null);
+    const result = validateNewStaff(adding);
+    if (!result.ok) { setAddErrors(result.errors); return; }
+    setAddErrors({});
+    setBusy(true);
+    const { error } = await createStaff(vendorId, result.value);
+    setBusy(false);
+    const described = describeError(error);
+    setProblem(described);
+    // Leave the form open and filled on failure. The common miss here is a mistyped or
+    // already-linked id, and both are fixed by editing what is on screen -- clearing it
+    // would make the admin fetch the id again to correct one character.
+    if (described) return;
+    setAdding(null);
+    await load();
+    setAdded(true);
+  }
 
   async function save() {
     if (!editing) return;
@@ -78,8 +107,92 @@ export default function Staff() {
       <h2 className="font-semibold text-slate-800">{t("staff.title")}</h2>
 
       <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
-        {t("staff.cannotInvite")}
+        {t("staff.signUpFirst")}
       </p>
+
+      {!adding && (
+        <button
+          data-testid="staff-add-open"
+          onClick={() => {
+            setAdded(false);
+            setAddErrors({});
+            setAdding({ id: "", name: "", role: "recorder" });
+          }}
+          className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px]"
+        >
+          {t("staff.add")}
+        </button>
+      )}
+
+      {added && (
+        <p data-testid="staff-added" className="text-sm text-green-700">{t("staff.added")}</p>
+      )}
+
+      {adding && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); void add(); }}
+          className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
+        >
+          <h3 className="font-semibold text-slate-800">{t("staff.addTitle")}</h3>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-id">
+              {t("staff.userId")}
+            </label>
+            <input
+              id="staff-add-id" data-testid="staff-add-id" value={adding.id}
+              autoComplete="off" spellCheck={false}
+              onChange={(e) => setAdding({ ...adding, id: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] font-mono text-sm"
+            />
+            {addErrors.id && (
+              <p data-testid="staff-add-error-id" className="text-xs text-red-700 mt-1">
+                {t(addErrors.id)}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-name">
+              {t("staff.name")}
+            </label>
+            <input
+              id="staff-add-name" data-testid="staff-add-name" value={adding.name}
+              onChange={(e) => setAdding({ ...adding, name: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+            {addErrors.name && (
+              <p data-testid="staff-add-error-name" className="text-xs text-red-700 mt-1">
+                {t(addErrors.name)}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-role">
+              {t("staff.role")}
+            </label>
+            <select
+              id="staff-add-role" data-testid="staff-add-role" value={adding.role}
+              onChange={(e) => setAdding({ ...adding, role: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white"
+            >
+              {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEY[r])}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit" data-testid="staff-add-save" disabled={busy}
+              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
+            >
+              {t("staff.save")}
+            </button>
+            <button
+              type="button" onClick={() => setAdding(null)}
+              className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+            >
+              {t("staff.cancel")}
+            </button>
+          </div>
+        </form>
+      )}
 
       {problem && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

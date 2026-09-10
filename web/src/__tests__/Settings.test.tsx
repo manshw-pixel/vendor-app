@@ -43,6 +43,14 @@ describe("the loyalty settings screen", () => {
     expect((field as HTMLInputElement).value).toBe("600");
   });
 
+  it("puts no heading of its own above the staff section", async () => {
+    // Staff renders its own <h2>Staff</h2> and must, because the router mounts it
+    // standalone. A wrapper heading here stacked the same word twice on this page.
+    render(<Settings />);
+    await screen.findByTestId("screen-staff");
+    expect(screen.queryByRole("heading", { name: /^Staff$/i })).toBeNull();
+  });
+
   it("warns that past points are never recalculated", async () => {
     // points_ledger is append-only. A vendor who raises a reward and expects yesterday's
     // customers to benefit is going to be wrong, and the screen is where to say so.

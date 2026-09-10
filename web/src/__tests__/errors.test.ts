@@ -72,3 +72,19 @@ describe("describeError", () => {
     expect(d?.key).toBe("error.unknown");
   });
 });
+
+describe("a duplicate staff account", () => {
+  it("says the account is already linked rather than the generic duplicate", () => {
+    // Gated on the table, exactly as the customers branch is: describeError is shared
+    // with the billing flow, and a duplicate elsewhere must not claim a staff account.
+    expect(describeError({
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "app_users_pkey"',
+    })?.key).toBe("error.staffExists");
+  });
+
+  it("leaves an unrelated duplicate on the generic message", () => {
+    expect(describeError({ code: "23505", message: "some other constraint" })?.key)
+      .toBe("error.duplicate");
+  });
+});

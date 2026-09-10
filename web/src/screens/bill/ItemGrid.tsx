@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+
+type T = ReturnType<typeof useTranslation>["t"];
 import { validateWeight, type Draft } from "../../billing";
 import type { Item } from "../../data";
 import { itemName, type Lang } from "../../i18n/locales";
@@ -15,6 +17,10 @@ function stockClass(kg: number): string {
   if (kg <= 0) return "text-red-600";
   if (kg < 10) return "text-amber-600";
   return "text-slate-500";
+}
+
+function stockText(kg: number, t: T): string {
+  return kg <= 0 ? t("bill.outOfStock") : t("bill.stock", { kg });
 }
 
 export function ItemGrid({
@@ -53,36 +59,39 @@ export function ItemGrid({
     <div className="space-y-3">
       <h2 className="font-semibold text-slate-800">{t("bill.addItem")}</h2>
 
-      <ul className="space-y-2">
-        {items.map((item) => (
-          <li key={item.id}>
-            <button
-              data-testid={`item-row-${item.id}`}
-              onClick={() => {
-                setSelected(item);
-                setWeight("");
-                setReason(null);
-              }}
-              className={`w-full flex items-center gap-3 rounded-xl border p-3 min-h-[44px] text-left bg-white ${
-                selected?.id === item.id
-                  ? "border-emerald-500 ring-2 ring-emerald-200"
-                  : "border-slate-200"
-              }`}
-            >
-              <span className="flex-1 min-w-0 font-medium text-slate-800 truncate">
-                {itemName(item, lang)}
-              </span>
-              <span className="text-sm text-slate-600 whitespace-nowrap">{rupees(item.price)}</span>
-              <span className={`text-xs whitespace-nowrap ${stockClass(item.stock_kg)}`}>
-                {item.stock_kg <= 0 ? t("bill.outOfStock") : t("bill.stock", { kg: item.stock_kg })}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <label className="block text-sm text-slate-600" htmlFor="item-select">
+        {t("bill.chooseItem")}
+        <select
+          id="item-select"
+          data-testid="item-select"
+          value={selected?.id ?? ""}
+          onChange={(e) => {
+            setSelected(items.find((i) => i.id === e.target.value) ?? null);
+            setWeight("");
+            setReason(null);
+          }}
+          className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
+        >
+          <option value="">{t("bill.chooseItem")}</option>
+          {items.map((item) => (
+            <option key={item.id} value={item.id}>
+              {`${itemName(item, lang)} — ${rupees(item.price)} · ${stockText(item.stock_kg, t)}`}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {selected && (
         <div className="space-y-2 border border-slate-200 rounded-xl bg-white p-3">
+          {/* <option> cannot carry stockClass's colour, so the warning that the shop is
+              low or out is repeated here, where it can be styled, for the one item the
+              recorder actually picked. */}
+          <p data-testid="item-detail" className="text-sm text-slate-700">
+            {rupees(selected.price)}
+            <span className={`ml-2 text-xs ${stockClass(selected.stock_kg)}`}>
+              {stockText(selected.stock_kg, t)}
+            </span>
+          </p>
           <label className="block text-sm text-slate-600">
             {t("bill.weightKg")}
             {/* Scales report values like 1.35, so this is a decimal keypad, not a stepper. */}

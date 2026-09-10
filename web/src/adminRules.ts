@@ -7,6 +7,8 @@
  * actually hold. Rejecting here only buys a clearer message than a 400 from PostgREST.
  */
 
+import { ROLES, type Role } from "./config";
+
 export type ItemInput = {
   name_en: string;
   name_hi: string;
@@ -130,4 +132,38 @@ export function validateSettings(
  */
 export function canEditStaff(selfUserId: string, targetUserId: string): boolean {
   return selfUserId !== targetUserId;
+}
+
+export type NewStaffInput = { id: string; name: string; role: string };
+export type NewStaffField = keyof NewStaffInput;
+export type NewStaffValue = { id: string; name: string; role: Role };
+
+/** app_users.id has no FK to auth.users (0001_schema.sql:34) -- the column comment is the
+ *  only thing tying them together, so a typo here inserts a row that resolves to nobody.
+ *  Shape is all this can check; that the account exists is not knowable from the SPA. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A new staff row, linking an account that has ALREADY signed up.
+ *
+ * Deliberately not an invitation: creating the auth account needs auth.admin.createUser
+ * and therefore the service_role key, which config.ts forbids in this bundle. So the
+ * admin pastes the user id from the sign-up, and this checks what it can.
+ */
+export function validateNewStaff(
+  input: NewStaffInput,
+): { ok: true; value: NewStaffValue } | { ok: false; errors: Partial<Record<NewStaffField, string>> } {
+  const errors: Partial<Record<NewStaffField, string>> = {};
+
+  if (!UUID.test(input.id.trim())) errors.id = "staff.badId";
+  if (input.name.trim() === "") errors.name = "staff.required";
+  if (!(ROLES as readonly string[]).includes(input.role)) errors.role = "staff.badRole";
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    // Lowercased because Postgres renders uuid canonically anyway; storing the admin's
+    // uppercase paste would make the row read differently from every other id in the table.
+    value: { id: input.id.trim().toLowerCase(), name: input.name.trim(), role: input.role as Role },
+  };
 }

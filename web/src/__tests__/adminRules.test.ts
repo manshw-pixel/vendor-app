@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  validateItem, validateSettings, canEditStaff, stockLevel, LOW_STOCK_KG,
+  validateItem, validateSettings, validateNewStaff, canEditStaff, stockLevel, LOW_STOCK_KG,
 } from "../adminRules";
 
 const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5" };
@@ -144,5 +144,49 @@ describe("stockLevel", () => {
 
   it("calls a healthy figure ok", () => {
     expect(stockLevel(LOW_STOCK_KG + 0.01)).toBe("ok");
+  });
+});
+
+describe("validateNewStaff", () => {
+  const good = { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", name: "Rina", role: "recorder" };
+
+  it("accepts a well-formed row", () => {
+    const r = validateNewStaff(good);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toEqual(good);
+  });
+
+  it("rejects an id that is not a uuid", () => {
+    // app_users.id has no FK to auth.users, so a typo inserts a row that resolves to
+    // nobody and looks, from the roster, exactly like a working account.
+    const r = validateNewStaff({ ...good, id: "u2" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.id).toBe("staff.badId");
+  });
+
+  it("canonicalises an id pasted in uppercase", () => {
+    const r = validateNewStaff({ ...good, id: good.id.toUpperCase() });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.id).toBe(good.id);
+  });
+
+  it("rejects a blank name", () => {
+    const r = validateNewStaff({ ...good, name: "   " });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.name).toBe("staff.required");
+  });
+
+  it("rejects a role the check constraint would refuse", () => {
+    // 0001_schema.sql: role in ('admin','recorder','biller'). Anything else is a 23514
+    // from the database; catching it here buys a message that names the field.
+    const r = validateNewStaff({ ...good, role: "owner" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.role).toBe("staff.badRole");
+  });
+
+  it("reports every bad field at once", () => {
+    const r = validateNewStaff({ id: "x", name: "", role: "" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["id", "name", "role"]);
   });
 });

@@ -140,8 +140,10 @@ export default function Settings() {
         )}
       </section>
 
+      {/* No heading here: Staff renders its own <h2>{t("staff.title")}</h2>, and it has to
+          -- the router mounts that screen standalone too. A wrapper heading saying the
+          same word stacked two identical "Staff" headings on this page. */}
       <section className="space-y-3">
-        <h2 className="font-semibold text-slate-800">{t("settings.staffSection")}</h2>
         <Staff />
       </section>
     </div>
