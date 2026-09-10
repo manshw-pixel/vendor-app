@@ -27,3 +27,9 @@ site_url = "http://127.0.0.1:3000"
 # signUp returns { session: null } and every downstream assertion fails on a null token.
 # This is a LOCAL convenience: production keeps confirmations on.
 enable_confirmations = false
+
+# verify_jwt rejects unauthenticated calls at the platform edge. That is defence in depth,
+# NOT the check: a valid token proves a signed-in user, not an admin. The function reads
+# app_users under the caller's own JWT to decide that, and must keep doing so.
+[functions.admin-create-user]
+verify_jwt = true
