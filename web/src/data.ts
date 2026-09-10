@@ -18,6 +18,9 @@ export type PendingBill = {
   id: string;
   token_no: number;
   total: number;
+  // Needed to read a loyalty balance before completing. Nullable because a walk-in bill
+  // has no customer, and therefore nothing to redeem against.
+  customer_id: string | null;
   customers: { name: string; flat_no: string } | null;
 };
 
@@ -122,22 +125,41 @@ export async function billToken(billId: string) {
 export async function listPending() {
   return supabase
     .from("bills")
-    .select("id, token_no, total, customers(name, flat_no)")
+    .select("id, token_no, total, customer_id, customers(name, flat_no)")
     .eq("status", "billed")
     .order("token_no", { ascending: false });
 }
 
-export async function completeBill(billId: string) {
-  return supabase.rpc("complete_bill", { p_bill_id: billId });
+/**
+ * Completes a sale, optionally spending some of the customer's points on it.
+ *
+ * p_redeem_points is omitted rather than sent as 0 when nothing is redeemed: the function
+ * defaults it, and the parameter names must match 0010_points_redemption.sql exactly --
+ * PostgREST resolves the overload by argument name and a mismatch reads as
+ * "function not found".
+ */
+export async function completeBill(billId: string, redeemPoints?: number) {
+  const args: Record<string, unknown> = { p_bill_id: billId };
+  if (redeemPoints && redeemPoints > 0) args.p_redeem_points = redeemPoints;
+  return supabase.rpc("complete_bill", args);
 }
 
-/** What complete_bill() actually wrote to points_ledger for this bill, not a client-side
- *  recompute of the vendor's threshold. Filtered on bill_id only -- RLS (points_read)
- *  already scopes the read to the caller's tenant, so a second vendor filter here would
- *  be a weaker client-side copy of the policy. Zero rows is legitimate: a bill under the
- *  vendor's first threshold earns no points and complete_bill() writes no row for it. */
+/** The customer's unexpired points balance. Already tenant-guarded inside the function. */
+export async function customerBalance(customerId: string) {
+  return supabase.rpc("customer_points_balance", { p_customer_id: customerId });
+}
+
+/** What complete_bill() actually AWARDED for this bill, not a client-side recompute of the
+ *  vendor's threshold. Filtered on bill_id only for the tenant -- RLS (points_read)
+ *  already scopes the read, so a second vendor filter here would be a weaker client-side
+ *  copy of the policy. Zero rows is legitimate: a bill under the vendor's first threshold
+ *  earns no points and complete_bill() writes no row for it.
+ *
+ *  points > 0 matters since redemption existed: a redeemed bill carries its award row AND
+ *  its negative redemption rows under this same bill_id, and summing both would report the
+ *  customer earned less than they did -- or a negative number on a bill that earned nothing. */
 export async function pointsForBill(billId: string) {
-  return supabase.from("points_ledger").select("points").eq("bill_id", billId);
+  return supabase.from("points_ledger").select("points").eq("bill_id", billId).gt("points", 0);
 }
 
 export type { Customer, Draft };
