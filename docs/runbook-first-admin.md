@@ -92,3 +92,18 @@ onboarding stops being a rare event, that is a product decision to make delibera
 an admin-only onboarding flow, or a `SECURITY DEFINER` signup function with its own
 guards. Repeating this runbook by hand is fine for a handful of vendors and a bad answer
 for fifty.
+
+## Clearing a shop's data
+
+Settings -> Danger zone -> **Clear all data** wipes this vendor's bills, bill items, points
+ledger, customers, stock requests and outbound queue, and resets the token counter to 0 so
+numbering restarts at 1. Items, staff and the vendor row survive.
+
+It runs `clear_vendor_data()` (migration `0009`), a `SECURITY DEFINER` function scoped
+entirely to `current_vendor_id()`. That is not a convenience: `0002_rls.sql` grants no write
+policy at all on `points_ledger`, `vendor_counters` or `outbound_messages`, so a client
+cannot perform these deletes under its own rights however it is authorised.
+
+**There is no undo and no backup taken.** The UI requires typing the shop's name before the
+button enables. If you need the data afterwards, take a dump first -- from the Supabase
+dashboard, or `supabase db dump`.

@@ -73,6 +73,7 @@
     "badPassword": "Use at least 8 characters.",
     "adminCreates": "You create the account here. Give them the email and password you set, and they will be asked to choose their own password when they first sign in."
   },
+  "danger": { "title": "Danger zone", "body": "Delete all bills, customers and loyalty points for this shop. This cannot be undone.", "keeps": "Your items and stock stay, and so does your staff list. Token numbers start again at 1.", "clear": "Clear all data", "typeName": "Type {{name}} to confirm", "confirm": "Delete everything", "done": "Deleted {{bills}} bills, {{customers}} customers and {{points}} points records." },
   "settings": {
     "title": "Loyalty settings",
     "threshold1": "First spend target",

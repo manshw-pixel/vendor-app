@@ -101,3 +101,20 @@ export async function updateVendorConfig(vendorId: string, value: VendorConfig) 
     })
     .eq("id", vendorId);
 }
+
+export type ClearedCounts = { bills: number; customers: number; points_rows: number };
+
+/**
+ * Wipes this vendor's transactional history. There is no undo.
+ *
+ * An RPC rather than a series of deletes because 0002_rls.sql grants no write policy at
+ * all on points_ledger, vendor_counters or outbound_messages -- a client cannot perform
+ * these deletes under its own rights however it is authorised. clear_vendor_data() takes
+ * no arguments: it scopes everything to current_vendor_id(), so there is no vendor id to
+ * pass and none to get wrong.
+ *
+ * Returns a single row of counts; PostgREST renders a returns-table function as an array.
+ */
+export async function clearVendorData() {
+  return supabase.rpc("clear_vendor_data");
+}

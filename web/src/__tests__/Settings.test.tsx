@@ -14,9 +14,14 @@ const updateVendorConfig = vi.fn(async (..._a: unknown[]): Promise<{
   error: { code?: string; message?: string } | null;
 }> => ({ error: null }));
 
+const clearVendorData = vi.fn(async (): Promise<{
+  data: unknown; error: { code?: string; message?: string } | null;
+}> => ({ data: [{ bills: 4, customers: 2, points_rows: 3 }], error: null }));
+
 vi.mock("../admin", () => ({
   loadVendorConfig: (...a: unknown[]) => loadVendorConfig(...a),
   updateVendorConfig: (...a: unknown[]) => updateVendorConfig(...a),
+  clearVendorData: () => clearVendorData(),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -155,5 +160,80 @@ describe("the loyalty settings screen", () => {
     expect(screen.queryByTestId("settings-points_threshold_1")).toBeNull();
     expect(screen.queryByTestId("settings-save")).toBeNull();
     expect(updateVendorConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("the danger zone", () => {
+  const SHOP = "Shop"; // matches vendorName in the mocked session above
+
+  async function open() {
+    render(<Settings />);
+    fireEvent.click(await screen.findByTestId("danger-open"));
+  }
+
+  it("will not wipe until the shop's name is typed exactly", async () => {
+    // A single confirm click is right for removing one person, who can be added back.
+    // This deletes every bill, customer and point the shop has, and an accidental click
+    // is indistinguishable from a deliberate one.
+    await open();
+    expect((screen.getByTestId("danger-go") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: "shop" } });
+    expect((screen.getByTestId("danger-go") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: SHOP } });
+    expect((screen.getByTestId("danger-go") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not call the wipe while the button is disabled", async () => {
+    await open();
+    fireEvent.click(screen.getByTestId("danger-go"));
+    expect(clearVendorData).not.toHaveBeenCalled();
+  });
+
+  it("wipes and reports the counts it was given", async () => {
+    await open();
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: SHOP } });
+    fireEvent.click(screen.getByTestId("danger-go"));
+    await waitFor(() => expect(clearVendorData).toHaveBeenCalledTimes(1));
+    const done = await screen.findByTestId("danger-done");
+    expect(done.textContent ?? "").toMatch(/4/);
+    expect(done.textContent ?? "").toMatch(/2/);
+  });
+
+  it("sends no vendor id -- the function scopes itself to the caller", async () => {
+    // clear_vendor_data() takes no arguments on purpose: there is no vendor to name, so
+    // there is none to name wrongly.
+    await open();
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: SHOP } });
+    fireEvent.click(screen.getByTestId("danger-go"));
+    await waitFor(() => expect(clearVendorData).toHaveBeenCalled());
+    expect(clearVendorData.mock.calls[0]?.length ?? 0).toBe(0);
+  });
+
+  it("does not claim success when the wipe was refused", async () => {
+    // 42501 is what a non-admin gets. Showing "deleted 0 bills" there would read as a
+    // successful wipe of an already-empty shop.
+    clearVendorData.mockResolvedValueOnce({
+      data: null, error: { code: "42501", message: "only an admin may clear" },
+    });
+    await open();
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: SHOP } });
+    fireEvent.click(screen.getByTestId("danger-go"));
+    expect(await screen.findByTestId("danger-problem")).toBeTruthy();
+    expect(screen.queryByTestId("danger-done")).toBeNull();
+  });
+
+  it("leaves the loyalty form alone when the wipe fails", async () => {
+    // They share a screen, not a workflow. A failed wipe must not blank the form above it.
+    clearVendorData.mockResolvedValueOnce({
+      data: null, error: { code: "42501", message: "refused" },
+    });
+    await open();
+    fireEvent.change(screen.getByTestId("danger-confirm"), { target: { value: SHOP } });
+    fireEvent.click(screen.getByTestId("danger-go"));
+    await screen.findByTestId("danger-problem");
+    expect((screen.getByTestId("settings-points_threshold_1") as HTMLInputElement).value)
+      .toBe("600");
   });
 });

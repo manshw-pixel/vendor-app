@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 // i18next initialises as a side effect of this import, exactly as the sibling screens do.
 import "../i18n";
-import { loadVendorConfig, updateVendorConfig } from "../admin";
+import { clearVendorData, loadVendorConfig, updateVendorConfig, type ClearedCounts } from "../admin";
 import { validateSettings, type SettingsInput, type SettingsField } from "../adminRules";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
@@ -43,6 +43,29 @@ export default function Settings() {
   // screens don't need this because a filtered list read there is legitimately "nothing
   // yet", not a form waiting to clobber real data.
   const vendorId = session.kind === "ready" ? session.vendorId : null;
+  const vendorName = session.kind === "ready" ? session.vendorName : "";
+
+  // Danger zone. Kept in its own state so a failed or abandoned wipe cannot disturb the
+  // loyalty form above it -- they share a screen, not a workflow.
+  const [wiping, setWiping] = useState(false);
+  const [typedName, setTypedName] = useState("");
+  const [wipeBusy, setWipeBusy] = useState(false);
+  const [wiped, setWiped] = useState<ClearedCounts | null>(null);
+  const [wipeProblem, setWipeProblem] = useState<{ key: string; detail: string } | null>(null);
+
+  async function clearData() {
+    setWipeBusy(true);
+    setWipeProblem(null);
+    const { data, error } = await clearVendorData();
+    setWipeBusy(false);
+    const described = describeError(error);
+    if (described) { setWipeProblem(described); return; }
+    // A returns-table function arrives from PostgREST as an array of one row.
+    const row = (Array.isArray(data) ? data[0] : data) as ClearedCounts | undefined;
+    setWiped(row ?? { bills: 0, customers: 0, points_rows: 0 });
+    setWiping(false);
+    setTypedName("");
+  }
 
   useEffect(() => {
     if (!vendorId) return;
@@ -145,6 +168,66 @@ export default function Settings() {
           same word stacked two identical "Staff" headings on this page. */}
       <section className="space-y-3">
         <Staff />
+      </section>
+
+      {/* Last on the page and visually separated on purpose: everything above this line is
+          reversible, and nothing below it is. */}
+      <section className="bg-white border border-red-300 rounded-xl p-4 space-y-3 max-w-md">
+        <h2 className="font-semibold text-red-800">{t("danger.title")}</h2>
+        <p className="text-sm text-slate-600">{t("danger.body")}</p>
+        <p className="text-sm text-slate-600">{t("danger.keeps")}</p>
+
+        {wiped && (
+          <p data-testid="danger-done" className="text-sm text-green-700">
+            {t("danger.done", {
+              bills: wiped.bills, customers: wiped.customers, points: wiped.points_rows,
+            })}
+          </p>
+        )}
+        {wipeProblem && (
+          <p data-testid="danger-problem" className="text-sm text-red-700">{t(wipeProblem.key)}</p>
+        )}
+
+        {!wiping ? (
+          <button
+            data-testid="danger-open"
+            onClick={() => { setWiping(true); setWiped(null); setWipeProblem(null); }}
+            className="border border-red-300 text-red-700 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+          >
+            {t("danger.clear")}
+          </button>
+        ) : (
+          <div className="space-y-2 border-t border-slate-200 pt-3">
+            {/* Typing the shop's name, not a bare confirm button. The remove-a-person
+                dialog can be a single click because it undoes one row a person can be
+                re-added to; this deletes every bill, customer and point the shop has, and
+                a click made by accident is indistinguishable from one made on purpose. */}
+            <label className="block text-sm text-slate-600" htmlFor="danger-confirm">
+              {t("danger.typeName", { name: vendorName })}
+              <input
+                id="danger-confirm" data-testid="danger-confirm"
+                value={typedName} autoComplete="off"
+                onChange={(e) => setTypedName(e.target.value)}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                data-testid="danger-go" disabled={wipeBusy || typedName.trim() !== vendorName}
+                onClick={() => void clearData()}
+                className="rounded-lg px-4 py-2 text-sm bg-red-700 text-white min-h-[44px] disabled:opacity-50"
+              >
+                {t("danger.confirm")}
+              </button>
+              <button
+                type="button" onClick={() => { setWiping(false); setTypedName(""); }}
+                className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+              >
+                {t("staff.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
