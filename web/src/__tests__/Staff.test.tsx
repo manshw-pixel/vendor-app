@@ -15,15 +15,18 @@ const updateStaff = vi.fn(async (..._a: unknown[]): Promise<{
 const removeStaff = vi.fn(async (..._a: unknown[]): Promise<{
   error: { code?: string; message?: string } | null;
 }> => ({ error: null }));
-const createStaff = vi.fn(async (..._a: unknown[]): Promise<{
-  error: { code?: string; message?: string } | null;
+const createUserAccount = vi.fn(async (..._a: unknown[]): Promise<{
+  error: { key: string; detail: string } | null;
 }> => ({ error: null }));
 
 vi.mock("../admin", () => ({
   listStaff: () => listStaff(),
   updateStaff: (...a: unknown[]) => updateStaff(...a),
   removeStaff: (...a: unknown[]) => removeStaff(...a),
-  createStaff: (...a: unknown[]) => createStaff(...a),
+}));
+
+vi.mock("../adminApi", () => ({
+  createUserAccount: (...a: unknown[]) => createUserAccount(...a),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -43,11 +46,11 @@ describe("the staff screen", () => {
     expect(screen.getByText(/Admin One/)).toBeTruthy();
   });
 
-  it("says plainly that adding links an account rather than inviting one", async () => {
-    // §6: creating auth accounts is still the Edge Function slice. The form links an
-    // account that already exists, and the screen must not read as an invitation.
+  it("says plainly that the admin creates the account here", async () => {
+    // The admin types real credentials and a real account is minted -- the screen must
+    // not read as an invitation the person accepts themselves.
     render(<Staff />);
-    expect(await screen.findByText(/runbook-first-admin/i)).toBeTruthy();
+    expect(await screen.findByText(/you create the account here/i)).toBeTruthy();
   });
 
   it("changes someone else's role", async () => {
@@ -127,74 +130,87 @@ describe("the staff screen", () => {
 });
 
 describe("adding staff", () => {
-  const ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
-
   async function openForm() {
     render(<Staff />);
     fireEvent.click(await screen.findByTestId("staff-add-open"));
   }
 
-  it("links a new person to this vendor", async () => {
+  function fill() {
+    fireEvent.change(screen.getByTestId("staff-add-email"), { target: { value: "rina@shop.test" } });
+    fireEvent.change(screen.getByTestId("staff-add-password"), { target: { value: "sunflower9" } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Rina" } });
+  }
+
+  it("creates the account with the credentials the admin typed", async () => {
     await openForm();
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fill();
     fireEvent.change(screen.getByTestId("staff-add-role"), { target: { value: "biller" } });
     fireEvent.click(screen.getByTestId("staff-add-save"));
-    await waitFor(() => expect(createStaff)
-      .toHaveBeenCalledWith("v1", { id: ID, name: "Sunil", role: "biller" }));
+    await waitFor(() => expect(createUserAccount).toHaveBeenCalledWith({
+      email: "rina@shop.test", password: "sunflower9", name: "Rina", role: "biller",
+    }));
   });
 
-  it("sends the vendor id explicitly -- app_users.vendor_id has no default", async () => {
-    // Omitting it is a 23502, and users_admin_write checks it in WITH CHECK.
+  it("asks for no user id at all", async () => {
+    // The uuid was a value nobody could obtain without the Supabase dashboard.
     await openForm();
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
-    fireEvent.click(screen.getByTestId("staff-add-save"));
-    await waitFor(() => expect(createStaff).toHaveBeenCalled());
-    expect(createStaff.mock.calls[0]?.[0]).toBe("v1");
+    expect(screen.queryByTestId("staff-add-id")).toBeNull();
   });
 
-  it("refuses an id that is not a uuid before it reaches the database", async () => {
+  it("refuses a bad address before an account is created", async () => {
+    // The round trip mints a real auth account, so an obvious slip is worth catching
+    // against its own field first.
     await openForm();
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: "sunil@shop" } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fill();
+    fireEvent.change(screen.getByTestId("staff-add-email"), { target: { value: "rina" } });
     fireEvent.click(screen.getByTestId("staff-add-save"));
-    expect(await screen.findByTestId("staff-add-error-id")).toBeTruthy();
-    expect(createStaff).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("staff-add-error-email")).toBeTruthy();
+    expect(createUserAccount).not.toHaveBeenCalled();
+  });
+
+  it("refuses a short password before an account is created", async () => {
+    await openForm();
+    fill();
+    fireEvent.change(screen.getByTestId("staff-add-password"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    expect(await screen.findByTestId("staff-add-error-password")).toBeTruthy();
+    expect(createUserAccount).not.toHaveBeenCalled();
   });
 
   it("reloads the roster after a successful add", async () => {
     await openForm();
     expect(listStaff).toHaveBeenCalledTimes(1);
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fill();
     fireEvent.click(screen.getByTestId("staff-add-save"));
     await waitFor(() => expect(listStaff).toHaveBeenCalledTimes(2));
     expect(await screen.findByTestId("staff-added")).toBeTruthy();
   });
 
-  it("names the real problem when the account is already linked, and keeps the form filled", async () => {
-    // 23505 on app_users_pkey is the likeliest slip: the roster shows names, the form
-    // takes ids, so re-adding someone is easy. The generic "this already exists" would
-    // not say which account, and losing the typed id would mean fetching it again.
-    createStaff.mockResolvedValueOnce({
-      error: { code: "23505", message: 'duplicate key value violates unique constraint "app_users_pkey"' },
+  it("names an address already in use, and keeps the form filled", async () => {
+    createUserAccount.mockResolvedValueOnce({
+      error: { key: "error.emailTaken", detail: "" },
     });
     await openForm();
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fill();
     fireEvent.click(screen.getByTestId("staff-add-save"));
-    expect(await screen.findByText(/already linked|पहले से|आधीच/i)).toBeTruthy();
-    expect((screen.getByTestId("staff-add-id") as HTMLInputElement).value).toBe(ID);
+    expect(await screen.findByText(/already (has an account|in use)|पहले से|आधीच/i)).toBeTruthy();
+    expect((screen.getByTestId("staff-add-email") as HTMLInputElement).value).toBe("rina@shop.test");
   });
 
-  it("does not claim success when the policy blocks the insert", async () => {
-    createStaff.mockResolvedValueOnce({ error: { code: "42501", message: "row-level security" } });
+  it("does not claim success when the call failed", async () => {
+    createUserAccount.mockResolvedValueOnce({ error: { key: "error.notAllowed", detail: "" } });
     await openForm();
-    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
-    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fill();
     fireEvent.click(screen.getByTestId("staff-add-save"));
-    await waitFor(() => expect(createStaff).toHaveBeenCalled());
+    await waitFor(() => expect(createUserAccount).toHaveBeenCalled());
     expect(screen.queryByTestId("staff-added")).toBeNull();
+  });
+
+  it("never puts the password in the DOM as readable text", async () => {
+    // A shop counter is not a private place, and this field is filled while someone reads
+    // the password out.
+    await openForm();
+    fill();
+    expect((screen.getByTestId("staff-add-password") as HTMLInputElement).type).toBe("password");
   });
 });

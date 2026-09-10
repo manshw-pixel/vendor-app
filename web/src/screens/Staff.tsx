@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 // do. The screen is rendered directly (by tests, and by the router) without going
 // through main.tsx.
 import "../i18n";
-import { createStaff, listStaff, updateStaff, removeStaff, type StaffRow } from "../admin";
+import { listStaff, updateStaff, removeStaff, type StaffRow } from "../admin";
+import { createUserAccount } from "../adminApi";
 import { canEditStaff, validateNewStaff, type NewStaffInput, type NewStaffField } from "../adminRules";
 import { ROLES, type Role } from "../config";
 import { useSession } from "../components/SessionProvider";
@@ -19,12 +20,11 @@ const ROLE_KEY: Record<Role, string> = {
 /**
  * The staff roster: §11b's admin-only view of app_users for this vendor.
  *
- * Adding someone LINKS an account that already exists; it does not invite one. Creating
- * the auth.users row needs auth.admin.createUser and so the service_role key, which
- * config.ts forbids in this bundle -- that is still the Edge Function slice. So the form
- * takes a user id the person reads off their own sign-up, which is exactly what
- * docs/runbook-first-admin.md previously had an admin do by hand in SQL. The screen says
- * that plainly rather than offering an invite button that would silently fail.
+ * Adding someone CREATES the account: the admin types an email, a first password and a
+ * name, and the admin-create-user Edge Function calls auth.admin.createUser with the
+ * service_role key the SPA is never allowed to hold (config.ts forbids it in this
+ * bundle). No vendor id is sent -- the function reads it from app_users under the
+ * caller's own JWT, which is what stops an admin creating staff in someone else's shop.
  *
  * canEditStaff blocks the signed-in admin from touching their own row: self-demotion or
  * self-removal is the one action that can lock a vendor out of its own tenant, since
@@ -53,7 +53,6 @@ export default function Staff() {
 
   if (session.kind !== "ready") return null;
   const selfId = session.userId;
-  const vendorId = session.vendorId;
 
   async function add() {
     if (!adding) return;
@@ -63,14 +62,12 @@ export default function Staff() {
     if (!result.ok) { setAddErrors(result.errors); return; }
     setAddErrors({});
     setBusy(true);
-    const { error } = await createStaff(vendorId, result.value);
+    const { error } = await createUserAccount(result.value);
     setBusy(false);
-    const described = describeError(error);
-    setProblem(described);
-    // Leave the form open and filled on failure. The common miss here is a mistyped or
-    // already-linked id, and both are fixed by editing what is on screen -- clearing it
-    // would make the admin fetch the id again to correct one character.
-    if (described) return;
+    setProblem(error);
+    // Leave the form filled on failure. "That address already has an account" is the
+    // common miss, and it is fixed by editing what is on screen.
+    if (error) return;
     setAdding(null);
     await load();
     setAdded(true);
@@ -107,7 +104,7 @@ export default function Staff() {
       <h2 className="font-semibold text-slate-800">{t("staff.title")}</h2>
 
       <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
-        {t("staff.signUpFirst")}
+        {t("staff.adminCreates")}
       </p>
 
       {!adding && (
@@ -116,7 +113,7 @@ export default function Staff() {
           onClick={() => {
             setAdded(false);
             setAddErrors({});
-            setAdding({ id: "", name: "", role: "recorder" });
+            setAdding({ email: "", password: "", name: "", role: "recorder" });
           }}
           className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px]"
         >
@@ -131,22 +128,45 @@ export default function Staff() {
       {adding && (
         <form
           onSubmit={(e) => { e.preventDefault(); void add(); }}
+          // noValidate: the email input's native type=email check would otherwise block
+          // the submit event entirely on a bad address, so validateNewStaff's own message
+          // (and its test) would never run.
+          noValidate
           className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
         >
           <h3 className="font-semibold text-slate-800">{t("staff.addTitle")}</h3>
           <div>
-            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-id">
-              {t("staff.userId")}
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-email">
+              {t("staff.email")}
             </label>
             <input
-              id="staff-add-id" data-testid="staff-add-id" value={adding.id}
+              id="staff-add-email" data-testid="staff-add-email" type="email" value={adding.email}
               autoComplete="off" spellCheck={false}
-              onChange={(e) => setAdding({ ...adding, id: e.target.value })}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] font-mono text-sm"
+              onChange={(e) => setAdding({ ...adding, email: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
             />
-            {addErrors.id && (
-              <p data-testid="staff-add-error-id" className="text-xs text-red-700 mt-1">
-                {t(addErrors.id)}
+            {addErrors.email && (
+              <p data-testid="staff-add-error-email" className="text-xs text-red-700 mt-1">
+                {t(addErrors.email)}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-add-password">
+              {t("staff.password")}
+            </label>
+            {/* type=password even though the admin is typing it themselves: a shop counter
+                is not a private place, and this is filled while someone reads it out. */}
+            <input
+              id="staff-add-password" data-testid="staff-add-password" type="password"
+              value={adding.password} autoComplete="new-password"
+              onChange={(e) => setAdding({ ...adding, password: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+            <p className="text-xs text-slate-500 mt-1">{t("staff.passwordHint")}</p>
+            {addErrors.password && (
+              <p data-testid="staff-add-error-password" className="text-xs text-red-700 mt-1">
+                {t(addErrors.password)}
               </p>
             )}
           </div>
