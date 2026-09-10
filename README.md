@@ -62,6 +62,15 @@ limits:
   registers its job — but nothing here proves pg_cron will *fire* it. The run prints what
   it skipped, above the results.
 - **PostgreSQL 17.9 vs production's 17.6.** Same major, minor drift.
+- **The `admin-create-user` Edge Function.** No test exercises it. `tests/run.mjs` has no
+  Deno runtime, and the local suite runs no GoTrue at all — there is nothing here to invoke
+  the function against, let alone parse or type-check it. Neither is Docker or Deno on the
+  machine this suite runs on, so the function has never been parsed, type-checked, or
+  executed by anything, local or otherwise. Its request validation — the shape checks and
+  rejections a caller should see before the function ever touches the database — is
+  covered, by `web/src/__tests__/guards.test.ts`. Everything past that (the service-role
+  call to create the user, the compensating delete on partial failure, the actual database
+  write) is unverified until a real admin creates a real user on Cloud.
 
 Closing these means running the suite against a disposable Supabase Cloud project, which
 needs no code changes beyond pointing it there. That remains the eventual target.
