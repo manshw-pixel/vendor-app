@@ -31,6 +31,16 @@ export function describeError(
   if (error.code === "23503" && /app_users/.test(detail)) {
     return { key: "error.staffHasHistory", detail };
   }
+  // clear_vendor_data (the "Clear all data" button) deletes points_ledger before a
+  // concurrent complete_bill inserts a redemption row against a bill it is still
+  // completing. The insert then fails this constraint and the whole transaction rolls
+  // back -- nothing is actually lost -- but with no branch of its own it fell through to
+  // the generic message on the one button in the app with no undo. Gated on
+  // "points_ledger", the table/constraint actually named in that error, after the
+  // app_users branch above so the common staff-has-history case is unaffected.
+  if (error.code === "23503" && /points_ledger/.test(detail)) {
+    return { key: "error.clearRace", detail };
+  }
   // A function the database does not have. This is what every dashboard card returned in
   // production while migration 0007 sat unpushed: three identical "something went wrong"
   // messages for a cause with a one-command remedy. Matched on the message as well as the

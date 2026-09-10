@@ -124,6 +124,18 @@ export default function Completed() {
                       </li>
                     ))}
                   </ul>
+                  {b.redeemed_points > 0 && (
+                    <p
+                      data-testid={`completed-redeemed-${b.id}`}
+                      className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100"
+                    >
+                      {t("completed.redeemed", {
+                        gross: rupees(b.total + b.redeemed_points),
+                        points: b.redeemed_points,
+                        net: rupees(b.total),
+                      })}
+                    </p>
+                  )}
                 </div>
               )}
             </li>

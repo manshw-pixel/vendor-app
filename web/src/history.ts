@@ -16,6 +16,10 @@ export type CompletedBill = {
   id: string;
   token_no: number;
   total: number;
+  /** What was applied from the customer's loyalty balance. `total` is the NET actually
+   *  collected, so the gross a shopkeeper reconciling by hand expects is
+   *  `total + redeemed_points` (1 point = ₹1). 0 for the common case of no redemption. */
+  redeemed_points: number;
   completed_at: string;
   customers: { name: string; flat_no: string } | null;
 };
@@ -56,7 +60,8 @@ export type Cursor = { completedAt: string; id: string };
  *  without a second request. */
 export const PAGE_SIZE = 50;
 
-const BILL_COLS = "id, token_no, total, completed_at, customers(name, flat_no)";
+const BILL_COLS =
+  "id, token_no, total, redeemed_points, completed_at, customers(name, flat_no)";
 
 /**
  * One page of completed bills, newest first.

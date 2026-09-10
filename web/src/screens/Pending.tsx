@@ -194,7 +194,7 @@ export default function Pending() {
                     {t("pending.redeemAll")}
                   </button>
                   <p data-testid="redeem-summary" className="text-sm text-slate-700">
-                    {t("pending.redeemSummary", { net, used: points })}
+                    {t("pending.redeemSummary", { net: rupees(net), used: rupees(points) })}
                   </p>
                 </div>
               )}

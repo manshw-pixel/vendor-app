@@ -148,6 +148,42 @@ test("clear_vendor_data refuses a caller with no session", async () => {
   assert(await countFor("bills", world.a.vendorId) > 0, "the bills should still be there");
 });
 
+test("clear_vendor_data empties a bill that redeemed points, ledger and all", async () => {
+  // Redemption (0010) writes points_ledger rows this file's populate() never produces:
+  // an award (positive) row from completing the bill, plus one or more negative rows for
+  // what was spent, and it sets bills.redeemed_points. The reviewer confirmed by reading
+  // that clear_vendor_data's six deletes still reach all of that -- this pins it so a
+  // future change to either function can't quietly stop being true.
+  const world = await getWorld();
+  const n = ++seq;
+  const { rows: [c] } = await sql(
+    `insert into customers (vendor_id, name, flat_no, mobile) values ($1,$2,$3,$4) returning id`,
+    [world.a.vendorId, `Redeem ${n}`, `R-${n}`, `+9187777${String(n).padStart(5, "0")}`]);
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,500,'recording') returning id`, [world.a.vendorId, c.id]);
+  await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
+             values ($1,$2,$3,5,40,500)`, [b.id, world.a.vendorId, world.a.itemId]);
+  await sql(`select issue_token($1)`, [b.id]);
+  await sql(`insert into points_ledger (vendor_id, customer_id, points, expires_at)
+             values ($1,$2,100, now() + interval '30 days')`, [world.a.vendorId, c.id]);
+
+  await sql(`select complete_bill($1, null, $2)`, [b.id, 40]);
+  const { rows: [row] } = await sql(`select redeemed_points from bills where id = $1`, [b.id]);
+  assertEqual(row.redeemed_points, 40, "precondition: the bill actually redeemed points");
+  const { rows: [ledgerBefore] } = await sql(
+    `select count(*)::int as n from points_ledger where customer_id = $1`, [c.id]);
+  assert(ledgerBefore.n >= 2, "precondition: the award and the redemption both landed");
+
+  const { error } = await world.a.clients.admin.rpc("clear_vendor_data");
+  assert(!error, `rpc failed: ${error && error.message}`);
+
+  for (const t of ["bills", "bill_items", "points_ledger", "stock_requests",
+                   "outbound_messages", "customers"]) {
+    assertEqual(await countFor(t, world.a.vendorId), 0, `${t} should be empty`);
+  }
+});
+
 test("clear_vendor_data reports what it actually deleted", async () => {
   // The UI shows these back to the admin. For an action with no undo, "deleted 4 bills and
   // 4 customers" is the difference between confirming the scope was what they meant and

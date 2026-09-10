@@ -4,11 +4,12 @@ import type { CompletedBill, BillLine } from "../history";
 
 const PAGE_SIZE = 50;
 
-function bill(n: number): CompletedBill {
+function bill(n: number, redeemed_points = 0): CompletedBill {
   return {
     id: `b${n}`,
     token_no: n,
     total: 100 + n,
+    redeemed_points,
     completed_at: `2026-09-09T10:00:${String(n % 60).padStart(2, "0")}.000Z`,
     customers: { name: `Cust ${n}`, flat_no: `A-${n}` },
   };
@@ -103,6 +104,25 @@ describe("the completed bills screen", () => {
     fireEvent.click(screen.getByTestId("range-today"));
     await waitFor(() => expect(listCompleted).toHaveBeenCalledTimes(2));
     expect(listCompleted.mock.calls[1]?.[1]).toBeNull();
+  });
+
+  it("shows the applied points on a redeemed bill, and nothing extra on one that wasn't", async () => {
+    // total is the NET collected; redeemed_points is what was spent, so the gross a
+    // shopkeeper expects is total + redeemed_points. A bill with no redemption must not
+    // gain any extra line -- most bills have none.
+    listCompleted.mockResolvedValueOnce({ data: [bill(1, 50), bill(2)], error: null });
+    render(<Completed />);
+
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    const redeemedLine = await screen.findByTestId("completed-redeemed-b1");
+    expect(redeemedLine.textContent).toMatch(/151/);   // gross: 101 + 50
+    expect(redeemedLine.textContent).toMatch(/50/);    // points applied
+    expect(redeemedLine.textContent).toMatch(/101/);   // net: bill(1).total
+
+    fireEvent.click(screen.getByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("completed-row-b2"));
+    await waitFor(() => expect(billLines).toHaveBeenCalledWith("b2"));
+    expect(screen.queryByTestId("completed-redeemed-b2")).toBeNull();
   });
 
   it("ignores a slow page for a range the user has already moved off", async () => {

@@ -39,6 +39,18 @@ describe("describeError", () => {
     expect(d?.key).toBe("error.staffHasHistory");
   });
 
+  it("names a points_ledger foreign-key hit as a clear-vs-complete race, not a generic failure", () => {
+    // clear_vendor_data deletes points_ledger before a concurrent complete_bill can
+    // insert a redemption row against the bill it is still completing -- the insert then
+    // violates points_ledger.bill_id and the whole transaction (both sides) rolls back.
+    // The one button in the app with no undo must say this, not "something went wrong".
+    const d = describeError({
+      code: "23503",
+      message: 'insert or update on table "points_ledger" violates foreign key constraint "points_ledger_bill_id_fkey"',
+    });
+    expect(d?.key).toBe("error.clearRace");
+  });
+
   it("does not claim staff history for an unrelated foreign-key violation", () => {
     // describeError is shared with the billing flow -- a 23503 that has nothing to do
     // with app_users (e.g. a bill_items insert racing a vanished item row) must fall
