@@ -17,7 +17,9 @@ const KEYS: Record<ErrorCode, string> = {
   weak_password: "error.weakPassword",
   bad_request: "error.unknown",
   create_failed: "error.staffNotCreated",
-  link_failed: "error.staffNotCreated",
+  // The account was created before this step failed, and the compensating delete may
+  // itself have failed -- unlike create_failed, "nothing was saved" would be a lie here.
+  link_failed: "error.staffPartlyCreated",
 };
 
 async function codeFrom(error: { message?: string; context?: unknown }): Promise<string> {

@@ -67,10 +67,9 @@ describe("App", () => {
   });
 
   it("shows an unlinked person their own user id, which nothing else in the app does", async () => {
-    // Settings -> Staff -> Add staff asks an admin to paste this exact value, and this
-    // panel is the only place it can be read. Without it the form wants something
-    // obtainable only from the Supabase dashboard -- the database access it exists to
-    // avoid. The id is the assertion; the copy button is a convenience on top of it.
+    // Reaching this panel now means admin-create-user's link step failed, or the account
+    // was made by hand outside the app -- support needs this id to diagnose which. The id
+    // is the assertion; the copy button is a convenience on top of it.
     getSession.mockResolvedValue({
       data: { session: { user: { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", email: "new@shop.test" } } },
     });

@@ -12,9 +12,9 @@ export type SessionState =
   | { kind: "loading" }
   | { kind: "signedOut" }
   // Carries userId as well as email BECAUSE this is the screen that has to show it:
-  // linking an account is done by an admin pasting this person's user id, and until
-  // Settings -> Staff can invite by email, this is the only place in the app that id
-  // can be read. See App.tsx's Unmapped panel.
+  // reaching "unmapped" now means the admin-create-user link step failed, or the account
+  // was made by hand outside the app, so the id is what support needs to diagnose which.
+  // See App.tsx's Unmapped panel.
   | { kind: "unmapped"; userId: string; email: string }
   // Its own kind rather than a flag on `ready`, so App.tsx cannot reach the routes at all.
   // A boolean on ready would leave Shell and Guard rendering the app behind the prompt and

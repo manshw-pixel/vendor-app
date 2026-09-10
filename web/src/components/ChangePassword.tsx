@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../supabase";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 import { LangSwitch } from "./Shell";
+import { useSessionReload } from "./SessionProvider";
 
 /**
  * Shown instead of every route while app_users.must_change_password is set.
@@ -17,6 +18,7 @@ import { LangSwitch } from "./Shell";
  */
 export function ChangePassword({ email }: { email: string }) {
   const { t } = useTranslation();
+  const reload = useSessionReload();
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<{ key: string; detail: string } | null>(null);
@@ -52,9 +54,17 @@ export function ChangePassword({ email }: { email: string }) {
       setError({ key: "changePw.failed", detail: flagError.message ?? "" });
       return;
     }
-    // SessionProvider re-reads app_users on the auth state change updateUser triggers, so
-    // there is nothing to navigate to: the session resolves to `ready` and App renders the
-    // routes on its own.
+    // Re-read explicitly rather than rely on the auth state change updateUser() fires:
+    // that event resolves SessionProvider's state (and unmounts this screen) BEFORE
+    // updateUser()'s own promise returns, so it can read app_users before this RPC's write
+    // lands and leave the person stuck on the very screen they just satisfied. Called
+    // unconditionally -- reload() lives on SessionProvider, which outlives this screen, so
+    // it is safe (and necessary) even if the incidental event already unmounted us. It races
+    // that event's own re-read, but SessionProvider keeps only the response to the request
+    // it issued last, so issuing this one after the RPC is what makes it win. Depending on a
+    // third-party library's internal event ordering was the bug; this cannot silently drift
+    // if that ordering changes.
+    reload();
   }
 
   return (

@@ -49,15 +49,16 @@ describe("createUserAccount", () => {
     expect((await createUserAccount(value)).error?.key).toBe("error.notAllowed");
   });
 
-  it("says the account was rolled back when linking failed", async () => {
-    // link_failed means the auth account was created and then deleted again. Telling the
-    // admin to just try again is right, and only true because of that compensating delete.
+  it("does not say nothing was saved when linking failed", async () => {
+    // link_failed means the auth account was created and then the link step (or its
+    // compensating delete) failed -- the account may still exist, so "nothing was saved"
+    // would be a lie here. It gets its own key rather than sharing create_failed's.
     invoke.mockResolvedValueOnce({
       data: null,
       error: { message: "non-2xx",
                context: new Response(JSON.stringify({ error: "link_failed" }), { status: 500 }) },
     });
-    expect((await createUserAccount(value)).error?.key).toBe("error.staffNotCreated");
+    expect((await createUserAccount(value)).error?.key).toBe("error.staffPartlyCreated");
   });
 
   it("falls back to unknown when the body is not one of our codes", async () => {
