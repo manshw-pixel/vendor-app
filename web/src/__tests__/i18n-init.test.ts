@@ -35,6 +35,12 @@ describe("i18n initialises on import", () => {
       "app.signingIn", "app.language", "nav.bill", "nav.pending", "nav.items",
       "nav.customers", "nav.staff", "nav.dashboards", "session.unmappedTitle",
       "offline.banner", "soon.body",
+      "staff.email", "staff.password", "staff.passwordHint", "staff.badEmail",
+      "staff.badPassword", "staff.adminCreates",
+      "changePw.title", "changePw.body", "changePw.new", "changePw.confirm",
+      "changePw.save", "changePw.tooShort", "changePw.mismatch", "changePw.failed",
+      "error.emailTaken", "error.weakPassword", "error.staffNotCreated",
+      "session.notLinkedHelp",
     ]) {
       expect(i18n.getResource("mr", "translation", key), `missing mr: ${key}`).toBeTruthy();
     }
@@ -44,5 +50,43 @@ describe("i18n initialises on import", () => {
     const out = i18n.t("session.unmapped", { email: "a@b.test" });
     expect(out).toContain("a@b.test");
     expect(out).not.toContain("{{email}}");
+  });
+
+  it("has retired every key the uuid flow used", () => {
+    // Left behind, these read as live copy to the next person to open the file, and one of
+    // them (staff.badId) taught an admin to expect a value the app no longer asks for.
+    for (const key of ["staff.badId", "staff.userId", "staff.signUpFirst",
+                       "error.staffExists", "session.sendIdToAdmin"]) {
+      for (const lang of ["en", "hi", "mr"]) {
+        expect(i18n.getResource(lang, "translation", key), `${lang} still has ${key}`)
+          .toBeUndefined();
+      }
+    }
+  });
+
+  it("keeps the same key set across en, hi and mr", () => {
+    // A key added to one file and forgotten in another either shows the raw key (if
+    // missing from en, the fallback language) or silently falls back to English (if
+    // missing from hi/mr) -- and mr is the app's default, so its gaps are the ones a
+    // majority of users would actually hit.
+    function keys(obj: unknown, prefix = ""): Set<string> {
+      const out = new Set<string>();
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+        if (v && typeof v === "object") {
+          for (const nested of keys(v, `${prefix}${k}.`)) out.add(nested);
+        } else {
+          out.add(`${prefix}${k}`);
+        }
+      }
+      return out;
+    }
+    const en = keys(i18n.getResourceBundle("en", "translation"));
+    for (const lang of ["hi", "mr"]) {
+      const other = keys(i18n.getResourceBundle(lang, "translation"));
+      const missing = [...en].filter((k) => !other.has(k));
+      const extra = [...other].filter((k) => !en.has(k));
+      expect(missing, `${lang} missing: ${missing.join(", ")}`).toEqual([]);
+      expect(extra, `${lang} has extra: ${extra.join(", ")}`).toEqual([]);
+    }
   });
 });

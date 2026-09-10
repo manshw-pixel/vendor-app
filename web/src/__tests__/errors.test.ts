@@ -20,6 +20,13 @@ describe("describeError", () => {
     expect(d?.key).toBe("error.customerExists");
   });
 
+  it("leaves an unrelated duplicate on the generic message", () => {
+    // app_users no longer has its own branch here -- createStaff (the only client-side
+    // insert into app_users) was removed in Task 5, so any other 23505 falls through.
+    const d = describeError({ code: "23505", message: "some other constraint" });
+    expect(d?.key).toBe("error.duplicate");
+  });
+
   it("distinguishes a network failure from a refusal", () => {
     const d = describeError({ message: "Failed to fetch" });
     expect(d?.key).toBe("error.offline");
@@ -70,21 +77,5 @@ describe("describeError", () => {
   it("does not claim a missing migration for an unrelated PostgREST error", () => {
     const d = describeError({ code: "PGRST116", message: "JSON object requested, multiple rows returned" });
     expect(d?.key).toBe("error.unknown");
-  });
-});
-
-describe("a duplicate staff account", () => {
-  it("says the account is already linked rather than the generic duplicate", () => {
-    // Gated on the table, exactly as the customers branch is: describeError is shared
-    // with the billing flow, and a duplicate elsewhere must not claim a staff account.
-    expect(describeError({
-      code: "23505",
-      message: 'duplicate key value violates unique constraint "app_users_pkey"',
-    })?.key).toBe("error.staffExists");
-  });
-
-  it("leaves an unrelated duplicate on the generic message", () => {
-    expect(describeError({ code: "23505", message: "some other constraint" })?.key)
-      .toBe("error.duplicate");
   });
 });

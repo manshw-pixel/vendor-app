@@ -72,27 +72,18 @@ app. See below.
 ## Adding staff after the first admin
 
 Steps 2 and 3 are the bootstrap only. Once one admin exists, Settings → Staff → **Add
-staff** does step 3 for you: `users_admin_write` already authorises an admin to insert
-`app_users` rows for their own vendor, so no SQL and no database access is needed.
+staff** creates the account directly: the admin fills in an email, a first password, a
+name and a role. The `admin-create-user` Edge Function creates the `auth.users` row with
+`auth.admin.createUser` and inserts the linked `app_users` row in one step, using the
+`service_role` key that `web/src/config.ts` forbids in the browser bundle — which is why
+this has to go through a function rather than the client.
 
-What the form still cannot do is step 1. Creating the `auth.users` row needs
-`auth.admin.createUser` and therefore the `service_role` key, which `web/src/config.ts`
-forbids in the browser bundle — that is the unbuilt Edge Function slice. So the sequence
-per person is:
+The person then signs in with the email and password the admin set, and is immediately
+asked to choose their own password before doing anything else in the app.
 
-1. **They sign up through the app themselves** (or you add them under Authentication →
-   Users, as in step 1 above).
-2. **They read their user id off their own sign-in screen** and send it to the admin.
-   After signing up they land on **"Account not linked to a shop"**, which shows their
-   uuid with a **Copy user id** button — that panel exists for this step and is the only
-   place in the app the id appears.
-3. **The admin pastes it into Add staff** with a name and a role.
-
-The id is the whole point of the paste, and it is unchecked by any foreign key —
-`app_users.id` has no reference to `auth.users` (`0001_schema.sql:34`), only a comment
-saying they are equal. The form validates the *shape* of the uuid, which is all a client
-can do; a well-formed id belonging to nobody inserts cleanly and produces a person who
-signs in fine and resolves to no tenant. Verify with the query in step 4.
+This in-app path depends on `admin-create-user` being deployed. If it is not, the SQL
+insert in step 3 above remains the recovery route — sign the person up (or add them under
+Authentication → Users) and promote them by hand the same way the first admin was made.
 
 ## Onboarding vendor #2
 

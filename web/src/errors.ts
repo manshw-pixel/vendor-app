@@ -18,14 +18,6 @@ export function describeError(
   if (error.code === "23505" && /customers/.test(detail)) {
     return { key: "error.customerExists", detail };
   }
-  // app_users.id is the auth user's own id, so a re-add of someone already linked --
-  // the likeliest slip on the add-staff form, since the roster shows names and the form
-  // takes ids -- collides on the primary key. Gated on the table the same way the
-  // customers branch above is: describeError is shared, and a duplicate anywhere else
-  // must not claim a staff account.
-  if (error.code === "23505" && /app_users/.test(detail)) {
-    return { key: "error.staffExists", detail };
-  }
   if (error.code === "23505") {
     return { key: "error.duplicate", detail };
   }

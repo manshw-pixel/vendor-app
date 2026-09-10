@@ -16,14 +16,14 @@ import Settings from "./screens/Settings";
 import { homeFor } from "./routes";
 
 /**
- * The screen a person sees between signing up and an admin linking them.
+ * The screen a person sees when their sign-in has no linked staff record.
  *
- * It shows their user id because it is the ONLY place in the app that id can be read,
- * and Settings -> Staff -> Add staff asks an admin to paste exactly this value. Until an
- * Edge Function can invite by email, a panel here that said only "an admin needs to add
- * you" would leave both sides stuck: the admin has a form, and nobody can obtain what it
- * wants except through the Supabase dashboard -- which is the database access the form
- * exists to avoid.
+ * This is no longer a step in the normal flow: an admin now creates the account (email
+ * and password) directly in Settings -> Staff, which links it at creation. This panel is
+ * reached only by a failure -- an account made by hand in the Supabase dashboard, or the
+ * rare case where the admin-create-user function's compensating delete also failed after
+ * the link step errored. It keeps showing the user id because that is what support needs
+ * to diagnose which of those happened.
  */
 function Unmapped({ userId, email }: { userId: string; email: string }) {
   const { t } = useTranslation();
@@ -48,7 +48,7 @@ function Unmapped({ userId, email }: { userId: string; email: string }) {
         <p className="text-sm text-slate-600">{t("session.unmapped", { email })}</p>
 
         <div className="space-y-2 border-t border-slate-200 pt-3">
-          <p className="text-sm text-slate-700">{t("session.sendIdToAdmin")}</p>
+          <p className="text-sm text-slate-700">{t("session.notLinkedHelp")}</p>
           <p
             data-testid="session-user-id"
             className="font-mono text-xs break-all select-all bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800"
