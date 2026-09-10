@@ -123,3 +123,36 @@ cannot perform these deletes under its own rights however it is authorised.
 **There is no undo and no backup taken.** The UI requires typing the shop's name before the
 button enables. If you need the data afterwards, take a dump first -- from the Supabase
 dashboard, or `supabase db dump`.
+
+## Redeeming points at the counter
+
+1 point = ₹1. The biller applies redemption while completing a bill, not as a separate
+step.
+
+**The cap is clamped, not refused.** `complete_bill()` applies
+`least(requested, balance, floor(bill total))` itself -- it never rejects a request that
+overshoots. A customer who misremembers their balance, or asks to redeem more than the
+bill comes to, still gets a completed sale: the function just applies as much as it can
+and moves on. Only whole points are ever applied, so a part-rupee bill absorbs one fewer
+point than its exact total.
+
+**Points are earned on what the customer actually paid.** Redeeming first lowers the
+amount the bill earns points on -- a bill that clears the earning threshold before
+redemption but not after earns nothing; one that clears it either way earns on the net.
+
+**`bills.total` is the net collected, not the sticker total.** `bills.redeemed_points`
+records what was applied on top of it, so the pre-redemption ("gross") amount is
+`total + redeemed_points`, not `total` alone. Anyone reading the `bills` table directly,
+or reconciling it against a till, needs both columns -- `total` by itself understates what
+the sale was worth.
+
+This also means the `points_awarded` outbound message payload's `total` field is now the
+net figure, since it is built from `bills.total`. Worth flagging to whoever writes the
+WhatsApp template for that message, since that copy lives outside this repo.
+
+**Known limit: `days_left` can be pessimistic.** `customer_points_balance()` derives
+consumption from a running sum rather than tracking which batch a redemption came out of.
+So the expiry date it names can belong to a batch that has, in reality, already been fully
+spent by an earlier redemption -- the function has no per-batch ledger to check against.
+The balance itself is always correct; only the date attached to it can undersell how much
+time is actually left.
