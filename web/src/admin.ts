@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { ItemValue, NewStaffValue, SettingsField } from "./adminRules";
+import type { ItemValue, SettingsField } from "./adminRules";
 import type { Role } from "./config";
 
 /**
@@ -67,24 +67,6 @@ export async function customerPoints(customerId: string) {
 
 export async function listStaff() {
   return supabase.from("app_users").select("id, name, role").order("name");
-}
-
-/**
- * Links an account that has already signed up to this vendor.
- *
- * NOT an invitation. Creating the auth.users row needs auth.admin.createUser and so the
- * service_role key, which config.ts forbids in this bundle -- that is the Edge Function
- * slice. Until then the person signs up themselves and an admin pastes their user id
- * here, which is what docs/runbook-first-admin.md previously had them do by hand in SQL.
- *
- * vendor_id is sent explicitly: there is no column default, and users_admin_write checks
- * it in WITH CHECK, so omitting it is a 23502 rather than a quiet insert into the wrong
- * tenant.
- */
-export async function createStaff(vendorId: string, value: NewStaffValue) {
-  return supabase.from("app_users").insert({
-    id: value.id, vendor_id: vendorId, name: value.name, role: value.role,
-  });
 }
 
 export async function updateStaff(id: string, patch: { name?: string; role?: Role }) {
