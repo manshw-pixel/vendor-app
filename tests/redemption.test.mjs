@@ -63,16 +63,32 @@ test("a redemption row expires WITH the points it consumed, not later", async ()
   // THE test for this feature. A redemption row given its own future expiry drops out of
   // the balance sum when it passes and silently REFUNDS the spent points. The existing
   // redemption case in points_balance.test.mjs cannot catch this: it never advances time.
+  //
+  // Granted at 10 days, not 30: vendors.redeem_days defaults to 30, so a redemption row
+  // mistakenly written as `now() + redeem_days` (the pattern the award insert two dozen
+  // lines below actually uses) would land on the same expiry as a 30-day batch and pass
+  // this test on the very bug it exists to catch. 10 days can't coincide with that default.
+  // The direct equality assertion below is the real guard either way -- it can't be fooled
+  // by any arithmetic coincidence -- but the grant is chosen to not rely on that alone.
   const w = await billedBill({ total: 500 });
-  await grant(w, 100, 30);
+  await grant(w, 100, 10);
 
   await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
   assertEqual(await balance(w.customerId), 60, "precondition: 60 left before expiry");
 
-  // Move every one of this customer's ledger rows into the past by 31 days, which is what
+  const { rows: [batch] } = await sql(
+    `select expires_at from points_ledger where customer_id = $1 and points > 0`,
+    [w.customerId]);
+  const { rows: [redemption] } = await sql(
+    `select expires_at from points_ledger where customer_id = $1 and points < 0`,
+    [w.customerId]);
+  assertEqual(redemption.expires_at.getTime(), batch.expires_at.getTime(),
+    "the redemption row must inherit the batch's own expiry, not a fresh one");
+
+  // Move every one of this customer's ledger rows into the past by 11 days, which is what
   // the passage of time does to them. The earned batch and its redemption must leave the
   // sum together.
-  await sql(`update points_ledger set expires_at = expires_at - interval '31 days'
+  await sql(`update points_ledger set expires_at = expires_at - interval '11 days'
               where customer_id = $1`, [w.customerId]);
 
   assertEqual(await balance(w.customerId), 0,
@@ -103,9 +119,12 @@ test("redemption consumes the soonest-expiring points first, across batches", as
   assertEqual(await balance(w.customerId), 30, "150 granted minus 120 spent");
 
   // Two negative rows, one per bucket consumed, each carrying that bucket's expiry.
+  // Tiebreak by earned_at, id: if a wrong implementation left both rows sharing one
+  // timestamp, ordering by expires_at alone would make rows[0] arbitrary and this
+  // assertion nondeterministic instead of reliably failing.
   const { rows } = await sql(
     `select points, expires_at from points_ledger
-      where customer_id = $1 and points < 0 order by expires_at`, [w.customerId]);
+      where customer_id = $1 and points < 0 order by expires_at, earned_at, id`, [w.customerId]);
   assertEqual(rows.length, 2, "should write one negative row per bucket consumed");
   assertEqual(rows[0].points, -100, "the soonest bucket should be drained first");
   assertEqual(rows[1].points, -20, "the remainder comes from the later bucket");
@@ -252,6 +271,12 @@ test("a recorder still cannot complete a bill, redemption or not", async () => {
   const { error } = await world.a.clients.recorder
     .rpc("complete_bill", { p_bill_id: w.billId, p_redeem_points: 40 });
   assert(error, "a recorder must not be able to complete a sale");
+  // Match the specific role-refusal message, not just any error: an overload ambiguity or
+  // a stale PostgREST schema cache also surfaces as an error (e.g. "function not found")
+  // and would satisfy a bare assert(error) identically to a genuine role refusal -- exactly
+  // the failure mode the migration's `drop function` comment exists to prevent.
+  assert(/may not complete bills/i.test(error.message),
+    `expected a role-refusal error, got: ${error.message}`);
 
   assertEqual(await balance(w.customerId), 100, "and must not have spent anything");
 });
