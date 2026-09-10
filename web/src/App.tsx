@@ -5,6 +5,7 @@ import { SessionProvider, useSession } from "./components/SessionProvider";
 import { Login } from "./components/Login";
 import { Shell } from "./components/Shell";
 import { Guard } from "./components/Guard";
+import { ChangePassword } from "./components/ChangePassword";
 import Bill from "./screens/Bill";
 import Pending from "./screens/Pending";
 import Items from "./screens/Items";
@@ -91,6 +92,7 @@ function Inner() {
   if (s.kind === "signedOut") return <Login />;
   if (s.kind === "unmapped") return <Unmapped userId={s.userId} email={s.email} />;
   if (s.kind === "error") return <SessionError detail={s.detail} />;
+  if (s.kind === "mustChangePassword") return <ChangePassword email={s.email} />;
 
   return (
     <Shell role={s.role} vendorName={s.vendorName} name={s.name}>

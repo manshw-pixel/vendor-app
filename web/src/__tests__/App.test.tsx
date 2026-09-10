@@ -59,7 +59,7 @@ describe("App", () => {
     getSession.mockResolvedValue({
       data: { session: { user: { id: "u1", email: "admin@shop.test" } } },
     });
-    appUserRow.value = { name: "Admin", role: "admin", vendor_id: "v1", vendors: { name: "Shop" } };
+    appUserRow.value = { name: "Admin", role: "admin", vendor_id: "v1", vendors: { name: "Shop" }, must_change_password: false };
 
     render(<App />);
 
@@ -111,10 +111,27 @@ describe("App", () => {
     getSession.mockResolvedValue({
       data: { session: { user: { id: "u1", email: "admin@shop.test" } } },
     });
-    appUserRow.value = { name: "Admin", role: "admin", vendor_id: "v1", vendors: { name: "Shop" } };
+    appUserRow.value = { name: "Admin", role: "admin", vendor_id: "v1", vendors: { name: "Shop" }, must_change_password: false };
 
     render(<App />);
 
     expect(screen.queryByText(/coming soon|लवकरच|जल्द/i)).toBeNull();
+  });
+
+  it("shows the password change instead of any route while the flag is set", async () => {
+    // The gate has to be at the router, not inside a screen: reachable routes behind a
+    // prompt are reachable.
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "u1", email: "rina@shop.test" } } },
+    });
+    appUserRow.value = {
+      name: "Rina", role: "recorder", vendor_id: "v1",
+      vendors: { name: "Shop" }, must_change_password: true,
+    };
+
+    render(<App />);
+
+    expect(await screen.findByTestId("newpw")).toBeTruthy();
+    expect(screen.queryByTestId("screen-bill")).toBeNull();
   });
 });
