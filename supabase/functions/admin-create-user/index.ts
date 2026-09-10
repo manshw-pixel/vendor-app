@@ -104,13 +104,28 @@ Deno.serve(async (req) => {
     // where they land, which is why it survives this slice.
     //
     // supabase-js resolves with { error } rather than rejecting, so a failed delete would
-    // NOT be caught by .catch -- it would silently disappear, leaving the very account
-    // stranding this admin's staff member with no trace in the logs. Capture the result
-    // and log it instead: still best-effort, still never throws, but now visible in the
-    // Edge Function dashboard if it happens.
-    const { error: deleteError } = await admin.auth.admin.deleteUser(created.user.id);
-    if (deleteError) {
-      console.error("admin-create-user: compensating deleteUser failed", {
+    // NOT be caught by a bare .catch -- it would silently disappear, leaving the very
+    // account stranding this admin's staff member with no trace in the logs. But a
+    // genuine rejection (e.g. a network failure mid-call) is also possible, and that IS
+    // thrown -- if left unguarded it would escape this handler entirely, so the caller
+    // gets a raw platform 500 instead of link_failed, the one code that tells them what
+    // happened. These are two different failure modes of the same call, not belt-and-
+    // braces: try/catch handles the throw, the error-result check handles the resolve.
+    // Both are logged the same way because operationally they mean the same thing -- the
+    // compensating delete did not happen and someone needs to know. Still best-effort,
+    // still never throws out of this handler, but now visible in the Edge Function
+    // dashboard if it happens.
+    try {
+      const { error: deleteError } = await admin.auth.admin.deleteUser(created.user.id);
+      if (deleteError) {
+        console.error("admin-create-user: compensating deleteUser failed", {
+          userId: created.user.id,
+          linkError,
+          deleteError,
+        });
+      }
+    } catch (deleteError) {
+      console.error("admin-create-user: compensating deleteUser threw", {
         userId: created.user.id,
         linkError,
         deleteError,
