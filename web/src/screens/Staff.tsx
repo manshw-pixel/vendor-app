@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 // do. The screen is rendered directly (by tests, and by the router) without going
 // through main.tsx.
 import "../i18n";
-import { listStaff, updateStaff, removeStaff, type StaffRow } from "../admin";
-import { createUserAccount } from "../adminApi";
+import { listStaff, updateStaff, type StaffRow } from "../admin";
+import { createUserAccount, deleteUserAccount } from "../adminApi";
 import { canEditStaff, validateNewStaff, type NewStaffInput, type NewStaffField } from "../adminRules";
 import { ROLES, type Role } from "../config";
 import { useSession } from "../components/SessionProvider";
@@ -87,16 +87,15 @@ export default function Staff() {
 
   async function remove(row: StaffRow) {
     setBusy(true);
-    const { error } = await removeStaff(row.id);
+    const { error } = await deleteUserAccount(row.id);
     setBusy(false);
-    // Close the dialog whether or not the delete succeeded -- a 23503 (the person has
-    // recorded or completed bills) is the common failure here, not an edge case, and
-    // leaving the dialog open on it would look like the app had hung. load() runs before
-    // the problem is set, because listStaff's own (null) error would otherwise clobber
-    // the message we are about to show.
+    // Close the dialog whether or not it succeeded -- a 409 (the person has recorded or
+    // completed bills) is the common failure here, not an edge case, and leaving the
+    // dialog open on it would look like the app had hung. load() runs before the problem
+    // is set, because listStaff's own (null) error would otherwise clobber the message.
     setConfirming(null);
     await load();
-    setProblem(describeError(error));
+    setProblem(error);
   }
 
   return (

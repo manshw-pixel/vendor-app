@@ -6,7 +6,7 @@ const invoke = vi.fn(async (..._a: unknown[]): Promise<{
 
 vi.mock("../supabase", () => ({ supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
 
-const { createUserAccount } = await import("../adminApi");
+const { createUserAccount, deleteUserAccount } = await import("../adminApi");
 
 const value = { email: "rina@shop.test", password: "sunflower9", name: "Rina", role: "recorder" as const };
 
@@ -73,5 +73,53 @@ describe("createUserAccount", () => {
   it("reports a dead network as offline, not as a rejected request", async () => {
     invoke.mockResolvedValueOnce({ data: null, error: { message: "Failed to fetch" } });
     expect((await createUserAccount(value)).error?.key).toBe("error.offline");
+  });
+});
+
+describe("deleteUserAccount", () => {
+  const ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+
+  const refused = (code: string, status: number) => ({
+    data: null,
+    error: { message: "non-2xx", context: new Response(JSON.stringify({ error: code }), { status }) },
+  });
+
+  it("sends only the id", async () => {
+    await deleteUserAccount(ID);
+    expect(invoke).toHaveBeenCalledWith("admin-delete-user", { body: { id: ID } });
+  });
+
+  it("keeps the has-history message the direct delete used to produce", async () => {
+    // bills.recorder_id/biller_id reference app_users with no ON DELETE clause, so this is
+    // the common failure in a working shop. It read as "cannot be removed, change their
+    // role instead" before this went through a function, and must still.
+    invoke.mockResolvedValueOnce(refused("has_history", 409));
+    expect((await deleteUserAccount(ID)).error?.key).toBe("error.staffHasHistory");
+  });
+
+  it("distinguishes a half-done removal from an outright failure", async () => {
+    // account_delete_failed means the roster row IS gone and the email is still taken.
+    // Collapsing it into a generic failure would leave an admin unable to explain why
+    // re-adding that address is refused.
+    invoke.mockResolvedValueOnce(refused("account_delete_failed", 500));
+    expect((await deleteUserAccount(ID)).error?.key).toBe("error.staffPartlyRemoved");
+  });
+
+  it("reports a target in another shop as simply not on the list", async () => {
+    invoke.mockResolvedValueOnce(refused("not_your_staff", 404));
+    expect((await deleteUserAccount(ID)).error?.key).toBe("error.staffNotFound");
+  });
+
+  it("reports self-deletion as not allowed", async () => {
+    invoke.mockResolvedValueOnce(refused("cannot_delete_self", 409));
+    expect((await deleteUserAccount(ID)).error?.key).toBe("error.notAllowed");
+  });
+
+  it("does not resolve a delete code against the create function's key map", async () => {
+    // The two functions have different ErrorCode unions and each gets its own map. A single
+    // shared map would have to be their union, and a code meaningful to one would then
+    // silently pick up the other's message.
+    invoke.mockResolvedValueOnce(refused("email_taken", 409));
+    expect((await deleteUserAccount(ID)).error?.key).toBe("error.unknown");
   });
 });

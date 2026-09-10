@@ -21,7 +21,7 @@ vi.mock("../supabase", () => ({
 
 const {
   listAllItems, createItem, updateItem, setItemActive,
-  updateCustomer, customerPoints, listStaff, updateStaff, removeStaff,
+  updateCustomer, customerPoints, listStaff, updateStaff,
   loadVendorConfig, updateVendorConfig,
 } = await import("../admin");
 
@@ -102,16 +102,6 @@ describe("updateStaff", () => {
   });
 });
 
-describe("removeStaff", () => {
-  it("deletes the app_users row by id", async () => {
-    // This unlinks the person from the vendor. It does NOT delete their auth account --
-    // the SPA holds only the anon key, and the screen's copy must not imply otherwise.
-    await removeStaff("u2");
-    expect(from).toHaveBeenCalledWith("app_users");
-    expect(del).toHaveBeenCalled();
-    expect(eqUpdate).toHaveBeenCalledWith("id", "u2");
-  });
-});
 
 describe("vendor config", () => {
   it("reads the vendor row by id", async () => {

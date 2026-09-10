@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import type { NewStaffValue } from "./adminRules";
 import type { ErrorCode } from "../../supabase/functions/admin-create-user/guards";
+import type { ErrorCode as DeleteErrorCode } from "../../supabase/functions/admin-delete-user/guards";
 
 /**
  * The only module that calls an Edge Function.
@@ -22,7 +23,13 @@ const KEYS: Record<ErrorCode, string> = {
   link_failed: "error.staffPartlyCreated",
 };
 
-async function codeFrom(error: { message?: string; context?: unknown }): Promise<string> {
+/** Takes the map as an argument because each function has its own ErrorCode union; a
+ *  shared map would have to be the union of both, and a code from one would then silently
+ *  resolve against the other's key. */
+async function codeFrom(
+  error: { message?: string; context?: unknown },
+  keys: Record<string, string>,
+): Promise<string> {
   if (/failed to fetch|networkerror|load failed/i.test(error.message ?? "")) {
     return "error.offline";
   }
@@ -30,8 +37,8 @@ async function codeFrom(error: { message?: string; context?: unknown }): Promise
   if (!(res instanceof Response)) return "error.unknown";
   try {
     const body = (await res.clone().json()) as { error?: string };
-    const code = body.error as ErrorCode | undefined;
-    return (code && KEYS[code]) || "error.unknown";
+    const code = body.error;
+    return (code && keys[code]) || "error.unknown";
   } catch {
     // A 502 from the platform or a gateway is HTML, not our JSON. Not knowing the cause
     // is itself the honest answer here.
@@ -51,5 +58,38 @@ export async function createUserAccount(
 ): Promise<{ error: { key: string; detail: string } | null }> {
   const { error } = await supabase.functions.invoke("admin-create-user", { body: value });
   if (!error) return { error: null };
-  return { error: { key: await codeFrom(error), detail: error.message ?? "" } };
+  return { error: { key: await codeFrom(error, KEYS), detail: error.message ?? "" } };
+}
+
+const DELETE_KEYS: Record<DeleteErrorCode, string> = {
+  not_admin: "error.notAllowed",
+  bad_request: "error.unknown",
+  // Absent and belonging-to-another-shop are one code by design, so this cannot be used to
+  // probe for account ids across tenants. "No longer on your staff list" is true of both.
+  not_your_staff: "error.staffNotFound",
+  cannot_delete_self: "error.notAllowed",
+  // The 23503 the database raises when the person has recorded or completed bills. The
+  // same message the old direct-delete path produced, so the common failure in a working
+  // shop still reads the way it always has.
+  has_history: "error.staffHasHistory",
+  unlink_failed: "error.unknown",
+  // Off the roster but the account survives, so their email is still taken. Distinct from
+  // unlink_failed because the two leave genuinely different states behind.
+  account_delete_failed: "error.staffPartlyRemoved",
+};
+
+/**
+ * Removes a person from this shop AND deletes their auth account.
+ *
+ * Went through the Edge Function rather than a direct table delete because deleting an
+ * auth.users row needs the service_role key. The old direct delete left the account alive,
+ * which is why a removed person's email could never be reused -- the whole reason this
+ * exists.
+ */
+export async function deleteUserAccount(
+  id: string,
+): Promise<{ error: { key: string; detail: string } | null }> {
+  const { error } = await supabase.functions.invoke("admin-delete-user", { body: { id } });
+  if (!error) return { error: null };
+  return { error: { key: await codeFrom(error, DELETE_KEYS), detail: error.message ?? "" } };
 }

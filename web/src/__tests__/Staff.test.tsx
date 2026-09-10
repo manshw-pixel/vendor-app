@@ -12,8 +12,8 @@ const listStaff = vi.fn(async (): Promise<{ data: StaffRow[] | null; error: null
 const updateStaff = vi.fn(async (..._a: unknown[]): Promise<{
   error: { code?: string; message?: string } | null;
 }> => ({ error: null }));
-const removeStaff = vi.fn(async (..._a: unknown[]): Promise<{
-  error: { code?: string; message?: string } | null;
+const deleteUserAccount = vi.fn(async (..._a: unknown[]): Promise<{
+  error: { key: string; detail: string } | null;
 }> => ({ error: null }));
 const createUserAccount = vi.fn(async (..._a: unknown[]): Promise<{
   error: { key: string; detail: string } | null;
@@ -22,11 +22,11 @@ const createUserAccount = vi.fn(async (..._a: unknown[]): Promise<{
 vi.mock("../admin", () => ({
   listStaff: () => listStaff(),
   updateStaff: (...a: unknown[]) => updateStaff(...a),
-  removeStaff: (...a: unknown[]) => removeStaff(...a),
 }));
 
 vi.mock("../adminApi", () => ({
   createUserAccount: (...a: unknown[]) => createUserAccount(...a),
+  deleteUserAccount: (...a: unknown[]) => deleteUserAccount(...a),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -78,9 +78,9 @@ describe("the staff screen", () => {
   it("confirms before removing someone", async () => {
     render(<Staff />);
     fireEvent.click(await screen.findByTestId("staff-remove-u2"));
-    expect(removeStaff).not.toHaveBeenCalled();
+    expect(deleteUserAccount).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId("staff-remove-confirm"));
-    await waitFor(() => expect(removeStaff).toHaveBeenCalledWith("u2"));
+    await waitFor(() => expect(deleteUserAccount).toHaveBeenCalledWith("u2"));
   });
 
   it("gives the confirm dialog an accessible name", async () => {
@@ -92,13 +92,15 @@ describe("the staff screen", () => {
     expect(dialog.getAttribute("aria-label")).toBeTruthy();
   });
 
-  it("does not claim the sign-in account is deleted", async () => {
-    // removeStaff unlinks the person from the vendor; the SPA holds only the anon key
-    // and cannot touch auth.users.
+  it("says the sign-in account IS deleted, because now it is", async () => {
+    // This assertion used to be its own opposite: the SPA held only the anon key, so
+    // removal unlinked the person and left their account alive, and the copy said so.
+    // admin-delete-user changed that, and copy promising an account survives when it does
+    // not is worse than no copy at all -- an admin would not expect the email to free up.
     render(<Staff />);
     fireEvent.click(await screen.findByTestId("staff-remove-u2"));
     expect(screen.getByTestId("staff-remove-body").textContent ?? "").toMatch(
-      /not deleted|मिटत नाही|नहीं मिटता/i,
+      /is deleted|मिट जाएगा|मिटेल/i,
     );
   });
 
@@ -116,8 +118,11 @@ describe("the staff screen", () => {
     // with no ON DELETE clause, i.e. NO ACTION. Deleting anyone who has ever recorded or
     // completed a bill fails with 23503, which is the common case in a working shop, not
     // an edge case.
-    removeStaff.mockResolvedValueOnce({
-      error: { code: "23503", message: 'update or delete on table "app_users" violates foreign key constraint' },
+    // The function maps the database's 23503 to its own has_history code, and adminApi
+    // maps that back to the same message the old direct-delete path produced -- the
+    // common failure in a working shop still reads the way it always has.
+    deleteUserAccount.mockResolvedValueOnce({
+      error: { key: "error.staffHasHistory", detail: "" },
     });
     render(<Staff />);
     fireEvent.click(await screen.findByTestId("staff-remove-u2"));
@@ -212,5 +217,40 @@ describe("adding staff", () => {
     await openForm();
     fill();
     expect((screen.getByTestId("staff-add-password") as HTMLInputElement).type).toBe("password");
+  });
+});
+
+describe("removing staff frees the email", () => {
+  it("deletes the auth account, not just the roster row", async () => {
+    // The whole point of this change: the old direct delete left the account alive, so a
+    // removed person's email could never be used again.
+    render(<Staff />);
+    fireEvent.click(await screen.findByTestId("staff-remove-u2"));
+    fireEvent.click(screen.getByTestId("staff-remove-confirm"));
+    await waitFor(() => expect(deleteUserAccount).toHaveBeenCalledWith("u2"));
+  });
+
+  it("says plainly when the roster row went but the account did not", async () => {
+    // The half-done state: off the list, email still taken. Reporting it as success is
+    // what would send an admin looking for a bug when they cannot re-add that address.
+    deleteUserAccount.mockResolvedValueOnce({
+      error: { key: "error.staffPartlyRemoved", detail: "" },
+    });
+    render(<Staff />);
+    fireEvent.click(await screen.findByTestId("staff-remove-u2"));
+    fireEvent.click(screen.getByTestId("staff-remove-confirm"));
+    expect(await screen.findByText(/not free to reuse|दोबारा इस्तेमाल|पुन्हा वापरता/i)).toBeTruthy();
+  });
+
+  it("still reloads the roster after a refused removal", async () => {
+    deleteUserAccount.mockResolvedValueOnce({
+      error: { key: "error.staffHasHistory", detail: "" },
+    });
+    render(<Staff />);
+    await screen.findByTestId("staff-remove-u2");
+    expect(listStaff).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("staff-remove-u2"));
+    fireEvent.click(screen.getByTestId("staff-remove-confirm"));
+    await waitFor(() => expect(listStaff).toHaveBeenCalledTimes(2));
   });
 });

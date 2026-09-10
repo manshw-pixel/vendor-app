@@ -73,13 +73,6 @@ export async function updateStaff(id: string, patch: { name?: string; role?: Rol
   return supabase.from("app_users").update(patch).eq("id", id);
 }
 
-/** Unlinks a person from this vendor. Their auth.users account is untouched -- the SPA
- *  holds only the anon key and has no admin API. They simply stop resolving to a tenant,
- *  which SessionProvider renders as the "not linked to a shop" screen. */
-export async function removeStaff(id: string) {
-  return supabase.from("app_users").delete().eq("id", id);
-}
-
 const CONFIG_COLS =
   "points_threshold_1, points_reward_1, points_threshold_2, points_reward_2, redeem_days";
 

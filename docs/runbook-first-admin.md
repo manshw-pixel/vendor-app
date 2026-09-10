@@ -93,6 +93,22 @@ an admin-only onboarding flow, or a `SECURITY DEFINER` signup function with its 
 guards. Repeating this runbook by hand is fine for a handful of vendors and a bad answer
 for fifty.
 
+## Removing staff
+
+Settings -> Staff -> **Remove** now deletes the person's `auth.users` account as well as
+their `app_users` row, via the `admin-delete-user` Edge Function. Their email is free to
+use again immediately -- which it was not before, and that was the reason a removed person
+could never be re-added.
+
+Two failures are worth recognising:
+
+- **"has recorded or completed bills"** -- `bills.recorder_id`/`biller_id` reference
+  `app_users` with no `ON DELETE` clause, so the unlink is refused. Nothing is deleted,
+  including the account. Change their role instead of removing them.
+- **"off your staff list, but their sign-in account could not be deleted"** -- the roster
+  row went and the account survived, so their email is still taken. Delete the account by
+  hand under Authentication -> Users in the dashboard.
+
 ## Clearing a shop's data
 
 Settings -> Danger zone -> **Clear all data** wipes this vendor's bills, bill items, points
