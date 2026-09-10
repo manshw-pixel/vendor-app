@@ -29,7 +29,10 @@ describe("SessionProvider", () => {
   it("resolves to ready when app_users has a row", async () => {
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "a@b.test" } } } });
     maybeSingle.mockResolvedValue({
-      data: { name: "Manish", role: "admin", vendor_id: "v1", vendors: { name: "My Kirana" } },
+      data: {
+        name: "Manish", role: "admin", vendor_id: "v1",
+        vendors: { name: "My Kirana" }, must_change_password: false,
+      },
       error: null,
     });
 

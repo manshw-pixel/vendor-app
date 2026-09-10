@@ -23,7 +23,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async function load(userId: string, email: string) {
       const { data, error } = await supabase
         .from("app_users")
-        .select("name, role, vendor_id, vendors(name)")
+        .select("name, role, vendor_id, must_change_password, vendors(name)")
         .eq("id", userId)
         .maybeSingle();
       if (cancelled) return;

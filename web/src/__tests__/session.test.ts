@@ -6,6 +6,7 @@ const row = {
   role: "admin" as const,
   vendor_id: "7bf7f5c7-0a6a-4ab0-a2b9-f8341f42bcf3",
   vendors: { name: "My Kirana" },
+  must_change_password: false,
 };
 
 describe("sessionFromRow", () => {
@@ -37,5 +38,32 @@ describe("sessionFromRow", () => {
     const s = sessionFromRow("u1", "a@b.test", { ...row, vendors: null });
     expect(s.kind).toBe("ready");
     if (s.kind === "ready") expect(s.vendorName).toBe("");
+  });
+});
+
+describe("a password the admin chose", () => {
+  it("becomes its own session kind, not a flag on ready", () => {
+    // A boolean on `ready` would leave Shell and Guard rendering the app behind the
+    // prompt, and every screen would have to remember to check it. A distinct kind makes
+    // the routes unreachable rather than merely hidden -- the same reason unmapped is one.
+    const s = sessionFromRow("u1", "rina@shop.test", { ...row, must_change_password: true });
+    expect(s.kind).toBe("mustChangePassword");
+  });
+
+  it("carries the id and email that screen needs", () => {
+    const s = sessionFromRow("u1", "rina@shop.test", { ...row, must_change_password: true });
+    expect(s).toEqual({ kind: "mustChangePassword", userId: "u1", email: "rina@shop.test" });
+  });
+
+  it("lets a cleared flag through to ready", () => {
+    expect(sessionFromRow("u1", "rina@shop.test", row).kind).toBe("ready");
+  });
+
+  it("outranks the role, so even an admin is stopped", () => {
+    // An admin who created their own account through this flow is in the same position
+    // as anyone else: the person who typed the password knows it.
+    const s = sessionFromRow("u1", "a@shop.test",
+      { ...row, role: "admin", must_change_password: true });
+    expect(s.kind).toBe("mustChangePassword");
   });
 });

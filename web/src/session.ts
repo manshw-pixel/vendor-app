@@ -5,6 +5,7 @@ export type AppUserRow = {
   role: Role;
   vendor_id: string;
   vendors: { name: string } | null;
+  must_change_password: boolean;
 };
 
 export type SessionState =
@@ -15,6 +16,10 @@ export type SessionState =
   // Settings -> Staff can invite by email, this is the only place in the app that id
   // can be read. See App.tsx's Unmapped panel.
   | { kind: "unmapped"; userId: string; email: string }
+  // Its own kind rather than a flag on `ready`, so App.tsx cannot reach the routes at all.
+  // A boolean on ready would leave Shell and Guard rendering the app behind the prompt and
+  // put the burden on every screen to remember the check.
+  | { kind: "mustChangePassword"; userId: string; email: string }
   | { kind: "error"; detail: string }
   | {
       kind: "ready";
@@ -36,6 +41,9 @@ export function sessionFromRow(
   row: AppUserRow | null,
 ): SessionState {
   if (!row) return { kind: "unmapped", userId, email };
+  // Checked before role: an admin who created their own account is in exactly the same
+  // position as anyone else, because the person who typed the password knows it.
+  if (row.must_change_password) return { kind: "mustChangePassword", userId, email };
   return {
     kind: "ready",
     userId,
