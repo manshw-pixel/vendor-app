@@ -12,6 +12,7 @@ import "./points_balance.test.mjs";
 import "./views.test.mjs";
 import "./analytics.test.mjs";
 import "./expiry.test.mjs";
+import "./must_change_password.test.mjs";
 
 try {
   await bootstrap();
