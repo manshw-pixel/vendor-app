@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "../App";
 
 const { getSession, onAuthStateChange, appUserRow } = vi.hoisted(() => ({
@@ -64,6 +64,45 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.queryByText(/coming soon|लवकरच|जल्द/i)).toBeNull();
+  });
+
+  it("shows an unlinked person their own user id, which nothing else in the app does", async () => {
+    // Settings -> Staff -> Add staff asks an admin to paste this exact value, and this
+    // panel is the only place it can be read. Without it the form wants something
+    // obtainable only from the Supabase dashboard -- the database access it exists to
+    // avoid. The id is the assertion; the copy button is a convenience on top of it.
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", email: "new@shop.test" } } },
+    });
+    appUserRow.value = null;
+
+    render(<App />);
+
+    const shown = await screen.findByTestId("session-user-id");
+    expect(shown.textContent).toBe("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+    expect(screen.getByTestId("session-copy-id")).toBeTruthy();
+  });
+
+  it("still renders the id when the clipboard is unavailable", async () => {
+    // navigator.clipboard is HTTPS-only and can be refused outright. The id is selectable
+    // text, so a rejected copy costs a manual select, not the value -- but a throw that
+    // escaped would blank the panel and strand the person entirely.
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", email: "new@shop.test" } } },
+    });
+    appUserRow.value = null;
+    const clipboard = { writeText: vi.fn(async () => { throw new Error("denied"); }) };
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
+
+    try {
+      render(<App />);
+      fireEvent.click(await screen.findByTestId("session-copy-id"));
+      await waitFor(() => expect(clipboard.writeText).toHaveBeenCalled());
+      expect(screen.getByTestId("session-user-id").textContent)
+        .toBe("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
   });
 
   it("no longer serves a placeholder for dashboards", async () => {

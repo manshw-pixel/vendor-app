@@ -10,7 +10,11 @@ export type AppUserRow = {
 export type SessionState =
   | { kind: "loading" }
   | { kind: "signedOut" }
-  | { kind: "unmapped"; email: string }
+  // Carries userId as well as email BECAUSE this is the screen that has to show it:
+  // linking an account is done by an admin pasting this person's user id, and until
+  // Settings -> Staff can invite by email, this is the only place in the app that id
+  // can be read. See App.tsx's Unmapped panel.
+  | { kind: "unmapped"; userId: string; email: string }
   | { kind: "error"; detail: string }
   | {
       kind: "ready";
@@ -31,7 +35,7 @@ export function sessionFromRow(
   email: string,
   row: AppUserRow | null,
 ): SessionState {
-  if (!row) return { kind: "unmapped", email };
+  if (!row) return { kind: "unmapped", userId, email };
   return {
     kind: "ready",
     userId,

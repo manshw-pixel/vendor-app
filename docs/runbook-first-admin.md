@@ -82,8 +82,10 @@ per person is:
 
 1. **They sign up through the app themselves** (or you add them under Authentication →
    Users, as in step 1 above).
-2. **They read their user id off their own account** and send it to the admin. It is a
-   uuid, e.g. `3f2504e0-4f89-11d3-9a0c-0305e82c3301`.
+2. **They read their user id off their own sign-in screen** and send it to the admin.
+   After signing up they land on **"Account not linked to a shop"**, which shows their
+   uuid with a **Copy user id** button — that panel exists for this step and is the only
+   place in the app the id appears.
 3. **The admin pastes it into Add staff** with a name and a role.
 
 The id is the whole point of the paste, and it is unchecked by any foreign key —
