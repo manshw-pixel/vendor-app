@@ -8,6 +8,7 @@
  */
 
 import { ROLES, type Role } from "./config";
+import { MIN_PASSWORD_LENGTH } from "../../supabase/functions/admin-create-user/guards";
 
 export type ItemInput = {
   name_en: string;
@@ -134,36 +135,38 @@ export function canEditStaff(selfUserId: string, targetUserId: string): boolean 
   return selfUserId !== targetUserId;
 }
 
-export type NewStaffInput = { id: string; name: string; role: string };
+export type NewStaffInput = { email: string; password: string; name: string; role: string };
 export type NewStaffField = keyof NewStaffInput;
-export type NewStaffValue = { id: string; name: string; role: Role };
+export type NewStaffValue = { email: string; password: string; name: string; role: Role };
 
-/** app_users.id has no FK to auth.users (0001_schema.sql:34) -- the column comment is the
- *  only thing tying them together, so a typo here inserts a row that resolves to nobody.
- *  Shape is all this can check; that the account exists is not knowable from the SPA. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Same shape as the Edge Function's own check, and deliberately as loose: GoTrue decides
+ *  what it accepts, and rejecting an address it would have taken is worse than a round
+ *  trip. */
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * A new staff row, linking an account that has ALREADY signed up.
+ * A new staff account, as the admin fills it in.
  *
- * Deliberately not an invitation: creating the auth account needs auth.admin.createUser
- * and therefore the service_role key, which config.ts forbids in this bundle. So the
- * admin pastes the user id from the sign-up, and this checks what it can.
+ * This duplicates the Edge Function's guards on purpose: the round trip creates a real
+ * auth account, so an obvious slip should be named against its field before it is made.
+ * MIN_PASSWORD_LENGTH is IMPORTED rather than restated, because two copies of that number
+ * drift and the drift appears as the server refusing what the form accepted.
  */
 export function validateNewStaff(
   input: NewStaffInput,
 ): { ok: true; value: NewStaffValue } | { ok: false; errors: Partial<Record<NewStaffField, string>> } {
   const errors: Partial<Record<NewStaffField, string>> = {};
 
-  if (!UUID.test(input.id.trim())) errors.id = "staff.badId";
+  const email = input.email.trim().toLowerCase();
+  if (!EMAIL.test(email)) errors.email = "staff.badEmail";
   if (input.name.trim() === "") errors.name = "staff.required";
   if (!(ROLES as readonly string[]).includes(input.role)) errors.role = "staff.badRole";
+  // Not trimmed: trimming silently changes the credential the admin read out loud.
+  if (input.password.length < MIN_PASSWORD_LENGTH) errors.password = "staff.badPassword";
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
-    // Lowercased because Postgres renders uuid canonically anyway; storing the admin's
-    // uppercase paste would make the row read differently from every other id in the table.
-    value: { id: input.id.trim().toLowerCase(), name: input.name.trim(), role: input.role as Role },
+    value: { email, password: input.password, name: input.name.trim(), role: input.role as Role },
   };
 }

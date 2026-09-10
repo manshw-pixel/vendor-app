@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateItem, validateSettings, validateNewStaff, canEditStaff, stockLevel, LOW_STOCK_KG,
 } from "../adminRules";
+import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 
 const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5" };
 
@@ -148,7 +149,7 @@ describe("stockLevel", () => {
 });
 
 describe("validateNewStaff", () => {
-  const good = { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", name: "Rina", role: "recorder" };
+  const good = { email: "rina@shop.test", password: "sunflower9", name: "Rina", role: "recorder" };
 
   it("accepts a well-formed row", () => {
     const r = validateNewStaff(good);
@@ -156,18 +157,37 @@ describe("validateNewStaff", () => {
     if (r.ok) expect(r.value).toEqual(good);
   });
 
-  it("rejects an id that is not a uuid", () => {
-    // app_users.id has no FK to auth.users, so a typo inserts a row that resolves to
-    // nobody and looks, from the roster, exactly like a working account.
-    const r = validateNewStaff({ ...good, id: "u2" });
+  it("rejects something that is not an email address", () => {
+    const r = validateNewStaff({ ...good, email: "rina" });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.id).toBe("staff.badId");
+    if (!r.ok) expect(r.errors.email).toBe("staff.badEmail");
   });
 
-  it("canonicalises an id pasted in uppercase", () => {
-    const r = validateNewStaff({ ...good, id: good.id.toUpperCase() });
+  it("lowercases the email, because GoTrue treats it case-insensitively", () => {
+    const r = validateNewStaff({ ...good, email: "Rina@Shop.Test" });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.id).toBe(good.id);
+    if (r.ok) expect(r.value.email).toBe("rina@shop.test");
+  });
+
+  it("rejects a password below the shared floor", () => {
+    const r = validateNewStaff({ ...good, password: "short" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.password).toBe("staff.badPassword");
+  });
+
+  it("takes its floor from the same constant the function enforces", () => {
+    // Two independent numbers would drift, and the drift shows up as the server rejecting
+    // what the form accepted -- with the field message already dismissed.
+    const atFloor = { ...good, password: "a".repeat(MIN_PASSWORD_LENGTH) };
+    expect(validateNewStaff(atFloor).ok).toBe(true);
+    const below = { ...good, password: "a".repeat(MIN_PASSWORD_LENGTH - 1) };
+    expect(validateNewStaff(below).ok).toBe(false);
+  });
+
+  it("never trims the password", () => {
+    const r = validateNewStaff({ ...good, password: " pass word " });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.password).toBe(" pass word ");
   });
 
   it("rejects a blank name", () => {
@@ -177,16 +197,16 @@ describe("validateNewStaff", () => {
   });
 
   it("rejects a role the check constraint would refuse", () => {
-    // 0001_schema.sql: role in ('admin','recorder','biller'). Anything else is a 23514
-    // from the database; catching it here buys a message that names the field.
     const r = validateNewStaff({ ...good, role: "owner" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.role).toBe("staff.badRole");
   });
 
   it("reports every bad field at once", () => {
-    const r = validateNewStaff({ id: "x", name: "", role: "" });
+    const r = validateNewStaff({ email: "x", password: "", name: "", role: "" });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["id", "name", "role"]);
+    if (!r.ok) {
+      expect(Object.keys(r.errors).sort()).toEqual(["email", "name", "password", "role"]);
+    }
   });
 });
