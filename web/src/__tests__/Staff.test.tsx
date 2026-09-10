@@ -15,11 +15,15 @@ const updateStaff = vi.fn(async (..._a: unknown[]): Promise<{
 const removeStaff = vi.fn(async (..._a: unknown[]): Promise<{
   error: { code?: string; message?: string } | null;
 }> => ({ error: null }));
+const createStaff = vi.fn(async (..._a: unknown[]): Promise<{
+  error: { code?: string; message?: string } | null;
+}> => ({ error: null }));
 
 vi.mock("../admin", () => ({
   listStaff: () => listStaff(),
   updateStaff: (...a: unknown[]) => updateStaff(...a),
   removeStaff: (...a: unknown[]) => removeStaff(...a),
+  createStaff: (...a: unknown[]) => createStaff(...a),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -39,9 +43,9 @@ describe("the staff screen", () => {
     expect(screen.getByText(/Admin One/)).toBeTruthy();
   });
 
-  it("says plainly that nobody can be invited here yet", async () => {
-    // §6: creating auth accounts is slice 2's Edge Function. A screen that appeared to
-    // invite and silently could not would be worse than one that admits the seam.
+  it("says plainly that adding links an account rather than inviting one", async () => {
+    // §6: creating auth accounts is still the Edge Function slice. The form links an
+    // account that already exists, and the screen must not read as an invitation.
     render(<Staff />);
     expect(await screen.findByText(/runbook-first-admin/i)).toBeTruthy();
   });
@@ -119,5 +123,78 @@ describe("the staff screen", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await screen.findByText(/काढून टाकता येत नाही|cannot be removed|हटाया नहीं जा सकता/i)).toBeTruthy();
     expect(screen.getByText(/Rina/)).toBeTruthy();
+  });
+});
+
+describe("adding staff", () => {
+  const ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+
+  async function openForm() {
+    render(<Staff />);
+    fireEvent.click(await screen.findByTestId("staff-add-open"));
+  }
+
+  it("links a new person to this vendor", async () => {
+    await openForm();
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.change(screen.getByTestId("staff-add-role"), { target: { value: "biller" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    await waitFor(() => expect(createStaff)
+      .toHaveBeenCalledWith("v1", { id: ID, name: "Sunil", role: "biller" }));
+  });
+
+  it("sends the vendor id explicitly -- app_users.vendor_id has no default", async () => {
+    // Omitting it is a 23502, and users_admin_write checks it in WITH CHECK.
+    await openForm();
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    await waitFor(() => expect(createStaff).toHaveBeenCalled());
+    expect(createStaff.mock.calls[0]?.[0]).toBe("v1");
+  });
+
+  it("refuses an id that is not a uuid before it reaches the database", async () => {
+    await openForm();
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: "sunil@shop" } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    expect(await screen.findByTestId("staff-add-error-id")).toBeTruthy();
+    expect(createStaff).not.toHaveBeenCalled();
+  });
+
+  it("reloads the roster after a successful add", async () => {
+    await openForm();
+    expect(listStaff).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    await waitFor(() => expect(listStaff).toHaveBeenCalledTimes(2));
+    expect(await screen.findByTestId("staff-added")).toBeTruthy();
+  });
+
+  it("names the real problem when the account is already linked, and keeps the form filled", async () => {
+    // 23505 on app_users_pkey is the likeliest slip: the roster shows names, the form
+    // takes ids, so re-adding someone is easy. The generic "this already exists" would
+    // not say which account, and losing the typed id would mean fetching it again.
+    createStaff.mockResolvedValueOnce({
+      error: { code: "23505", message: 'duplicate key value violates unique constraint "app_users_pkey"' },
+    });
+    await openForm();
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    expect(await screen.findByText(/already linked|पहले से|आधीच/i)).toBeTruthy();
+    expect((screen.getByTestId("staff-add-id") as HTMLInputElement).value).toBe(ID);
+  });
+
+  it("does not claim success when the policy blocks the insert", async () => {
+    createStaff.mockResolvedValueOnce({ error: { code: "42501", message: "row-level security" } });
+    await openForm();
+    fireEvent.change(screen.getByTestId("staff-add-id"), { target: { value: ID } });
+    fireEvent.change(screen.getByTestId("staff-add-name"), { target: { value: "Sunil" } });
+    fireEvent.click(screen.getByTestId("staff-add-save"));
+    await waitFor(() => expect(createStaff).toHaveBeenCalled());
+    expect(screen.queryByTestId("staff-added")).toBeNull();
   });
 });

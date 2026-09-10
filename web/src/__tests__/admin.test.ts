@@ -21,7 +21,7 @@ vi.mock("../supabase", () => ({
 
 const {
   listAllItems, createItem, updateItem, setItemActive,
-  updateCustomer, customerPoints, listStaff, updateStaff, removeStaff,
+  updateCustomer, customerPoints, listStaff, createStaff, updateStaff, removeStaff,
   loadVendorConfig, updateVendorConfig,
 } = await import("../admin");
 
@@ -129,5 +129,23 @@ describe("vendor config", () => {
       "points_threshold_1", "points_threshold_2", "redeem_days",
     ]);
     expect(eqUpdate).toHaveBeenCalledWith("id", "v1");
+  });
+});
+
+describe("createStaff", () => {
+  const person = { id: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", name: "Sunil", role: "biller" as const };
+
+  it("inserts the row into app_users", async () => {
+    await createStaff("v1", person);
+    expect(from).toHaveBeenCalledWith("app_users");
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ id: person.id, name: "Sunil", role: "biller" }));
+  });
+
+  it("sends vendor_id explicitly", async () => {
+    // app_users.vendor_id is NOT NULL with no default (0001_schema.sql:35), and
+    // users_admin_write checks it in WITH CHECK -- omitting it is a 23502, not a quiet
+    // insert into whatever tenant the session happens to resolve to.
+    await createStaff("v1", person);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ vendor_id: "v1" }));
   });
 });

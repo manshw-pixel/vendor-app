@@ -66,8 +66,31 @@ select u.name, u.role, v.name as vendor
   from app_users u join vendors v on v.id = u.vendor_id;
 ```
 
-From here that admin can create the rest of their staff — recorders and billers —
-through the app normally.
+From here that admin adds the rest of their staff — recorders and billers — through the
+app. See below.
+
+## Adding staff after the first admin
+
+Steps 2 and 3 are the bootstrap only. Once one admin exists, Settings → Staff → **Add
+staff** does step 3 for you: `users_admin_write` already authorises an admin to insert
+`app_users` rows for their own vendor, so no SQL and no database access is needed.
+
+What the form still cannot do is step 1. Creating the `auth.users` row needs
+`auth.admin.createUser` and therefore the `service_role` key, which `web/src/config.ts`
+forbids in the browser bundle — that is the unbuilt Edge Function slice. So the sequence
+per person is:
+
+1. **They sign up through the app themselves** (or you add them under Authentication →
+   Users, as in step 1 above).
+2. **They read their user id off their own account** and send it to the admin. It is a
+   uuid, e.g. `3f2504e0-4f89-11d3-9a0c-0305e82c3301`.
+3. **The admin pastes it into Add staff** with a name and a role.
+
+The id is the whole point of the paste, and it is unchecked by any foreign key —
+`app_users.id` has no reference to `auth.users` (`0001_schema.sql:34`), only a comment
+saying they are equal. The form validates the *shape* of the uuid, which is all a client
+can do; a well-formed id belonging to nobody inserts cleanly and produces a person who
+signs in fine and resolves to no tenant. Verify with the query in step 4.
 
 ## Onboarding vendor #2
 

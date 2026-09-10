@@ -23,21 +23,55 @@ const data = await import("../data");
 beforeEach(() => vi.clearAllMocks());
 
 describe("the bill screen", () => {
-  it("shows items as one row each, not a two-column grid", async () => {
-    // The vendor asked for a list. The grid class is the thing being replaced, so this
-    // asserts its absence rather than a vaguer 'renders items'.
+  it("offers the items in one dropdown, not a row or tile per item", async () => {
+    // The vendor asked for a dropdown. The rows are the thing being replaced, so this
+    // asserts their absence as well as the select's presence.
     const { container } = render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    await screen.findByText(/Onion|कांदा|प्याज/);
+    const select = await screen.findByTestId("item-select");
+    expect(select.tagName).toBe("SELECT");
     expect(container.querySelector(".grid-cols-2")).toBeNull();
-    expect(container.querySelectorAll("[data-testid^='item-row-']").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("[data-testid^='item-row-']").length).toBe(0);
+  });
+
+  it("names the price and stock on the option itself", async () => {
+    // An <option> cannot be styled, so the figures a recorder chooses on have to be in
+    // its text or they are not on screen until after the pick.
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    const option = (await screen.findByTestId("item-select"))
+      .querySelector("option[value='i1']") as HTMLOptionElement;
+    expect(option.textContent ?? "").toMatch(/Onion|कांदा|प्याज/);
+    expect(option.textContent ?? "").toMatch(/40/);
+    expect(option.textContent ?? "").toMatch(/100/);
+  });
+
+  it("starts with nothing chosen, so no weight field is waiting", async () => {
+    // A select defaulting to the first item would let a mis-tap bill onions the recorder
+    // never picked -- the row layout had no such default.
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    await screen.findByTestId("item-select");
+    expect(screen.queryByTestId("weight-input")).toBeNull();
+  });
+
+  it("keeps the out-of-stock colour on the chosen item, which the option cannot carry", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    const detail = await screen.findByTestId("item-detail");
+    expect(detail.querySelector(".text-red-600")).toBeTruthy();
   });
 
   it("still takes a decimal weight after tapping a row", async () => {
     // Scales report 1.35. The layout changed; the keypad must not.
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByTestId(/^item-row-/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     const input = screen.getByTestId("weight-input") as HTMLInputElement;
     expect(input.getAttribute("inputmode")).toBe("decimal");
     fireEvent.change(input, { target: { value: "1.35" } });
@@ -51,7 +85,7 @@ describe("the bill screen", () => {
     fireEvent.click(await screen.findByText("Asha"));
 
     // 2. add a line
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -81,7 +115,7 @@ describe("the bill screen", () => {
   it("rejects a weight with more precision than the column stores", async () => {
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1.234" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     expect(await screen.findByText(/two decimal places|दोन|दो/i)).toBeTruthy();
@@ -93,7 +127,7 @@ describe("the bill screen", () => {
   it("creates no bill until the confirm is accepted -- an abandoned basket leaves no row", async () => {
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -114,11 +148,11 @@ describe("the bill screen", () => {
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
 
-    const tile = await screen.findByText(/Onion|कांदा/);
-    const button = tile.closest("button");
-    expect(button).toHaveProperty("disabled", false);
+    const option = (await screen.findByTestId("item-select"))
+      .querySelector("option[value='i1']") as HTMLOptionElement;
+    expect(option.disabled).toBe(false);
 
-    fireEvent.click(tile);
+    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -131,7 +165,7 @@ describe("the bill screen", () => {
     try {
       render(<Bill />);
       fireEvent.click(await screen.findByText("Asha"));
-      fireEvent.click(await screen.findByText(/Onion|कांदा/));
+      fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
       fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
       fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -149,7 +183,7 @@ describe("the bill screen", () => {
     });
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -189,7 +223,7 @@ describe("the bill screen", () => {
 
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -215,7 +249,7 @@ describe("the bill screen", () => {
 
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -245,7 +279,7 @@ describe("the bill screen", () => {
 
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -270,7 +304,7 @@ describe("the bill screen", () => {
     // silently, so assert it is genuinely gone rather than merely covered.
     render(<Bill />);
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.click(await screen.findByText(/Onion|कांदा/));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
