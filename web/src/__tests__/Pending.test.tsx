@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { PendingBill } from "../data";
 
 const listPending = vi.fn(async (..._args: unknown[]): Promise<{ data: PendingBill[] | null; error: null }> => ({
-  data: [{ id: "b1", token_no: 7, total: 500, customers: { name: "Asha", flat_no: "A-1" } }],
+  data: [{ id: "b1", token_no: 7, total: 500, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } }],
   error: null,
 }));
 const completeBill = vi.fn(async (..._args: unknown[]) => ({ error: null }));
@@ -11,10 +11,15 @@ const pointsForBill = vi.fn(async (..._args: unknown[]): Promise<{
   data: { points: number }[] | null;
   error: { message?: string; code?: string } | null;
 }> => ({ data: [], error: null }));
+const customerBalance = vi.fn(async (..._a: unknown[]): Promise<{
+  data: { balance: number; days_left: number | null }[] | null;
+  error: null;
+}> => ({ data: [{ balance: 100, days_left: 12 }], error: null }));
 vi.mock("../data", () => ({
   listPending: (...a: unknown[]) => listPending(...a),
   completeBill: (...a: unknown[]) => completeBill(...a),
   pointsForBill: (...a: unknown[]) => pointsForBill(...a),
+  customerBalance: (...a: unknown[]) => customerBalance(...a),
 }));
 
 const { default: Pending } = await import("../screens/Pending");
@@ -32,7 +37,10 @@ describe("the pending queue", () => {
     render(<Pending />);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
-    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1"));
+    // completeBill now always takes a second argument -- 0 when there is nothing to
+    // redeem -- rather than omitting it. Same claim ("completing sends this bill"),
+    // against the new signature.
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 0));
   });
 
   it("disables the button while the call is in flight", async () => {
@@ -59,7 +67,7 @@ describe("the pending queue", () => {
 
   it("handles a null customers embed without crashing", async () => {
     listPending.mockResolvedValueOnce({
-      data: [{ id: "b2", token_no: 3, total: 120, customers: null }],
+      data: [{ id: "b2", token_no: 3, total: 120, customer_id: null, customers: null }],
       error: null,
     });
     render(<Pending />);
@@ -97,5 +105,67 @@ describe("the pending queue", () => {
     expect(screen.getByText(/completed/i)).toBeTruthy();
     // Must not read like the legitimate zero-points case: no points-awarded count shown.
     expect(screen.queryByText(/points awarded/i)).toBeNull();
+  });
+});
+
+describe("redeeming points at the counter", () => {
+  it("offers no points input for a walk-in bill", async () => {
+    // customer_id is null: there is no loyalty account to spend from.
+    listPending.mockResolvedValueOnce({
+      data: [{ id: "b1", token_no: 7, total: 500, customer_id: null, customers: null }],
+      error: null,
+    });
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    expect(screen.queryByTestId("redeem-input")).toBeNull();
+  });
+
+  it("offers no points input when the customer has none", async () => {
+    customerBalance.mockResolvedValueOnce({ data: [{ balance: 0, days_left: null }], error: null });
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await waitFor(() => expect(customerBalance).toHaveBeenCalled());
+    expect(screen.queryByTestId("redeem-input")).toBeNull();
+  });
+
+  it("sends the points the biller entered", async () => {
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 40));
+  });
+
+  it("completes with no points when the field is left empty", async () => {
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("redeem-input");
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 0));
+  });
+
+  it("shows the biller what to actually collect", async () => {
+    // The number they say out loud. Getting this wrong at the counter is the whole risk of
+    // the feature.
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
+    expect((await screen.findByTestId("redeem-summary")).textContent ?? "").toMatch(/460/);
+  });
+
+  it("will not let the biller type more points than the customer has", async () => {
+    // The function clamps server-side too, but a form that accepts 500 and then collects a
+    // different number than it displayed would be worse than one that refuses to show it.
+    // With the default fixture (total 500, balance 100) typing 999 clamps to
+    // min(100, floor(500)) = 100, so the summary must read exactly 400 -- an alternation
+    // of two wrong numbers would pass on a screen that ignored the clamp entirely.
+    render(<Pending />);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "999" } });
+    expect((screen.getByTestId("redeem-summary").textContent ?? "")).toMatch(/400/);
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+    await waitFor(() => expect(completeBill).toHaveBeenCalled());
+    const sent = completeBill.mock.calls[0]?.[1] as number;
+    expect(sent).toBeLessThanOrEqual(100);
   });
 });
