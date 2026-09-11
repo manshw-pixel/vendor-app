@@ -15,6 +15,7 @@ import "./expiry.test.mjs";
 import "./must_change_password.test.mjs";
 import "./clear_vendor_data.test.mjs";
 import "./redemption.test.mjs";
+import "./claim_outbound.test.mjs";
 
 try {
   await bootstrap();

@@ -33,3 +33,11 @@ enable_confirmations = false
 # app_users under the caller's own JWT to decide that, and must keep doing so.
 [functions.admin-create-user]
 verify_jwt = true
+
+# verify_jwt = false ON PURPOSE, and it is not a hole. The caller is pg_cron over pg_net
+# (kick_send_notification(), 0011), which holds no user JWT and never will -- with
+# verify_jwt on, every tick would be rejected at the edge and the queue would never
+# drain. The door is the x-send-secret header the function compares against
+# SEND_NOTIFICATION_SECRET; nothing else about this function is reachable without it.
+[functions.send-notification]
+verify_jwt = false

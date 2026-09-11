@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 76 cases, 0 failures
+## ✅ Verified: 117 cases, 0 failures
 
-`npm test` runs **76 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all seven migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **117 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all eleven migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
@@ -42,6 +42,12 @@ Covered:
 - **The eight dashboard views**, including that they are `security_invoker` and do not
   leak across vendors.
 - **The reset guard** itself — six cases, no database needed.
+
+- **The outbound queue's claim.** `claim_outbound_messages()` marks rows `sending` and
+  increments `attempts` before any HTTP happens; two concurrent claims take disjoint
+  batches (`for update skip locked`) and lose no rows; `sent`, exhausted and in-flight
+  rows are left alone, a row stranded in `sending` is reclaimed after five minutes, and
+  no browser session of any role may run it.
 
 ### What the local suite does not cover
 
@@ -74,6 +80,14 @@ limits:
   that create or delete the auth user, the compensating delete on partial failure, the
   actual database writes) is unverified until a real admin creates or removes a real user
   on Cloud.
+
+- **The `send-notification` Edge Function.** Same position as the other two: no Deno
+  runtime, and no Twilio to call. Its decisions — phone normalisation, template variable
+  construction, retryable-vs-permanent classification — live in
+  `supabase/functions/send-notification/sender.ts` and are covered by
+  `web/src/__tests__/sender.test.ts`; its claim is covered by the database suite above.
+  The HTTP call itself, and therefore whether a message ever reaches a phone, is
+  unverified until it runs on Cloud against a real Twilio account.
 
 Closing these means running the suite against a disposable Supabase Cloud project, which
 needs no code changes beyond pointing it there. That remains the eventual target.
@@ -218,12 +232,16 @@ Both are deferred deliberately, and neither needs a migration to fix later:
 | `0005_cron.sql` | `expire_points()` and its daily pg_cron schedule |
 | `0006_points_threshold_inclusive.sql` | Fixes the points-threshold comparison to be inclusive |
 | `0007_analytics_by_date.sql` | `top_items_between` and `bought_together_between` RPCs — the date dimension `v_top_items` / `v_bought_together` never had |
+| `0008_must_change_password.sql` | `complete_password_change()` and the first-login flag |
+| `0009_clear_vendor_data.sql` | `clear_vendor_data()` — an admin emptying their own shop's transactions |
+| `0010_points_redemption.sql` | Spending points at the counter, inside `complete_bill` |
+| `0011_send_notification.sql` | `claim_outbound_messages()`, the `sending` state, and the per-minute cron tick that wakes the WhatsApp sender |
 
 | Directory | Contents |
 |---|---|
 | `web/` | The React + Vite + TypeScript SPA (slice 3) |
 | `console.html` | The single-file console that preceded it |
-| `tests/` | The 65-case database suite, run against native PostgreSQL |
+| `tests/` | The 117-case database suite, run against native PostgreSQL |
 
 The security model in one line: **there is no application server**, so RLS is the entire
 authorization layer, and the operations that must not be forgeable — token issuance,
@@ -297,9 +315,30 @@ environment where you can see them.
 - Points expiry is correct on *read* regardless (`customer_points_balance` filters on
   `expires_at`); the sweep exists to make the lapse an auditable ledger event.
 
+## Turning WhatsApp on
+
+The sender ships dark: with no secrets set, the cron tick is a no-op and the queue simply
+waits. Four operator steps on Cloud, none of which a migration can perform:
+
+1. **Enable `pg_net`** in Database → Extensions. Without it the cron job errors every
+   minute (visible in `cron.job_run_details`) and nothing sends.
+2. **Deploy the function:** `supabase functions deploy send-notification`.
+3. **Set its secrets:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`,
+   `SEND_NOTIFICATION_SECRET` (any long random string), and `TWILIO_CONTENT_SIDS` — a
+   JSON map of template key to Twilio Content SID, e.g.
+   `{"token_issued":"HX…","points_awarded":"HX…"}`. Template approval therefore never
+   waits on a deploy.
+4. **Create two Vault secrets** so cron can reach the function: `send_notification_url`
+   (the function's https URL) and `send_notification_secret` (the same string as
+   `SEND_NOTIFICATION_SECRET`).
+
+Until both templates are approved and their Content SIDs configured, messages fail
+permanently with `no_content_sid_for_<key>` in `last_error` rather than sending blank —
+so turn on step 3's SIDs only once approval lands.
+
 ## Not in this slice
 
-Edge Functions (`whatsapp-webhook`, `send-notifications`), the React SPA, and Drive
-integration are slices 2–4 in the design spec. Outbound WhatsApp messages are already
-queued into `outbound_messages` by the billing functions, so wiring a BSP later is a
-delivery job, not a redesign.
+`whatsapp-webhook` (the inbound bot: points queries, item suggestions, history on
+request), delivery/read callbacks, opt-in enforcement, and Drive integration. The
+sender handles `token_issued` and `points_awarded`, the only two events anything
+currently enqueues.
