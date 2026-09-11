@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 117 cases, 0 failures
+## ✅ Verified: 128 cases, 0 failures
 
-`npm test` runs **117 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all eleven migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **128 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all twelve migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
@@ -63,6 +63,13 @@ limits:
   correspondence that matters does hold — a policy-blocked write raises 42501 and a
   policy-filtered read returns zero rows, on both — so `assertDenied` and
   `assertInvisible` keep their meanings.
+- **Vault and `pg_net`.** Cloud extensions, absent from a native build, so `shim.sql`
+  supplies a `vault.decrypted_secrets` table and a `net.http_post()` that records calls
+  instead of making them. That is enough to pin which secrets `kick_send_notification()`
+  reads, that it trims them, and whether it posts at all — and it is what
+  `tests/kick.test.mjs` asserts. It proves nothing about delivery; the 200s in
+  `net._http_response` on Cloud do.
+
 - **`pg_cron`.** Not available on a native Windows build. `create extension pg_cron` is
   stripped and `cron.schedule` is shimmed, so the rest of `0005_cron.sql` still runs and
   registers its job — but nothing here proves pg_cron will *fire* it. The run prints what
@@ -236,12 +243,13 @@ Both are deferred deliberately, and neither needs a migration to fix later:
 | `0009_clear_vendor_data.sql` | `clear_vendor_data()` — an admin emptying their own shop's transactions |
 | `0010_points_redemption.sql` | Spending points at the counter, inside `complete_bill` |
 | `0011_send_notification.sql` | `claim_outbound_messages()`, the `sending` state, and the per-minute cron tick that wakes the WhatsApp sender |
+| `0012_kick_hardening.sql` | `kick_send_notification()` trims its Vault values and warns on an unusable URL, after a pasted leading space cost two hours on deploy day |
 
 | Directory | Contents |
 |---|---|
 | `web/` | The React + Vite + TypeScript SPA (slice 3) |
 | `console.html` | The single-file console that preceded it |
-| `tests/` | The 117-case database suite, run against native PostgreSQL |
+| `tests/` | The 128-case database suite, run against native PostgreSQL |
 
 The security model in one line: **there is no application server**, so RLS is the entire
 authorization layer, and the operations that must not be forgeable — token issuance,

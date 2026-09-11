@@ -105,3 +105,43 @@ $$;
 
 grant usage on schema cron to service_role;
 grant select on cron.job to authenticated, service_role;
+
+-- Vault and pg_net are Supabase Cloud extensions, absent from a native PostgreSQL build.
+-- kick_send_notification() (0011, hardened in 0012) reads one and calls the other, so
+-- without these it could not be exercised at all -- which is precisely how a leading space
+-- in a Vault value survived into production and failed silently for twenty minutes.
+--
+-- What this costs: nothing here proves pg_net will DELIVER the request, or that Vault
+-- decrypts anything. It proves which secrets the function reads, what it does to their
+-- values, and whether it posts at all. Delivery is verified on Cloud, where both are real
+-- (net._http_response shows the 200s) -- see README.md.
+create schema if not exists vault;
+
+create table if not exists vault.decrypted_secrets (
+  id               uuid primary key default gen_random_uuid(),
+  name             text,
+  decrypted_secret text
+);
+
+create schema if not exists net;
+
+-- Records calls instead of making them, so a test can assert on the URL that WOULD have
+-- been posted to -- trimmed or not.
+create table if not exists net.sent (
+  id      bigserial primary key,
+  url     text,
+  headers jsonb,
+  body    jsonb
+);
+
+-- Argument names match pg_net's real signature, because kick_send_notification() calls it
+-- with named arguments and would not resolve otherwise.
+create or replace function net.http_post(
+  url text,
+  body jsonb default '{}'::jsonb,
+  params jsonb default '{}'::jsonb,
+  headers jsonb default '{}'::jsonb,
+  timeout_milliseconds integer default 5000
+) returns bigint language sql as $$
+  insert into net.sent (url, headers, body) values (url, headers, body) returning id
+$$;
