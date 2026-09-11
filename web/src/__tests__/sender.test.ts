@@ -5,24 +5,24 @@ import {
 
 describe("normaliseMobile", () => {
   it("accepts a bare ten-digit Indian mobile", () => {
-    expect(normaliseMobile("9876543210")).toEqual({ ok: true, value: "whatsapp:+919876543210" });
+    expect(normaliseMobile("9876543210")).toEqual({ ok: true, value: "919876543210" });
   });
 
   it("strips the punctuation people actually type", () => {
     // customers.mobile is free text (0001_schema.sql) and has been since launch, so the
     // rows already in production carry every one of these shapes.
     for (const raw of ["98765 43210", "98765-43210", "(98765) 43210", " 9876543210 "]) {
-      expect(normaliseMobile(raw)).toEqual({ ok: true, value: "whatsapp:+919876543210" });
+      expect(normaliseMobile(raw)).toEqual({ ok: true, value: "919876543210" });
     }
   });
 
   it("drops a leading zero", () => {
-    expect(normaliseMobile("09876543210")).toEqual({ ok: true, value: "whatsapp:+919876543210" });
+    expect(normaliseMobile("09876543210")).toEqual({ ok: true, value: "919876543210" });
   });
 
   it("accepts numbers that already carry the country code", () => {
     for (const raw of ["+919876543210", "919876543210", "+91 98765 43210"]) {
-      expect(normaliseMobile(raw)).toEqual({ ok: true, value: "whatsapp:+919876543210" });
+      expect(normaliseMobile(raw)).toEqual({ ok: true, value: "919876543210" });
     }
   });
 
@@ -43,7 +43,7 @@ describe("normaliseMobile", () => {
 
   it("does not accept a ten-digit number that cannot start an Indian mobile", () => {
     // Indian mobiles begin 6-9. A landline pasted into the field would otherwise be
-    // sent to Twilio and rejected there, one wasted attempt at a time.
+    // sent to Gupshup and rejected there, one wasted attempt at a time.
     for (const raw of ["1234567890", "5876543210"]) {
       expect(normaliseMobile(raw).ok).toBe(false);
     }
@@ -51,14 +51,15 @@ describe("normaliseMobile", () => {
 });
 
 describe("buildMessage", () => {
-  const sids = { token_issued: "HXtoken", points_awarded: "HXpoints" };
+  const ids = { token_issued: "tpl-token", points_awarded: "tpl-points" };
 
-  it("maps token_issued to its content SID with token and total in order", () => {
-    // Payload shape is fixed by issue_token() at 0003_functions.sql:54.
-    const r = buildMessage("token_issued", { token_no: 7, total: 640.5 }, sids);
+  it("maps token_issued to its template id with token and total in order", () => {
+    // Payload shape is fixed by issue_token() at 0003_functions.sql:54. Gupshup takes a
+    // positional array, so order here IS the template's {{1}}, {{2}}.
+    const r = buildMessage("token_issued", { token_no: 7, total: 640.5 }, ids);
     expect(r).toEqual({
       ok: true,
-      value: { contentSid: "HXtoken", variables: { "1": "7", "2": "640.50" } },
+      value: { templateId: "tpl-token", params: ["7", "640.50"] },
     });
   });
 
@@ -67,44 +68,44 @@ describe("buildMessage", () => {
     const r = buildMessage(
       "points_awarded",
       { points: 50, total: 610, redeemed: 0, expires_in_days: 30 },
-      sids,
+      ids,
     );
     expect(r).toEqual({
       ok: true,
-      value: { contentSid: "HXpoints", variables: { "1": "50", "2": "610.00", "3": "30" } },
+      value: { templateId: "tpl-points", params: ["50", "610.00", "30"] },
     });
   });
 
   it("formats money to two decimals, never a bare integer or a float tail", () => {
     // numeric(10,2) arrives over PostgREST as a JS number: 640 must not read as "640"
     // in a customer's bill message, and 0.1+0.2 arithmetic must not leak digits.
-    const r = buildMessage("token_issued", { token_no: 1, total: 640 }, sids);
-    expect(r.ok && r.value.variables["2"]).toBe("640.00");
+    const r = buildMessage("token_issued", { token_no: 1, total: 640 }, ids);
+    expect(r.ok && r.value.params[1]).toBe("640.00");
   });
 
-  it("refuses a template key with no configured SID", () => {
-    // TWILIO_CONTENT_SIDS is set by hand after Meta approves each template. A key added
-    // to the database before the SID is configured must fail loudly, not send blank.
+  it("refuses a template key with no configured id", () => {
+    // GUPSHUP_TEMPLATE_IDS is set by hand after Meta approves each template. A key added
+    // to the database before its id is configured must fail loudly, not send blank.
     const r = buildMessage("token_issued", { token_no: 1, total: 10 }, {});
-    expect(r).toEqual({ ok: false, reason: "no_content_sid_for_token_issued" });
+    expect(r).toEqual({ ok: false, reason: "no_template_id_for_token_issued" });
   });
 
   it("refuses a template key the sender does not know", () => {
-    const r = buildMessage("expiry_reminder", {}, { expiry_reminder: "HXwhatever" });
+    const r = buildMessage("expiry_reminder", {}, { expiry_reminder: "tpl-whatever" });
     expect(r).toEqual({ ok: false, reason: "unknown_template_expiry_reminder" });
   });
 
   it("refuses a payload missing a variable the template needs", () => {
     // Sending a template with a hole in it is worse than not sending: the customer gets
     // a message with a blank where their token number should be.
-    expect(buildMessage("token_issued", { total: 10 }, sids).ok).toBe(false);
-    expect(buildMessage("token_issued", { token_no: 4 }, sids).ok).toBe(false);
-    expect(buildMessage("points_awarded", { points: 50, total: 610 }, sids).ok).toBe(false);
+    expect(buildMessage("token_issued", { total: 10 }, ids).ok).toBe(false);
+    expect(buildMessage("token_issued", { token_no: 4 }, ids).ok).toBe(false);
+    expect(buildMessage("points_awarded", { points: 50, total: 610 }, ids).ok).toBe(false);
   });
 
   it("refuses a payload whose numbers are not numbers", () => {
-    expect(buildMessage("token_issued", { token_no: "seven", total: 10 }, sids).ok).toBe(false);
-    expect(buildMessage("token_issued", { token_no: 7, total: null }, sids).ok).toBe(false);
+    expect(buildMessage("token_issued", { token_no: "seven", total: 10 }, ids).ok).toBe(false);
+    expect(buildMessage("token_issued", { token_no: 7, total: null }, ids).ok).toBe(false);
   });
 });
 
@@ -116,7 +117,7 @@ describe("classifyFailure", () => {
   });
 
   it("treats client errors as permanent", () => {
-    // 400 is Twilio's answer to an unreachable number or a bad ContentSid; retrying
+    // 400 is Gupshup's answer to an unreachable number or a bad template id; retrying
     // four more times changes nothing and delays every message queued behind it.
     for (const status of [400, 403, 404, 422]) {
       expect(classifyFailure(status)).toBe("permanent");
@@ -124,10 +125,18 @@ describe("classifyFailure", () => {
   });
 
   it("treats 401 as retryable despite being a 4xx", () => {
-    // A rotated or briefly-wrong TWILIO_AUTH_TOKEN is an operator mistake that gets
-    // fixed. Burning the queue to `failed` in the minutes before someone notices would
-    // lose real bills' messages with no way to replay them.
+    // A rotated or briefly-wrong GUPSHUP_API_KEY is an operator mistake that gets fixed.
+    // Burning the queue to `failed` in the minutes before someone notices would lose
+    // real bills' messages with no way to replay them.
     expect(classifyFailure(401)).toBe("retry");
+  });
+
+  it("treats 402 -- an empty Gupshup balance -- as retryable", () => {
+    // The one rule that is Gupshup-specific. A shop that has run out of credit tops up;
+    // failing those messages permanently means the bills billed during the gap are never
+    // told their token, and nothing replays them. Five minutes is a short window for a
+    // top-up, which is why the reason text says plainly that it is a balance problem.
+    expect(classifyFailure(402)).toBe("retry");
   });
 
   it("treats a thrown fetch (no status at all) as retryable", () => {

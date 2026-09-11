@@ -331,18 +331,26 @@ waits. Four operator steps on Cloud, none of which a migration can perform:
 1. **Enable `pg_net`** in Database → Extensions. Without it the cron job errors every
    minute (visible in `cron.job_run_details`) and nothing sends.
 2. **Deploy the function:** `supabase functions deploy send-notification`.
-3. **Set its secrets:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`,
-   `SEND_NOTIFICATION_SECRET` (any long random string), and `TWILIO_CONTENT_SIDS` — a
-   JSON map of template key to Twilio Content SID, e.g.
-   `{"token_issued":"HX…","points_awarded":"HX…"}`. Template approval therefore never
-   waits on a deploy.
+3. **Set its secrets:** `GUPSHUP_API_KEY`, `GUPSHUP_SOURCE` (the WhatsApp business
+   number, digits with country code), `GUPSHUP_APP_NAME`, `SEND_NOTIFICATION_SECRET` (any
+   long random string), and `GUPSHUP_TEMPLATE_IDS` — a JSON map of template key to the
+   Gupshup template id, e.g. `{"token_issued":"…","points_awarded":"…"}`. Template
+   approval therefore never waits on a deploy.
 4. **Create two Vault secrets** so cron can reach the function: `send_notification_url`
    (the function's https URL) and `send_notification_secret` (the same string as
    `SEND_NOTIFICATION_SECRET`).
 
-Until both templates are approved and their Content SIDs configured, messages fail
-permanently with `no_content_sid_for_<key>` in `last_error` rather than sending blank —
-so turn on step 3's SIDs only once approval lands.
+Until both templates are approved and their ids configured, messages fail permanently
+with `no_template_id_for_<key>` in `last_error` rather than sending blank — so set step
+3's ids only once approval lands.
+
+**The BSP is Gupshup**, not the Meta Cloud API the product spec names as its default:
+Indian billing, no minimum top-up, and no per-message platform markup. The send is
+confined to `buildMessage()` in `sender.ts` and one `fetch` in `index.ts`; the queue,
+claim, cron tick and retry accounting are provider-agnostic and were proven on Cloud
+before the provider was chosen. An empty Gupshup balance (402) is treated as RETRYABLE,
+so topping up rescues messages queued during the gap instead of them having failed
+silently.
 
 ## Not in this slice
 
