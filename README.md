@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 128 cases, 0 failures
+## ✅ Verified: 142 cases, 0 failures
 
-`npm test` runs **128 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all twelve migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **142 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all thirteen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
@@ -48,6 +48,15 @@ Covered:
   batches (`for update skip locked`) and lose no rows; `sent`, exhausted and in-flight
   rows are left alone, a row stranded in `sending` is reclaimed after five minutes, and
   no browser session of any role may run it.
+
+- **Staff-logged stock requests.** The insert policy admits recorder and admin and
+  refuses biller and cross-tenant writes; status flips `open` to `handled` and rejects
+  anything else; blank names are refused by a check constraint; the dropped delete
+  policy is pinned, because deleting a handled request would destroy the demand history
+  that #10 reports. `stock_requests_between()` folds case, respects its date bounds,
+  still counts a request already marked handled, and does not leak across vendors.
+  `bought_together_between()` is pinned to returning all three names per side — the
+  card rendered English under a Marathi UI until it did.
 
 ### What the local suite does not cover
 
