@@ -6,6 +6,7 @@ import { routesForRole } from "../routes";
 import { LANGS, type Lang } from "../i18n/locales";
 import { setLang } from "../i18n";
 import type { Role } from "../config";
+import { useLowStock } from "../useLowStock";
 
 export function LangSwitch() {
   const { i18n, t } = useTranslation();
@@ -43,6 +44,9 @@ function OfflineBanner() {
 export function Shell({ role, vendorName, name, children }:
   { role: Role; vendorName: string; name: string; children: ReactNode }) {
   const { t } = useTranslation();
+  // Admin only: they are the role that restocks. A recorder told about low stock can
+  // do nothing but worry about it.
+  const lowStock = useLowStock(role === "admin");
   return (
     <div className="min-h-screen">
       <OfflineBanner />
@@ -68,7 +72,18 @@ export function Shell({ role, vendorName, name, children }:
                      className={({ isActive }) =>
                        `px-3 py-2 text-sm whitespace-nowrap border-b-2 min-h-[44px] flex items-center ${
                          isActive ? "border-green-600 text-green-700 font-medium" : "border-transparent text-slate-600"}`}>
-              {t(r.labelKey)}
+              <>
+                {t(r.labelKey)}
+                {r.path === "/items" && lowStock > 0 && (
+                  <span
+                    data-testid="low-stock-badge"
+                    title={t("items.lowBadge", { n: lowStock })}
+                    className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center"
+                  >
+                    {lowStock}
+                  </span>
+                )}
+              </>
             </NavLink>
           ))}
         </div>

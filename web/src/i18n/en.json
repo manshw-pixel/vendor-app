@@ -31,7 +31,8 @@
     "namesNote": "All three names are required. Customers see the name in their own language.",
     "required": "This field is required.",
     "badPrice": "Enter a price between 0 and 99,999,999.99.",
-    "badStock": "Enter a stock figure between 0 and 99,999,999.99."
+    "badStock": "Enter a stock figure between 0 and 99,999,999.99.",
+    "lowBadge": "{{n}} items low on stock"
   },
   "customersScreen": {
     "title": "Customers",
