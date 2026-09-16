@@ -44,9 +44,21 @@ export type TopItem = {
 export type Pair = {
   item_a: string;
   item_b: string;
-  name_a: string;
-  name_b: string;
+  name_a_en: string;
+  name_a_hi: string;
+  name_a_mr: string;
+  name_b_en: string;
+  name_b_hi: string;
+  name_b_mr: string;
   bill_count: number;
+};
+
+/** #10. `request_count` is a Postgres bigint, which PostgREST serialises as a STRING --
+ *  Number() it before rendering or comparing. */
+export type RequestCount = {
+  item_name: string;
+  request_count: number | string;
+  last_requested_at: string;
 };
 
 /** One row. `total` arrives as a STRING: it is a Postgres numeric, and PostgREST
@@ -141,4 +153,9 @@ export async function topItemsBetween(range: Range) {
 export async function pairsBetween(range: Range) {
   const { fromTs, toTs } = toBounds(range);
   return supabase.rpc("bought_together_between", { p_from: fromTs, p_to: toTs });
+}
+
+export async function requestsBetween(range: Range) {
+  const { fromTs, toTs } = toBounds(range);
+  return supabase.rpc("stock_requests_between", { p_from: fromTs, p_to: toTs });
 }

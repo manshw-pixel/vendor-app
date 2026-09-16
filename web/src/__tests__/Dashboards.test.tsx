@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import type { TopItem, Pair } from "../history";
+import type { TopItem, Pair, RequestCount } from "../history";
+import i18n from "../i18n";
 
 // collected_between returns ONE aggregate row, and `total` arrives as a string because
 // PostgREST serialises Postgres numeric as text. The mock mirrors that exactly -- a mock
@@ -19,7 +20,18 @@ const topItemsBetween = vi.fn(async (..._a: unknown[]): Promise<{
   error: null,
 }));
 const pairsBetween = vi.fn(async (..._a: unknown[]): Promise<{ data: Pair[] | null; error: null }> =>
-  ({ data: [{ item_a: "i1", item_b: "i2", name_a: "Onion", name_b: "Tomato", bill_count: 4 }], error: null }));
+  ({
+    data: [{
+      item_a: "i1", item_b: "i2",
+      name_a_en: "Onion", name_a_hi: "प्याज", name_a_mr: "कांदा",
+      name_b_en: "Tomato", name_b_hi: "टमाटर", name_b_mr: "टोमॅटो",
+      bill_count: 4,
+    }],
+    error: null,
+  }));
+const requestsBetween = vi.fn(async (..._a: unknown[]): Promise<{
+  data: RequestCount[] | null; error: null;
+}> => ({ data: [], error: null }));
 
 vi.mock("../history", async () => {
   const actual = await vi.importActual<typeof import("../history")>("../history");
@@ -28,8 +40,16 @@ vi.mock("../history", async () => {
     collectedBetween: (...a: unknown[]) => collectedBetween(...a),
     topItemsBetween: (...a: unknown[]) => topItemsBetween(...a),
     pairsBetween: (...a: unknown[]) => pairsBetween(...a),
+    requestsBetween: (...a: unknown[]) => requestsBetween(...a),
   };
 });
+
+function stubPairs(data: Pair[]) {
+  pairsBetween.mockResolvedValueOnce({ data, error: null });
+}
+function stubRequests(data: RequestCount[]) {
+  requestsBetween.mockResolvedValueOnce({ data, error: null });
+}
 
 const { default: Dashboards } = await import("../screens/Dashboards");
 
@@ -128,5 +148,36 @@ describe("the dashboard", () => {
     render(<Dashboards />);
     expect(await screen.findByTestId("dash-problem-detail")).toBeTruthy();
     expect(screen.getByTestId("dash-problem-detail").textContent).toContain("collected_between");
+  });
+
+  it("renders pair names in the active language", async () => {
+    // The regression this fixes: bought_together_between used to return only name_en, so
+    // a Marathi admin saw Marathi in Top Items and English in the card directly below.
+    await i18n.changeLanguage("mr");
+    stubPairs([{
+      item_a: "a1", item_b: "b1",
+      name_a_en: "Onion", name_a_hi: "प्याज", name_a_mr: "कांदा",
+      name_b_en: "Tomato", name_b_hi: "टमाटर", name_b_mr: "टोमॅटो",
+      bill_count: 4,
+    }]);
+
+    render(<Dashboards />);
+    const row = await screen.findByTestId("dash-pair-a1-b1");
+    expect(row.textContent).toContain("कांदा");
+    expect(row.textContent).toContain("टोमॅटो");
+    expect(row.textContent).not.toContain("Onion");
+    await i18n.changeLanguage("en");
+  });
+
+  it("lists what customers asked for that the shop does not stock", async () => {
+    stubRequests([
+      { item_name: "dragon fruit", request_count: 11, last_requested_at: "2026-09-15T10:00:00Z" },
+      { item_name: "kiwi", request_count: 3, last_requested_at: "2026-09-14T10:00:00Z" },
+    ]);
+
+    render(<Dashboards />);
+    const card = await screen.findByTestId("dash-req-dragon fruit");
+    expect(card.textContent).toContain("dragon fruit");
+    expect(card.textContent).toContain("11");
   });
 });

@@ -124,7 +124,10 @@
     "togetherSub": "Pairs seen 3 or more times",
     "empty": "Nothing in this period.",
     "kg": "{{kg}} kg",
-    "pairCount": "{{n}} bills"
+    "pairCount": "{{n}} bills",
+    "requests": "Asked for, not stocked",
+    "requestsSub": "What customers wanted that you do not carry",
+    "askedCount": "{{n}} asked"
   },
   "req": {
     "title": "Customer requests",

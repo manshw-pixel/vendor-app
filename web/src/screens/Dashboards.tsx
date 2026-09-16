@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  collectedBetween, topItemsBetween, pairsBetween,
-  type TopItem, type Pair, type Collected,
+  collectedBetween, topItemsBetween, pairsBetween, requestsBetween,
+  type TopItem, type Pair, type Collected, type RequestCount,
 } from "../history";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
@@ -30,6 +30,7 @@ export default function Dashboards() {
   const [billCount, setBillCount] = useState(0);
   const [top, setTop] = useState<TopItem[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
+  const [requests, setRequests] = useState<RequestCount[]>([]);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(true);
 
@@ -44,14 +45,15 @@ export default function Dashboards() {
     const key = `${r.from}..${r.to}`;
     wanted.current = key;
     setBusy(true);
-    const [money, items, together] = await Promise.all([
-      collectedBetween(r), topItemsBetween(r), pairsBetween(r),
+    const [money, items, together, asked] = await Promise.all([
+      collectedBetween(r), topItemsBetween(r), pairsBetween(r), requestsBetween(r),
     ]);
     if (wanted.current !== key) return;   // superseded; a later range owns the screen now
     setBusy(false);
-    // First error wins: three cards failing for one reason should say it once.
+    // First error wins: four cards failing for one reason should say it once.
     setProblem(
-      describeError(money.error) ?? describeError(items.error) ?? describeError(together.error),
+      describeError(money.error) ?? describeError(items.error)
+        ?? describeError(together.error) ?? describeError(asked.error),
     );
     // collected_between returns exactly one row. `total` is a Postgres numeric, which
     // PostgREST serialises as a STRING -- Number() it or rupees() renders a concatenation.
@@ -60,6 +62,7 @@ export default function Dashboards() {
     setBillCount(Number(row?.bill_count ?? 0));
     setTop((items.data ?? []) as TopItem[]);
     setPairs((together.data ?? []) as Pair[]);
+    setRequests((asked.data ?? []) as RequestCount[]);
   }, []);
 
   useEffect(() => { void load(range); }, [range, load]);
@@ -128,8 +131,30 @@ export default function Dashboards() {
                 data-testid={`dash-pair-${p.item_a}-${p.item_b}`}
                 className="flex justify-between text-sm"
               >
-                <span className="text-slate-700">{p.name_a} + {p.name_b}</span>
+                <span className="text-slate-700">
+                  {itemName({ name_en: p.name_a_en, name_hi: p.name_a_hi, name_mr: p.name_a_mr }, lang)}
+                  {" + "}
+                  {itemName({ name_en: p.name_b_en, name_hi: p.name_b_hi, name_mr: p.name_b_mr }, lang)}
+                </span>
                 <span className="text-slate-600">{t("dash.pairCount", { n: p.bill_count })}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title={t("dash.requests")} subtitle={t("dash.requestsSub")}>
+        {requests.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("dash.empty")}</p>
+        ) : (
+          <ul className="space-y-1">
+            {requests.map((r) => (
+              <li key={r.item_name} data-testid={`dash-req-${r.item_name}`}
+                  className="flex justify-between text-sm">
+                <span className="text-slate-700 break-words">{r.item_name}</span>
+                <span className="text-slate-600">
+                  {t("dash.askedCount", { n: Number(r.request_count) })}
+                </span>
               </li>
             ))}
           </ul>
