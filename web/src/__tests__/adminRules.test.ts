@@ -138,13 +138,24 @@ describe("stockLevel", () => {
     expect(stockLevel(0)).toBe("out");
   });
 
-  it("calls anything at or under the threshold low", () => {
-    expect(stockLevel(LOW_STOCK_KG)).toBe("low");
+  it("calls anything under the threshold low", () => {
+    expect(stockLevel(LOW_STOCK_KG - 0.01)).toBe("low");
     expect(stockLevel(0.5)).toBe("low");
   });
 
   it("calls a healthy figure ok", () => {
     expect(stockLevel(LOW_STOCK_KG + 0.01)).toBe("ok");
+  });
+
+  /* The boundary is EXCLUSIVE, and these three pin it together because they have drifted
+     apart before: v_low_stock (0004_views.sql:46) is `stock_kg < 10`, the bill grid
+     (screens/bill/ItemGrid.tsx:18) is `kg < 10`, and this was `kg <= 2` while its own
+     comment claimed to match the bill grid. The visible symptom was an item reading amber
+     on the bill screen, counting toward the low-stock badge, and rendering plain on the
+     items list. */
+  it("agrees with v_low_stock and the bill grid on the threshold itself", () => {
+    expect(LOW_STOCK_KG).toBe(10);
+    expect(stockLevel(LOW_STOCK_KG)).toBe("ok");
   });
 });
 
