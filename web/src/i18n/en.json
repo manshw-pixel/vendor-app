@@ -1,6 +1,6 @@
 {
   "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language" },
-  "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards", "completed": "Completed" },
+  "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards", "completed": "Completed", "requests": "Requests" },
   "session": { "unmappedTitle": "Account not linked to a shop", "unmapped": "You are signed in as {{email}}, but no staff record exists for this account yet. An admin needs to add you before you can use the app.", "errorTitle": "Could not check your account", "error": "Something went wrong while checking your staff record. This is not the same as being unregistered -- try again.", "retry": "Retry", "notLinkedHelp": "Ask your shop's admin to add you. If they already did, show them this id.", "copyId": "Copy user id", "copied": "Copied." },
   "changePw": { "title": "Choose a password", "body": "You are signed in as {{email}} with a password an admin set. Choose one only you know before continuing.", "new": "New password", "confirm": "Confirm new password", "save": "Save password", "tooShort": "Password is too short.", "mismatch": "The two passwords do not match.", "failed": "Could not change the password. Try again." },
   "error": {
@@ -125,5 +125,18 @@
     "empty": "Nothing in this period.",
     "kg": "{{kg}} kg",
     "pairCount": "{{n}} bills"
+  },
+  "req": {
+    "title": "Customer requests",
+    "hint": "Items customers asked for that you do not stock.",
+    "placeholder": "Item a customer asked for",
+    "log": "Log request",
+    "open": "Open",
+    "handled": "Handled",
+    "markHandled": "Mark handled",
+    "showHandled": "Show handled ({{n}})",
+    "hideHandled": "Hide handled",
+    "empty": "No requests logged yet.",
+    "loading": "Loading…"
   }
 }

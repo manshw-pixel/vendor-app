@@ -3,7 +3,7 @@ import { routesForRole, canAccess, homeFor } from "../routes";
 
 describe("routesForRole", () => {
   it("gives the recorder billing and customers", () => {
-    expect(routesForRole("recorder").map((r) => r.path)).toEqual(["/bill", "/customers"]);
+    expect(routesForRole("recorder").map((r) => r.path)).toEqual(["/bill", "/customers", "/requests"]);
   });
 
   it("gives the biller the queue and the history", () => {
@@ -19,6 +19,7 @@ describe("routesForRole", () => {
       "/completed",
       "/items",
       "/customers",
+      "/requests",
       "/settings",
       "/dashboards",
     ]);
@@ -58,6 +59,14 @@ describe("canAccess", () => {
 
   it("refuses an unknown path", () => {
     expect(canAccess("admin", "/nope")).toBe(false);
+  });
+
+  it("gives recorders and admins the requests screen, but not billers", () => {
+    expect(canAccess("recorder", "/requests")).toBe(true);
+    expect(canAccess("admin", "/requests")).toBe(true);
+    // UX only -- what actually stops a biller writing one is stock_requests_staff_insert
+    // in 0013_stock_requests_worklist.sql.
+    expect(canAccess("biller", "/requests")).toBe(false);
   });
 });
 

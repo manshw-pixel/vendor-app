@@ -10,6 +10,7 @@ import Bill from "./screens/Bill";
 import Pending from "./screens/Pending";
 import Items from "./screens/Items";
 import Customers from "./screens/Customers";
+import Requests from "./screens/Requests";
 import Completed from "./screens/Completed";
 import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
@@ -102,6 +103,7 @@ function Inner() {
           <Route path="/pending" element={<Pending />} />
           <Route path="/items" element={<Items />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/requests" element={<Requests />} />
           <Route path="/completed" element={<Completed />} />
           <Route path="/dashboards" element={<Dashboards />} />
           <Route path="/settings" element={<Settings />} />

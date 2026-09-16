@@ -13,6 +13,7 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
   recorder: [
     { path: "/bill", labelKey: "nav.bill" },
     { path: "/customers", labelKey: "nav.customers" },
+    { path: "/requests", labelKey: "nav.requests" },
   ],
   biller: [
     { path: "/pending", labelKey: "nav.pending" },
@@ -24,6 +25,7 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
     { path: "/completed", labelKey: "nav.completed" },
     { path: "/items", labelKey: "nav.items" },
     { path: "/customers", labelKey: "nav.customers" },
+    { path: "/requests", labelKey: "nav.requests" },
     { path: "/settings", labelKey: "nav.settings" },
     { path: "/dashboards", labelKey: "nav.dashboards" },
   ],
