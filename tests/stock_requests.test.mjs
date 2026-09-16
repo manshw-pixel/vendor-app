@@ -146,6 +146,31 @@ test("stock_requests_between does not leak across vendors", async () => {
   );
 });
 
+test("stock_requests_between still counts a request marked handled", async () => {
+  const world = await getWorld();
+  const vid = world.a.vendorId;
+  // Deliberate per 0013's comment: handling a request does not un-ask it, and #10 is
+  // demand history, not a live worklist. A future "helpful" `and status = 'open'` filter
+  // on the function would break this silently -- lock the behaviour in.
+  const { data: made } = await world.a.clients.recorder
+    .from("stock_requests")
+    .insert({ vendor_id: vid, item_name: "jabuticaba" })
+    .select("id");
+  await world.a.clients.recorder
+    .from("stock_requests")
+    .update({ status: "handled" })
+    .eq("id", made[0].id);
+
+  const { data, error } = await world.a.clients.admin.rpc("stock_requests_between", {
+    p_from: new Date(Date.now() - 7 * 86400000).toISOString(),
+    p_to: new Date(Date.now() + 86400000).toISOString(),
+  });
+  assert(!error, `rpc failed: ${error?.message}`);
+  const row = data.find((r) => r.item_name === "jabuticaba");
+  assert(row, "a handled request was excluded from demand history");
+  assertEqual(Number(row.request_count), 1, "the handled request was not counted");
+});
+
 test("an anonymous client sees no stock requests", async () => {
   const world = await getWorld();
   await sql(`insert into stock_requests (vendor_id, item_name) values ($1,'anon-check')`,
@@ -158,12 +183,45 @@ test("an anonymous client sees no stock requests", async () => {
 
 test("bought_together_between returns all three names per side", async () => {
   const world = await getWorld();
+  const vid = world.a.vendorId;
+  // A qualifying pair needs its own items (all three names set, unlike the plain 'Onion
+  // A1' seedTwoVendors() gives every vendor) and three done bills co-occurring inside the
+  // window -- otherwise this can pass on an empty result and never touch the six name
+  // columns the i18n fix added. See analytics.test.mjs's windowedVendor() for the pattern.
+  const { rows: [ia] } = await sql(
+    `insert into items (vendor_id, name_en, name_hi, name_mr, price, stock_kg)
+     values ($1,'Guava','Guava-hi','Guava-mr',50,100) returning id`, [vid]);
+  const { rows: [ib] } = await sql(
+    `insert into items (vendor_id, name_en, name_hi, name_mr, price, stock_kg)
+     values ($1,'Fig','Fig-hi','Fig-mr',50,100) returning id`, [vid]);
+  for (let n = 0; n < 3; n++) {
+    const { rows: [b] } = await sql(
+      `insert into bills (vendor_id, customer_id, total, status, completed_at)
+       values ($1,$2,100,'done',now()) returning id`, [vid, world.a.customerId]);
+    await sql(
+      `insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
+       values ($1,$2,$3,2,50,100), ($1,$2,$4,2,50,100)`, [b.id, vid, ia.id, ib.id]);
+  }
+
   const { data, error } = await world.a.clients.admin.rpc("bought_together_between", {
     p_from: new Date(Date.now() - 7 * 86400000).toISOString(),
     p_to: new Date(Date.now() + 86400000).toISOString(),
   });
   assert(!error, `rpc failed: ${error?.message}`);
-  // The shape is what matters here; whether any pair clears the threshold of 3 is
-  // analytics.test.mjs's business. An empty result still proves the signature resolves.
-  assert(Array.isArray(data), "expected rows");
+
+  // a.item_id < b.item_id decides which side each item lands on, so read whichever of
+  // the two rows carries this pair and check both sides regardless of order.
+  const row = data.find((r) => [r.item_a, r.item_b].sort().join() === [ia.id, ib.id].sort().join());
+  assert(row, "the guava/fig pair is missing from the result");
+  const names = row.item_a === ia.id
+    ? { aEn: row.name_a_en, aHi: row.name_a_hi, aMr: row.name_a_mr,
+        bEn: row.name_b_en, bHi: row.name_b_hi, bMr: row.name_b_mr }
+    : { aEn: row.name_b_en, aHi: row.name_b_hi, aMr: row.name_b_mr,
+        bEn: row.name_a_en, bHi: row.name_a_hi, bMr: row.name_a_mr };
+  assertEqual(names.aEn, "Guava", "name_*_en missing for item A");
+  assertEqual(names.aHi, "Guava-hi", "name_*_hi missing for item A -- the i18n fix regressed");
+  assertEqual(names.aMr, "Guava-mr", "name_*_mr missing for item A -- the i18n fix regressed");
+  assertEqual(names.bEn, "Fig", "name_*_en missing for item B");
+  assertEqual(names.bHi, "Fig-hi", "name_*_hi missing for item B -- the i18n fix regressed");
+  assertEqual(names.bMr, "Fig-mr", "name_*_mr missing for item B -- the i18n fix regressed");
 });
