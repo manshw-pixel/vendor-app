@@ -16,7 +16,8 @@ export type StockRequest = {
  *
  * Deliberately NOT doing fuzzy matching: "dragonfruit" and "dragon fruit" will still
  * count separately. Synonym tables and trigram matching are speculative until real
- * counter entry proves messy; the item_name edit path in 0013 is the cheap mitigation.
+ * counter entry proves messy; the update policy in 0013 allows a future item_name edit
+ * affordance as the cheap mitigation, though no screen exposes it today.
  */
 export function normaliseItemName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");

@@ -92,6 +92,8 @@ export default function Requests() {
 
       {!busy && rows.length === 0 && <p className="text-sm text-slate-500">{t("req.empty")}</p>}
 
+      {open.length > 0 && <h3 className="text-sm text-slate-500">{t("req.open")}</h3>}
+
       <ul className="space-y-2">
         {open.map((r) => (
           <li key={r.id} data-testid={`req-open-${r.id}`}
@@ -114,14 +116,17 @@ export default function Requests() {
       )}
 
       {showHandled && (
-        <ul className="space-y-2">
-          {handled.map((r) => (
-            <li key={r.id} data-testid={`req-handled-${r.id}`}
-                className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-500 line-through">
-              {r.item_name}
-            </li>
-          ))}
-        </ul>
+        <>
+          <h3 className="text-sm text-slate-500">{t("req.handled")}</h3>
+          <ul className="space-y-2">
+            {handled.map((r) => (
+              <li key={r.id} data-testid={`req-handled-${r.id}`}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-500 line-through">
+                {r.item_name}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

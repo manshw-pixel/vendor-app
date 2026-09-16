@@ -175,8 +175,8 @@ test("no analytics function is SECURITY DEFINER", async () => {
   // A definer function would bypass RLS and hand every vendor everyone else's numbers.
   const { rows } = await sql(
     `select proname, prosecdef from pg_proc
-      where proname in ('top_items_between','bought_together_between','collected_between')`);
-  assertEqual(rows.length, 3, "expected all three functions to exist");
+      where proname in ('top_items_between','bought_together_between','collected_between','stock_requests_between')`);
+  assertEqual(rows.length, 4, "expected all four functions to exist");
   for (const r of rows) assert(r.prosecdef === false, `${r.proname} is SECURITY DEFINER`);
 });
 

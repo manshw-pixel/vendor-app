@@ -26,11 +26,12 @@ create policy stock_requests_staff_insert on stock_requests for insert to authen
   with check (vendor_id = current_vendor_id()
               and current_user_role() in ('recorder', 'admin'));
 
--- The update permits editing item_name as well as status. v_stock_request_counts groups
--- on lower(item_name), so a typo fragments the count into two rows, and the person who
--- made it should be able to repair it. Narrowing this to status alone would need a
--- column-level grant; no migration in this project issues explicit grants, and this is
--- not the place to introduce the pattern.
+-- The update permits editing item_name as well as status, not just status alone. No
+-- screen exposes editing item_name today, but v_stock_request_counts groups on
+-- lower(item_name), so a typo fragments the count into two rows, and this leaves room
+-- for a future affordance to let the person who made it repair it. Narrowing this to
+-- status alone would need a column-level grant; no migration in this project issues
+-- explicit grants, and this is not the place to introduce the pattern.
 create policy stock_requests_staff_update on stock_requests for update to authenticated
   using (vendor_id = current_vendor_id()
          and current_user_role() in ('recorder', 'admin'))
