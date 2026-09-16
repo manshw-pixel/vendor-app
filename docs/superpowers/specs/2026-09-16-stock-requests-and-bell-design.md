@@ -109,6 +109,13 @@ return type — but the argument list is unchanged, so the PostgREST overload
 ambiguity that `0010_points_redemption.sql:12` warns about does not arise. Rides
 along in 0013.
 
+Two consequences on the client. The `Pair` type in `web/src/history.ts:47` loses
+`name_a`/`name_b` and gains the six columns. And `itemName()`
+(`web/src/i18n/locales.ts:22`) takes an object keyed `name_en`/`name_hi`/`name_mr`,
+which a flattened pair row is not — so `Dashboards.tsx` reshapes each side into
+that shape before calling it, rather than `itemName()` growing a second
+signature. Keeping that function single-purpose is worth the two lines.
+
 ## Frontend
 
 **`web/src/screens/Requests.tsx`**, route `/requests`, in `routes.ts` under
@@ -162,5 +169,6 @@ suite already exercises.
 
 ## Scope
 
-One migration; one new screen; one new data module; three touched files
-(`routes.ts`, `Shell.tsx`, `Dashboards.tsx`); i18n keys; two test files.
+One migration; one new screen; one new data module; four touched files
+(`routes.ts`, `Shell.tsx`, `Dashboards.tsx`, `history.ts`); i18n keys; two test
+files.
