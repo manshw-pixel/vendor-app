@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { PendingBill } from "../data";
 
 const listPending = vi.fn(async (..._args: unknown[]): Promise<{ data: PendingBill[] | null; error: null }> => ({
@@ -28,13 +29,13 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("the pending queue", () => {
   it("lists a waiting bill by token and customer", async () => {
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     expect(await screen.findByText(/7/)).toBeTruthy();
     expect(screen.getByText(/Asha/)).toBeTruthy();
   });
 
   it("completes a bill after confirming", async () => {
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     // completeBill now always takes a second argument -- 0 when there is nothing to
@@ -48,7 +49,7 @@ describe("the pending queue", () => {
     // cheaper than explaining idempotency to a biller with a queue.
     let release: (v: { error: null }) => void = () => {};
     completeBill.mockImplementationOnce(() => new Promise((r) => { release = r; }));
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     await waitFor(() => {
@@ -60,7 +61,7 @@ describe("the pending queue", () => {
 
   it("says so plainly when nothing is waiting", async () => {
     listPending.mockResolvedValueOnce({ data: [], error: null });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     // An empty queue is the normal state of a quiet shop, not an error or a blank box.
     expect(await screen.findByText(/nothing waiting|काही नाही|कुछ नहीं/i)).toBeTruthy();
   });
@@ -70,13 +71,13 @@ describe("the pending queue", () => {
       data: [{ id: "b2", token_no: 3, total: 120, customer_id: null, customers: null }],
       error: null,
     });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     expect(await screen.findByText(/3/)).toBeTruthy();
   });
 
   it("shows the points a completion actually wrote to the ledger", async () => {
     pointsForBill.mockResolvedValueOnce({ data: [{ points: 5 }], error: null });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/5/)).toBeTruthy();
@@ -84,7 +85,7 @@ describe("the pending queue", () => {
 
   it("does not claim points for a completion that wrote none", async () => {
     pointsForBill.mockResolvedValueOnce({ data: [], error: null });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/completed/i)).toBeTruthy();
@@ -97,7 +98,7 @@ describe("the pending queue", () => {
     // but the read failure must be visible too, and must not look like the legitimate
     // zero-points case above.
     pointsForBill.mockResolvedValueOnce({ data: null, error: { message: "network down" } });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/checked/i)).toBeTruthy();
@@ -115,21 +116,21 @@ describe("redeeming points at the counter", () => {
       data: [{ id: "b1", token_no: 7, total: 500, customer_id: null, customers: null }],
       error: null,
     });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     expect(screen.queryByTestId("redeem-input")).toBeNull();
   });
 
   it("offers no points input when the customer has none", async () => {
     customerBalance.mockResolvedValueOnce({ data: [{ balance: 0, days_left: null }], error: null });
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     await waitFor(() => expect(customerBalance).toHaveBeenCalled());
     expect(screen.queryByTestId("redeem-input")).toBeNull();
   });
 
   it("sends the points the biller entered", async () => {
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
@@ -137,7 +138,7 @@ describe("redeeming points at the counter", () => {
   });
 
   it("completes with no points when the field is left empty", async () => {
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     await screen.findByTestId("redeem-input");
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
@@ -147,7 +148,7 @@ describe("redeeming points at the counter", () => {
   it("shows the biller what to actually collect", async () => {
     // The number they say out loud. Getting this wrong at the counter is the whole risk of
     // the feature.
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
     expect((await screen.findByTestId("redeem-summary")).textContent ?? "").toMatch(/460/);
@@ -159,7 +160,7 @@ describe("redeeming points at the counter", () => {
     // With the default fixture (total 500, balance 100) typing 999 clamps to
     // min(100, floor(500)) = 100, so the summary must read exactly 400 -- an alternation
     // of two wrong numbers would pass on a screen that ignored the clamp entirely.
-    render(<Pending />);
+    render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "999" } });
     expect((screen.getByTestId("redeem-summary").textContent ?? "")).toMatch(/400/);
@@ -167,5 +168,16 @@ describe("redeeming points at the counter", () => {
     await waitFor(() => expect(completeBill).toHaveBeenCalled());
     const sent = completeBill.mock.calls[0]?.[1] as number;
     expect(sent).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("reaching the receipt after completion", () => {
+  it("offers the receipt once the bill is completed", async () => {
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+    // The moment the slip is wanted: the customer is still standing there.
+    const link = await screen.findByTestId("pending-receipt-b1");
+    expect(link.getAttribute("href")).toBe("/receipt/b1");
   });
 });

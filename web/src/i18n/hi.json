@@ -120,7 +120,8 @@
     "lines": "सामान",
     "qtyLine": "{{qty}} किलो",
     "noCustomer": "कोई ग्राहक नहीं",
-    "redeemed": "कुल {{gross}} — {{points}} पॉइंट्स भुनाए गए — {{net}} लिए गए।"
+    "redeemed": "कुल {{gross}} — {{points}} पॉइंट्स भुनाए गए — {{net}} लिए गए।",
+    "receipt": "रसीद"
   },
   "dash": {
     "loading": "लोड हो रहा है…",

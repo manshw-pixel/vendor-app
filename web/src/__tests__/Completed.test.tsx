@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { CompletedBill, BillLine } from "../history";
 
 const PAGE_SIZE = 50;
@@ -44,7 +45,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("the completed bills screen", () => {
   it("lists completed bills with token, customer and total", async () => {
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     expect(await screen.findByText(/Cust 1/)).toBeTruthy();
     expect(screen.getByText(/₹101\.00/)).toBeTruthy();
   });
@@ -52,12 +53,12 @@ describe("the completed bills screen", () => {
   it("says nothing yet, not not allowed, on an empty period", async () => {
     // A policy-filtered read is zero rows, not an error. See errors.ts.
     listCompleted.mockResolvedValueOnce({ data: [], error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     expect(await screen.findByTestId("completed-empty")).toBeTruthy();
   });
 
   it("shows a bill's items when a row is opened", async () => {
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("completed-row-b1"));
     await waitFor(() => expect(billLines).toHaveBeenCalledWith("b1"));
     expect(await screen.findByText(/Onion|कांदा|प्याज/)).toBeTruthy();
@@ -65,7 +66,7 @@ describe("the completed bills screen", () => {
 
   it("hides load-more when the server returned no extra row", async () => {
     // Fewer than PAGE_SIZE + 1 rows means this was the last page.
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     await screen.findByTestId("completed-row-b1");
     expect(screen.queryByTestId("completed-more")).toBeNull();
   });
@@ -73,7 +74,7 @@ describe("the completed bills screen", () => {
   it("offers load-more when the server returned the extra row", async () => {
     const full = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => bill(i + 1));
     listCompleted.mockResolvedValueOnce({ data: full, error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     expect(await screen.findByTestId("completed-more")).toBeTruthy();
   });
 
@@ -82,7 +83,7 @@ describe("the completed bills screen", () => {
     // would show one bill twice once load-more ran.
     const full = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => bill(i + 1));
     listCompleted.mockResolvedValueOnce({ data: full, error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     await screen.findByTestId("completed-more");
     expect(screen.queryByTestId(`completed-row-b${PAGE_SIZE + 1}`)).toBeNull();
   });
@@ -90,7 +91,7 @@ describe("the completed bills screen", () => {
   it("resumes from the last rendered row, not the probe row", async () => {
     const full = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => bill(i + 1));
     listCompleted.mockResolvedValueOnce({ data: full, error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("completed-more"));
     await waitFor(() => expect(listCompleted).toHaveBeenCalledTimes(2));
     const cursor = listCompleted.mock.calls[1]?.[1] as { id: string };
@@ -99,7 +100,7 @@ describe("the completed bills screen", () => {
 
   it("refetches from the first page when the date range changes", async () => {
     // A new period must not resume from the old period's cursor.
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     await screen.findByTestId("completed-row-b1");
     fireEvent.click(screen.getByTestId("range-today"));
     await waitFor(() => expect(listCompleted).toHaveBeenCalledTimes(2));
@@ -111,7 +112,7 @@ describe("the completed bills screen", () => {
     // shopkeeper expects is total + redeemed_points. A bill with no redemption must not
     // gain any extra line -- most bills have none.
     listCompleted.mockResolvedValueOnce({ data: [bill(1, 50), bill(2)], error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
 
     fireEvent.click(await screen.findByTestId("completed-row-b1"));
     const redeemedLine = await screen.findByTestId("completed-redeemed-b1");
@@ -132,11 +133,18 @@ describe("the completed bills screen", () => {
     listCompleted
       .mockImplementationOnce(() => new Promise((r) => { releaseOld = r; }))
       .mockResolvedValueOnce({ data: [bill(42)], error: null });
-    render(<Completed />);
+    render(<MemoryRouter><Completed /></MemoryRouter>);
     fireEvent.click(screen.getByTestId("range-month"));
     await screen.findByTestId("completed-row-b42");
     releaseOld({ data: [bill(7)], error: null });
     await waitFor(() => expect(screen.queryByTestId("completed-row-b7")).toBeNull());
     expect(screen.getByTestId("completed-row-b42")).toBeTruthy();
+  });
+
+  it("links an expanded bill to its receipt", async () => {
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    const link = await screen.findByTestId("completed-receipt-b1");
+    expect(link.getAttribute("href")).toBe("/receipt/b1");
   });
 });

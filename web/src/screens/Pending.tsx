@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 // i18next initialises as a side effect of this import, exactly as Bill.tsx does. The
 // screen is rendered directly (by tests, and by the router) without going through
 // main.tsx.
@@ -23,6 +24,9 @@ export default function Pending() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  // The id of the bill just completed, so the receipt link can point at it even after
+  // refresh() removes the bill from the pending list.
+  const [completedId, setCompletedId] = useState<string | null>(null);
   const [pointsAwarded, setPointsAwarded] = useState<number | null>(null);
   // Distinct from "zero points" -- a failed read must never look like an absence of
   // data. The completion itself already happened server-side, so this note sits
@@ -77,6 +81,7 @@ export default function Pending() {
     setConfirmingId(null);
     setCompletingId(id);
     setCompleted(false);
+    setCompletedId(null);
     setPointsAwarded(null);
     setPointsReadFailed(false);
     const { error } = await completeBill(id, points);
@@ -99,6 +104,7 @@ export default function Pending() {
     }
     setCompletingId(null);
     setCompleted(true);
+    setCompletedId(id);
     await refresh();
   }
 
@@ -118,6 +124,16 @@ export default function Pending() {
             ? t("pending.pointsAwarded", { n: pointsAwarded })
             : t("pending.completed")}
         </p>
+      )}
+
+      {completed && completedId && (
+        <Link
+          data-testid={`pending-receipt-${completedId}`}
+          to={`/receipt/${completedId}`}
+          className="inline-block mt-2 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+        >
+          {t("completed.receipt")}
+        </Link>
       )}
 
       {completed && pointsReadFailed && (

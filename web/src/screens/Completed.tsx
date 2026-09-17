@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import {
   listCompleted, billLines, PAGE_SIZE,
   type CompletedBill, type BillLine, type Cursor,
@@ -136,6 +137,13 @@ export default function Completed() {
                       })}
                     </p>
                   )}
+                  <Link
+                    data-testid={`completed-receipt-${b.id}`}
+                    to={`/receipt/${b.id}`}
+                    className="inline-block mt-2 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                  >
+                    {t("completed.receipt")}
+                  </Link>
                 </div>
               )}
             </li>

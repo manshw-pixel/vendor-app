@@ -120,7 +120,8 @@
     "lines": "Items",
     "qtyLine": "{{qty}} kg",
     "noCustomer": "No customer",
-    "redeemed": "{{gross}} total — {{points}} points redeemed — {{net}} collected"
+    "redeemed": "{{gross}} total — {{points}} points redeemed — {{net}} collected",
+    "receipt": "Receipt"
   },
   "dash": {
     "loading": "Loading…",

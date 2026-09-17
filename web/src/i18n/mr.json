@@ -120,7 +120,8 @@
     "lines": "माल",
     "qtyLine": "{{qty}} किलो",
     "noCustomer": "ग्राहक नाही",
-    "redeemed": "एकूण {{gross}} — {{points}} पॉइंट्स वापरले — {{net}} घेतले."
+    "redeemed": "एकूण {{gross}} — {{points}} पॉइंट्स वापरले — {{net}} घेतले.",
+    "receipt": "पावती"
   },
   "dash": {
     "loading": "लोड होत आहे…",
