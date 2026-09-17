@@ -296,6 +296,45 @@ describe("the bill screen", () => {
     expect((data.replaceBillLines as unknown as Mock).mock.calls[1]?.[0]).toBe("b1");
   });
 
+  it("leaves the basket editable after a failed line write, and re-sends the EDITED basket on retry", async () => {
+    // This is the case replace_bill_lines exists to make safe: correct the mistake, then
+    // re-send. A failed write must not freeze the basket -- freezing here would let the
+    // recorder retry a basket they already know is wrong, with no way to fix it.
+    (data.replaceBillLines as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "XX000", message: "boom" },
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
+
+    // The picker must still be there -- the write never landed, so nothing is frozen.
+    expect(await screen.findByTestId("item-select")).toBeTruthy();
+
+    // Fix the mistake: add a second line before retrying.
+    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    expect(await screen.findByText("7")).toBeTruthy();
+
+    expect(data.createBill).toHaveBeenCalledTimes(1);
+    expect(data.replaceBillLines).toHaveBeenCalledTimes(2);
+    // The second call carries the EDITED basket (two lines), not the original one.
+    expect((data.replaceBillLines as unknown as Mock).mock.calls[1]?.[1]).toEqual([
+      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2 },
+      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 1 },
+    ]);
+  });
+
   it("closes the basket for good once the token is issued -- the policies freeze it", async () => {
     // Requirement 2, the one-way door. Once issue_token moves the bill to 'billed',
     // bills_recorder_update and bill_items_write both stop applying. A basket left

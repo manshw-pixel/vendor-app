@@ -71,9 +71,15 @@ export default function Bill() {
   // createBill would orphan the first bill in `recording` with its lines attached, and
   // issue_token's own guard cannot catch that -- it is a different bill.
   //
-  // Only the bill id is tracked. How far the LINE write got no longer matters:
-  // replaceBillLines is idempotent, so the retry just sends the basket again.
-  const [written, setWritten] = useState<{ billId: string } | null>(null);
+  // linesWritten no longer gates WHETHER replaceBillLines is called -- it is idempotent,
+  // so confirm() calls it unconditionally on every attempt. It exists purely to gate the
+  // UI: while it is false (no successful write yet for this bill, whether because none has
+  // been attempted or because the last attempt failed) the picker stays open and the
+  // basket stays editable, so a failed line write can be corrected before the retry --
+  // exactly the case replace_bill_lines makes safe. Once a write has landed it flips true
+  // and stays true; a later failure (e.g. issueToken) does not reopen editing, matching
+  // the one-way-door the confirm dialog already promises.
+  const [written, setWritten] = useState<{ billId: string; linesWritten: boolean } | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
   // Set only when a token failure's read-back itself failed: we genuinely do not know
@@ -121,7 +127,7 @@ export default function Bill() {
         return fail(describeError(billError));
       }
       billId = bill.id as string;
-      setWritten({ billId });
+      setWritten({ billId, linesWritten: false });
     }
 
     // Unconditional, first attempt or fifth. replace_bill_lines (0015) deletes and inserts
@@ -132,6 +138,7 @@ export default function Bill() {
     if (linesError) {
       return fail(describeError(linesError));
     }
+    setWritten({ billId, linesWritten: true });
 
     const { data: issued, error: tokenError } = await issueToken(billId);
     if (tokenError || issued == null) {
@@ -213,7 +220,7 @@ export default function Bill() {
             </p>
           )}
 
-          {!written && (
+          {!written?.linesWritten && (
             <ItemGrid
               items={items}
               lang={asLang(i18n.language)}
@@ -223,7 +230,7 @@ export default function Bill() {
 
           <Basket
             lines={lines}
-            frozen={written !== null}
+            frozen={written?.linesWritten ?? false}
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
           />
 
