@@ -188,6 +188,21 @@ describe("shop details", () => {
     // The two forms share a screen, not a workflow.
     expect(updateVendorConfig).not.toHaveBeenCalled();
   });
+
+  it("refuses to save when the read never resolved to a row (RLS filtered it)", async () => {
+    // loadShopDetails uses .maybeSingle(): zero rows come back as { data: null, error:
+    // null }, indistinguishable in shape from a genuinely blank row. If the screen let
+    // Save fire anyway, it would write { address: null, phone: null } over a real stored
+    // address and phone.
+    loadShopDetails.mockResolvedValueOnce({ data: null, error: null });
+    render(<Settings />);
+    await waitFor(() => expect(loadShopDetails).toHaveBeenCalledWith("v1"));
+    expect(await screen.findByTestId("shop-problem")).toBeTruthy();
+    expect((screen.getByTestId("shop-save") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("shop-save"));
+    expect(updateShopDetails).not.toHaveBeenCalled();
+  });
 });
 
 describe("the danger zone", () => {

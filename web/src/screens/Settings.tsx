@@ -55,18 +55,33 @@ export default function Settings() {
   const [shopSaved, setShopSaved] = useState(false);
   const [shopProblem, setShopProblem] = useState<{ key: string; detail: string } | null>(null);
   const [shopBusy, setShopBusy] = useState(false);
+  // Distinct from the fields being empty: loadShopDetails uses .maybeSingle(), so an
+  // RLS-filtered read returns { data: null, error: null } -- the same shape as a genuinely
+  // blank row. Without this flag, that filtered read would leave `shop` at its initial
+  // { address: "", phone: "" } with Save still enabled, and clicking Save would write
+  // those blanks over a real stored address and phone. Same trap `loaded` guards against
+  // in the loyalty form above.
+  const [shopLoaded, setShopLoaded] = useState(false);
 
   useEffect(() => {
     if (!vendorId) return;
     void (async () => {
       const { data, error } = await loadShopDetails(vendorId);
-      setShopProblem(describeError(error));
-      // Null columns become "" for the inputs; updateShopDetails maps them back to null.
-      if (data) setShop({ address: data.address ?? "", phone: data.phone ?? "" });
+      if (data) {
+        setShop({ address: data.address ?? "", phone: data.phone ?? "" });
+        setShopProblem(describeError(error));
+        setShopLoaded(true);
+      } else {
+        // Zero rows from .maybeSingle() is not an exception, same as loadVendorConfig's
+        // equivalent case -- report it explicitly and leave shopLoaded false so Save
+        // cannot fire against a read that never resolved to a definite row.
+        setShopProblem(describeError(error) ?? { key: "error.unknown", detail: "" });
+      }
     })();
   }, [vendorId]);
 
   async function saveShop() {
+    if (!shopLoaded) return;
     setShopSaved(false);
     setShopProblem(null);
     setShopBusy(true);
@@ -230,7 +245,7 @@ export default function Settings() {
           )}
 
           <button
-            type="submit" data-testid="shop-save" disabled={shopBusy}
+            type="submit" data-testid="shop-save" disabled={shopBusy || !shopLoaded}
             className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
           >
             {t("shop.save")}
