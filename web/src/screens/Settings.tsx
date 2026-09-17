@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 // i18next initialises as a side effect of this import, exactly as the sibling screens do.
 import "../i18n";
-import { clearVendorData, loadVendorConfig, updateVendorConfig, type ClearedCounts } from "../admin";
+import {
+  clearVendorData, loadVendorConfig, updateVendorConfig, type ClearedCounts,
+  loadShopDetails, updateShopDetails, type ShopDetails,
+} from "../admin";
 import { validateSettings, type SettingsInput, type SettingsField } from "../adminRules";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
@@ -44,6 +47,35 @@ export default function Settings() {
   // yet", not a form waiting to clobber real data.
   const vendorId = session.kind === "ready" ? session.vendorId : null;
   const vendorName = session.kind === "ready" ? session.vendorName : "";
+
+  // Shop details (address/phone for the receipt header). Separate state and save button
+  // from the loyalty form above: those fields run through validateSettings, which demands
+  // a positive number and rejects a blank, and these are optional free text.
+  const [shop, setShop] = useState<ShopDetails>({ address: "", phone: "" });
+  const [shopSaved, setShopSaved] = useState(false);
+  const [shopProblem, setShopProblem] = useState<{ key: string; detail: string } | null>(null);
+  const [shopBusy, setShopBusy] = useState(false);
+
+  useEffect(() => {
+    if (!vendorId) return;
+    void (async () => {
+      const { data, error } = await loadShopDetails(vendorId);
+      setShopProblem(describeError(error));
+      // Null columns become "" for the inputs; updateShopDetails maps them back to null.
+      if (data) setShop({ address: data.address ?? "", phone: data.phone ?? "" });
+    })();
+  }, [vendorId]);
+
+  async function saveShop() {
+    setShopSaved(false);
+    setShopProblem(null);
+    setShopBusy(true);
+    const { error } = await updateShopDetails(vendorId!, shop);
+    setShopBusy(false);
+    const described = describeError(error);
+    setShopProblem(described);
+    if (!described) setShopSaved(true);
+  }
 
   // Danger zone. Kept in its own state so a failed or abandoned wipe cannot disturb the
   // loyalty form above it -- they share a screen, not a workflow.
@@ -161,6 +193,49 @@ export default function Settings() {
             </button>
           </form>
         )}
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-md">
+        <h2 className="font-semibold text-slate-800">{t("shop.section")}</h2>
+        <p className="text-sm text-slate-600">{t("shop.help")}</p>
+
+        {shopProblem && (
+          <p data-testid="shop-problem" className="text-sm text-red-700">{t(shopProblem.key)}</p>
+        )}
+
+        <form onSubmit={(e) => { e.preventDefault(); void saveShop(); }} className="space-y-3">
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="shop-address">
+              {t("shop.address")}
+            </label>
+            <input
+              id="shop-address" data-testid="shop-address" value={shop.address ?? ""}
+              onChange={(e) => { setShopSaved(false); setShop({ ...shop, address: e.target.value }); }}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="shop-phone">
+              {t("shop.phone")}
+            </label>
+            <input
+              id="shop-phone" data-testid="shop-phone" value={shop.phone ?? ""} inputMode="tel"
+              onChange={(e) => { setShopSaved(false); setShop({ ...shop, phone: e.target.value }); }}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+          </div>
+
+          {shopSaved && (
+            <p data-testid="shop-saved" className="text-sm text-green-700">{t("shop.saved")}</p>
+          )}
+
+          <button
+            type="submit" data-testid="shop-save" disabled={shopBusy}
+            className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
+          >
+            {t("shop.save")}
+          </button>
+        </form>
       </section>
 
       {/* No heading here: Staff renders its own <h2>{t("staff.title")}</h2>, and it has to

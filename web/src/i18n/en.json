@@ -92,6 +92,14 @@
     "outOfOrder": "The second target must be larger than the first.",
     "loyaltySection": "Loyalty"
   },
+  "shop": {
+    "section": "Shop details",
+    "help": "Printed at the top of every receipt. Leave a field blank to keep it off the slip.",
+    "address": "Address",
+    "phone": "Phone",
+    "save": "Save",
+    "saved": "Saved."
+  },
   "range": {
     "today": "Today",
     "week": "This week",

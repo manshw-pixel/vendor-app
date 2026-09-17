@@ -18,10 +18,19 @@ const clearVendorData = vi.fn(async (): Promise<{
   data: unknown; error: { code?: string; message?: string } | null;
 }> => ({ data: [{ bills: 4, customers: 2, points_rows: 3 }], error: null }));
 
+const loadShopDetails = vi.fn(async (..._a: unknown[]) => ({
+  data: { address: null, phone: null }, error: null,
+}));
+const updateShopDetails = vi.fn(async (..._a: unknown[]): Promise<{
+  error: { code?: string; message?: string } | null;
+}> => ({ error: null }));
+
 vi.mock("../admin", () => ({
   loadVendorConfig: (...a: unknown[]) => loadVendorConfig(...a),
   updateVendorConfig: (...a: unknown[]) => updateVendorConfig(...a),
   clearVendorData: () => clearVendorData(),
+  loadShopDetails: (...a: unknown[]) => loadShopDetails(...a),
+  updateShopDetails: (...a: unknown[]) => updateShopDetails(...a),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -159,6 +168,24 @@ describe("the loyalty settings screen", () => {
     expect(await screen.findByTestId("settings-problem")).toBeTruthy();
     expect(screen.queryByTestId("settings-points_threshold_1")).toBeNull();
     expect(screen.queryByTestId("settings-save")).toBeNull();
+    expect(updateVendorConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("shop details", () => {
+  it("saves the shop details without touching the loyalty config", async () => {
+    render(<Settings />);
+    const address = await screen.findByTestId("shop-address");
+    fireEvent.change(address, { target: { value: "Shop 12, Kothrud, Pune" } });
+    fireEvent.change(screen.getByTestId("shop-phone"), { target: { value: "9876543210" } });
+    fireEvent.click(screen.getByTestId("shop-save"));
+
+    await screen.findByTestId("shop-saved");
+    expect(updateShopDetails).toHaveBeenCalledWith("v1", {
+      address: "Shop 12, Kothrud, Pune",
+      phone: "9876543210",
+    });
+    // The two forms share a screen, not a workflow.
     expect(updateVendorConfig).not.toHaveBeenCalled();
   });
 });

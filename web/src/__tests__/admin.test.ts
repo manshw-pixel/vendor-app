@@ -7,12 +7,16 @@ const eqUpdate = vi.fn(async (..._a: unknown[]) => ({ error: null }));
 const update = vi.fn((..._a: unknown[]) => ({ eq: (...b: unknown[]) => eqUpdate(...b) }));
 const del = vi.fn((..._a: unknown[]) => ({ eq: (...b: unknown[]) => eqUpdate(...b) }));
 const rpc = vi.fn(async (..._a: unknown[]) => ({ data: 120, error: null }));
+const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+const eq = vi.fn((..._a: unknown[]) => ({ maybeSingle }));
+const select = vi.fn((..._a: unknown[]) => ({
+  order: async () => ({ data: [], error: null }),
+  eq,
+}));
+const chain = { select, eq, maybeSingle, update };
 const from = vi.fn((..._a: unknown[]) => ({
   insert, update, delete: del,
-  select: () => ({
-    order: async () => ({ data: [], error: null }),
-    eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
-  }),
+  select,
 }));
 
 vi.mock("../supabase", () => ({
@@ -23,6 +27,7 @@ const {
   listAllItems, createItem, updateItem, setItemActive,
   updateCustomer, customerPoints, listStaff, updateStaff,
   loadVendorConfig, updateVendorConfig,
+  loadShopDetails, updateShopDetails,
 } = await import("../admin");
 
 const value = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5 };
@@ -119,5 +124,31 @@ describe("vendor config", () => {
       "points_threshold_1", "points_threshold_2", "redeem_days",
     ]);
     expect(eqUpdate).toHaveBeenCalledWith("id", "v1");
+  });
+});
+
+describe("shop details", () => {
+  it("reads only the two header columns", async () => {
+    await loadShopDetails("v1");
+    expect(from).toHaveBeenCalledWith("vendors");
+    expect(chain.select).toHaveBeenCalledWith("address, phone");
+    expect(chain.eq).toHaveBeenCalledWith("id", "v1");
+  });
+
+  it("writes only address and phone", async () => {
+    // vendors_admin_update permits the whole row. Sending exactly two columns is what
+    // stops this screen clobbering the loyalty config it does not own.
+    await updateShopDetails("v1", { address: "Shop 12, Kothrud", phone: "9876543210" });
+    expect(chain.update).toHaveBeenCalledWith({
+      address: "Shop 12, Kothrud",
+      phone: "9876543210",
+    });
+  });
+
+  it("stores a blank field as null, not an empty string", async () => {
+    // The receipt omits a null line. An empty string would be a present-but-blank value
+    // that renders as a stray blank line on every slip.
+    await updateShopDetails("v1", { address: "", phone: "  " });
+    expect(chain.update).toHaveBeenCalledWith({ address: null, phone: null });
   });
 });

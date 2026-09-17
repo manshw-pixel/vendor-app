@@ -95,6 +95,30 @@ export async function updateVendorConfig(vendorId: string, value: VendorConfig) 
     .eq("id", vendorId);
 }
 
+export type ShopDetails = { address: string | null; phone: string | null };
+
+const SHOP_COLS = "address, phone";
+
+/** The receipt's shop header (0014). Separate from loadVendorConfig because the two
+ *  are edited by different forms with different rules: loyalty values are required
+ *  positive numbers, these are optional free text. */
+export async function loadShopDetails(vendorId: string) {
+  return supabase.from("vendors").select(SHOP_COLS).eq("id", vendorId).maybeSingle();
+}
+
+/** Blank becomes NULL, never "". The receipt omits a null line; an empty string is a
+ *  present value that prints as a blank line on every slip. */
+export async function updateShopDetails(vendorId: string, value: ShopDetails) {
+  const blankToNull = (s: string | null) => {
+    const trimmed = (s ?? "").trim();
+    return trimmed === "" ? null : trimmed;
+  };
+  return supabase
+    .from("vendors")
+    .update({ address: blankToNull(value.address), phone: blankToNull(value.phone) })
+    .eq("id", vendorId);
+}
+
 export type ClearedCounts = { bills: number; customers: number; points_rows: number };
 
 /**
