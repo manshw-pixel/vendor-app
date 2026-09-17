@@ -335,6 +335,11 @@ environment where you can see them.
   the routing are covered; whether a 58mm roll produces a readable slip needs paper and a
   paired printer. See "Setting up the receipt printer" in the runbook for what to check by
   hand the first time.
+- **No test pulls a cable.** `replace_bill_lines` is provably safe to repeat — the DB
+  suite calls it twice and asserts one copy of the lines — and both screens are tested
+  against a simulated lost reply. But an actual mid-flight network drop on the Tokyo link
+  is verified by reasoning, not by a test. What the tests establish is that repeating the
+  call cannot corrupt a bill, which is the property that makes the reasoning sound.
 
 ## Turning WhatsApp on
 
