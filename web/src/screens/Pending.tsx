@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 // screen is rendered directly (by tests, and by the router) without going through
 // main.tsx.
 import "../i18n";
-import { completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
+import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 
@@ -32,6 +32,10 @@ export default function Pending() {
   // data. The completion itself already happened server-side, so this note sits
   // alongside the completed message rather than replacing it.
   const [pointsReadFailed, setPointsReadFailed] = useState(false);
+  // Set only when the read-back after a failed completion ITSELF failed: we genuinely do
+  // not know whether the bill completed. Rendered alongside the failure banner, never in
+  // place of it -- the same shape as Bill.tsx's tokenUnknown.
+  const [completionUnknown, setCompletionUnknown] = useState(false);
   // The customer's spendable balance for the bill currently being confirmed, or null
   // while there is nothing to spend from (no customer, a failed read, or a zero
   // balance) -- null is also the signal that hides the redeem input entirely.
@@ -84,11 +88,27 @@ export default function Pending() {
     setCompletedId(null);
     setPointsAwarded(null);
     setPointsReadFailed(false);
+    setCompletionUnknown(false);
     const { error } = await completeBill(id, points);
     if (error) {
-      setFailure(describeError(error));
-      setCompletingId(null);
-      return;
+      // complete_bill may have committed and had its reply lost. Read back what the
+      // server actually recorded rather than trusting the lost reply -- reporting a
+      // failure for a sale that succeeded is what makes a biller re-record it by hand,
+      // moving stock twice and awarding points twice. complete_bill is idempotent by
+      // guard, so a retry is safe either way; this is about what the biller is TOLD.
+      const { data: readBack, error: readError } = await billToken(id);
+      if (!readError && readBack && readBack.status === "done") {
+        // It worked. Fall through to the normal completion path below.
+      } else {
+        if (readError) {
+          // The same problem one layer down. Do not claim success and do not claim
+          // failure -- say so, and leave the failure banner up as well.
+          setCompletionUnknown(true);
+        }
+        setFailure(describeError(error));
+        setCompletingId(null);
+        return;
+      }
     }
     // What complete_bill() actually wrote, not a client-side recompute of the vendor's
     // threshold. No rows is legitimate -- a bill under the first threshold earns no
@@ -115,6 +135,12 @@ export default function Pending() {
       {failure && (
         <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
           {t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span>
+        </p>
+      )}
+
+      {completionUnknown && (
+        <p data-testid="pending-completion-unknown" className="text-xs text-amber-700">
+          {t("pending.completionUnknown")}
         </p>
       )}
 

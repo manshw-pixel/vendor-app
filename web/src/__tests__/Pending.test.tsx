@@ -7,7 +7,11 @@ const listPending = vi.fn(async (..._args: unknown[]): Promise<{ data: PendingBi
   data: [{ id: "b1", token_no: 7, total: 500, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } }],
   error: null,
 }));
-const completeBill = vi.fn(async (..._args: unknown[]) => ({ error: null }));
+const completeBill = vi.fn(async (..._args: unknown[]): Promise<{ error: { message?: string; code?: string } | null }> => ({ error: null }));
+const billToken = vi.fn(async (..._args: unknown[]): Promise<{
+  data: { token_no: number; status: string } | null;
+  error: { message?: string; code?: string } | null;
+}> => ({ data: null, error: null }));
 const pointsForBill = vi.fn(async (..._args: unknown[]): Promise<{
   data: { points: number }[] | null;
   error: { message?: string; code?: string } | null;
@@ -21,6 +25,7 @@ vi.mock("../data", () => ({
   completeBill: (...a: unknown[]) => completeBill(...a),
   pointsForBill: (...a: unknown[]) => pointsForBill(...a),
   customerBalance: (...a: unknown[]) => customerBalance(...a),
+  billToken: (...a: unknown[]) => billToken(...a),
 }));
 
 const { default: Pending } = await import("../screens/Pending");
@@ -168,6 +173,51 @@ describe("redeeming points at the counter", () => {
     await waitFor(() => expect(completeBill).toHaveBeenCalled());
     const sent = completeBill.mock.calls[0]?.[1] as number;
     expect(sent).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("the completion read-back after a lost reply", () => {
+  it("treats a lost reply on an already-completed bill as success", async () => {
+    // complete_bill may have committed and had its reply lost. Bill.tsx already reads back
+    // after a lost issue_token reply; this is the same trick in the place it was missing.
+    // Reporting failure here is what makes a biller re-record the sale by hand, moving
+    // stock twice and awarding points twice.
+    completeBill.mockResolvedValueOnce({ error: { message: "Failed to fetch" } });
+    billToken.mockResolvedValueOnce({ data: { token_no: 7, status: "done" }, error: null });
+
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+
+    expect(await screen.findByText(/completed/i)).toBeTruthy();
+    expect(screen.queryByText(/no connection|network/i)).toBeNull();
+  });
+
+  it("reports a genuine failure when the bill is still billed", async () => {
+    completeBill.mockResolvedValueOnce({ error: { message: "Failed to fetch" } });
+    billToken.mockResolvedValueOnce({ data: { token_no: 7, status: "billed" }, error: null });
+
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+
+    expect(await screen.findByText(/no connection|network/i)).toBeTruthy();
+    expect(screen.queryByText(/^completed\.$/i)).toBeNull();
+  });
+
+  it("says plainly that it does not know when the read-back itself fails", async () => {
+    // The honest answer is the useful one: a biller told "we are not sure" checks the
+    // completed list, where one told "failed" re-records the sale.
+    completeBill.mockResolvedValueOnce({ error: { message: "Failed to fetch" } });
+    billToken.mockResolvedValueOnce({ data: null, error: { message: "Failed to fetch" } });
+
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+
+    await screen.findByTestId("pending-completion-unknown");
+    // The failure banner stands alongside it -- never in place of it.
+    expect(screen.getByText(/no connection|network/i)).toBeTruthy();
   });
 });
 
