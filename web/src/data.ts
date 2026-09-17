@@ -108,6 +108,29 @@ export async function addLines(vendorId: string, billId: string, lines: readonly
   );
 }
 
+/**
+ * Sets a recording bill's lines to exactly these.
+ *
+ * Safe to call again after a lost response: replace_bill_lines (0015) deletes and inserts
+ * in one transaction, so a retry converges on the same rows instead of appending a second
+ * copy. This is what replaced addLines + billHasLines -- the old pair could only narrow
+ * the double-insert window, never close it, because the check was not atomic with the
+ * insert.
+ *
+ * No vendor_id: the function reads it off the bill. No line_total: the function computes
+ * it, so a client-supplied one cannot forge a bill's total.
+ */
+export async function replaceBillLines(billId: string, lines: readonly Draft[]) {
+  return supabase.rpc("replace_bill_lines", {
+    p_bill_id: billId,
+    p_lines: lines.map((l) => ({
+      item_id: l.itemId,
+      qty_kg: l.qtyKg,
+      unit_price: l.unitPrice,
+    })),
+  });
+}
+
 /** Parameter names must match 0003_functions.sql exactly; PostgREST resolves the
  *  overload by argument name, and a mismatch reads as "function not found". */
 export async function issueToken(billId: string) {

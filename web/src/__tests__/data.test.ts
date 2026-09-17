@@ -17,7 +17,7 @@ const from = vi.fn((..._a: unknown[]) => ({
 
 vi.mock("../supabase", () => ({ supabase: { from: (...a: unknown[]) => from(...a), rpc: (...a: unknown[]) => rpc(...a) } }));
 
-const { createBill, addLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
+const { createBill, addLines, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
 
 beforeEach(() => { insert.mockClear(); rpc.mockClear(); from.mockClear(); select.mockClear(); gt.mockClear(); });
 
@@ -55,6 +55,42 @@ describe("addLines", () => {
   it("does nothing on an empty basket", async () => {
     await addLines("v1", "b1", []);
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("replaceBillLines", () => {
+  it("sends the basket without any line_total", async () => {
+    // line_total is computed in the function. Sending one would be ignored, and having it
+    // in the payload would suggest the client's figure still matters.
+    await replaceBillLines("b1", [
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5 },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("replace_bill_lines", {
+      p_bill_id: "b1",
+      p_lines: [{ item_id: "i1", qty_kg: 2.5, unit_price: 40 }],
+    });
+  });
+
+  it("does not send a vendor id", async () => {
+    // The function reads vendor_id off the bill. Sending one would be a weaker second
+    // copy of a value the server already holds authoritatively.
+    await replaceBillLines("b1", [
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 1 },
+    ]);
+    const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(Object.keys(args)).toEqual(["p_bill_id", "p_lines"]);
+  });
+
+  it("carries every line of a multi-item basket in order", async () => {
+    await replaceBillLines("b1", [
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5 },
+      { itemId: "i2", name: "Onion", unitPrice: 32, qtyKg: 1 },
+    ]);
+    const args = rpc.mock.calls[0]?.[1] as { p_lines: unknown[] };
+    expect(args.p_lines).toEqual([
+      { item_id: "i1", qty_kg: 2.5, unit_price: 40 },
+      { item_id: "i2", qty_kg: 1, unit_price: 32 },
+    ]);
   });
 });
 
