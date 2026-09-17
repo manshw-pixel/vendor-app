@@ -17,7 +17,7 @@ const from = vi.fn((..._a: unknown[]) => ({
 
 vi.mock("../supabase", () => ({ supabase: { from: (...a: unknown[]) => from(...a), rpc: (...a: unknown[]) => rpc(...a) } }));
 
-const { createBill, addLines, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
+const { createBill, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
 
 beforeEach(() => { insert.mockClear(); rpc.mockClear(); from.mockClear(); select.mockClear(); gt.mockClear(); });
 
@@ -37,24 +37,6 @@ describe("createBill", () => {
     // cannot be trusted with it. Sending one invites someone to believe it matters.
     await createBill("v1", "c1", "u1");
     expect(insert.mock.calls[0]?.[0]).not.toHaveProperty("total");
-  });
-});
-
-describe("addLines", () => {
-  it("stamps vendor_id on every line and computes line_total", async () => {
-    await addLines("v1", "b1", [
-      { itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2 },
-      { itemId: "i2", name: "Beet", unitPrice: 30, qtyKg: 1.5 },
-    ]);
-    expect(insert).toHaveBeenCalledWith([
-      { bill_id: "b1", vendor_id: "v1", item_id: "i1", qty_kg: 2, unit_price: 40, line_total: 80 },
-      { bill_id: "b1", vendor_id: "v1", item_id: "i2", qty_kg: 1.5, unit_price: 30, line_total: 45 },
-    ]);
-  });
-
-  it("does nothing on an empty basket", async () => {
-    await addLines("v1", "b1", []);
-    expect(insert).not.toHaveBeenCalled();
   });
 });
 

@@ -7,8 +7,7 @@ vi.mock("../data", () => ({
   createCustomer: vi.fn(),
   findCustomerByMobile: vi.fn(),
   createBill: vi.fn(async () => ({ data: { id: "b1" }, error: null })),
-  addLines: vi.fn(async () => ({ error: null })),
-  billHasLines: vi.fn(async () => ({ data: [], error: null })),
+  replaceBillLines: vi.fn(async () => ({ data: null, error: null })),
   issueToken: vi.fn(async () => ({ data: 7, error: null })),
   billToken: vi.fn(async () => ({ data: null, error: null })),
 }));
@@ -99,7 +98,7 @@ describe("the bill screen", () => {
 
     await waitFor(() => expect(data.issueToken).toHaveBeenCalledWith("b1"));
     expect(data.createBill).toHaveBeenCalledWith("v1", "c1", "u1");
-    expect(data.addLines).toHaveBeenCalledWith("v1", "b1", [
+    expect(data.replaceBillLines).toHaveBeenCalledWith("b1", [
       { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2 },
     ]);
     expect(await screen.findByText("7")).toBeTruthy();
@@ -203,7 +202,10 @@ describe("the bill screen", () => {
 
     expect(await screen.findByText("7")).toBeTruthy();
     expect(data.createBill).toHaveBeenCalledTimes(1);
-    expect(data.addLines).toHaveBeenCalledTimes(1);
+    // Twice, not once: replace_bill_lines is idempotent, so the retry re-sends the whole
+    // basket unconditionally rather than checking whether the first attempt landed. That
+    // is the point of this change, not a regression.
+    expect(data.replaceBillLines).toHaveBeenCalledTimes(2);
     expect(data.issueToken).toHaveBeenCalledTimes(2);
   });
 
@@ -263,18 +265,13 @@ describe("the bill screen", () => {
     expect(data.createBill).toHaveBeenCalledTimes(1);
   });
 
-  it("does not insert lines twice on retry when the first addLines actually committed", async () => {
-    // The scenario the client-side check exists for: addLines committed in the database
-    // but the response was lost, so the client reports failure and linesAdded stays
-    // false. Without the pre-insert check, the retry would call addLines a second time
-    // and issue_token would double the total. With it, the retry sees the bill already
-    // has lines and skips straight to issuing the token.
-    (data.addLines as unknown as Mock).mockResolvedValueOnce({
-      error: { code: "XX000", message: "response lost" },
-    });
-    (data.billHasLines as unknown as Mock).mockResolvedValueOnce({
-      data: [{ id: "existing-line" }],
-      error: null,
+  it("re-sends the whole basket on retry, and the replace makes that safe", async () => {
+    // The old flow asked "did my lines already land?" before re-sending, a check that was
+    // never atomic with the insert. replace_bill_lines is idempotent, so the retry simply
+    // sends the basket again -- and the bill must still be the SAME bill, because
+    // createBill is the one step that must not repeat.
+    (data.replaceBillLines as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "XX000", message: "boom" },
     });
 
     render(<Bill />);
@@ -287,14 +284,16 @@ describe("the bill screen", () => {
     fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
     expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
 
-    // Retry: the check sees rows already there and must not insert again.
+    // Retry.
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
     fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
 
     expect(await screen.findByText("7")).toBeTruthy();
+    expect(data.replaceBillLines).toHaveBeenCalledTimes(2);
     expect(data.createBill).toHaveBeenCalledTimes(1);
-    expect(data.billHasLines).toHaveBeenCalledWith("b1");
-    expect(data.addLines).toHaveBeenCalledTimes(1);
+    // Both calls carried the same bill id and the same basket.
+    expect((data.replaceBillLines as unknown as Mock).mock.calls[0]?.[0]).toBe("b1");
+    expect((data.replaceBillLines as unknown as Mock).mock.calls[1]?.[0]).toBe("b1");
   });
 
   it("closes the basket for good once the token is issued -- the policies freeze it", async () => {

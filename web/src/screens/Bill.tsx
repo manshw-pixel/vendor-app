@@ -7,13 +7,12 @@ import { useSession } from "../components/SessionProvider";
 import { type Draft } from "../billing";
 import type { Customer } from "../customers";
 import {
-  addLines,
-  billHasLines,
   billToken,
   createBill,
   issueToken,
   listCustomers,
   listItems,
+  replaceBillLines,
   type Item,
 } from "../data";
 import { describeError } from "../errors";
@@ -49,7 +48,8 @@ function useOnline(): boolean {
 /**
  * The recorder's bill screen: one state machine over phase / lines / token.
  *
- * Nothing is written until Done. The order there is createBill -> addLines -> issueToken,
+ * Nothing is written until Done. The order there is createBill -> replaceBillLines ->
+ * issueToken,
  * so an abandoned basket leaves no row at all, and issue_token is the single moment the
  * bill becomes real. It is also a one-way door: once the bill is `billed` the policies
  * refuse further edits, so the confirm comes BEFORE it and there is no undo after -- one
@@ -70,7 +70,10 @@ export default function Bill() {
   // What of the write has already landed. A retry RESUMES from here: re-running
   // createBill would orphan the first bill in `recording` with its lines attached, and
   // issue_token's own guard cannot catch that -- it is a different bill.
-  const [written, setWritten] = useState<{ billId: string; linesAdded: boolean } | null>(null);
+  //
+  // Only the bill id is tracked. How far the LINE write got no longer matters:
+  // replaceBillLines is idempotent, so the retry just sends the basket again.
+  const [written, setWritten] = useState<{ billId: string } | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
   // Set only when a token failure's read-back itself failed: we genuinely do not know
@@ -111,10 +114,6 @@ export default function Bill() {
     setFailure(null);
     setTokenUnknown(false);
 
-    // Only a resumed call (a bill already held from an earlier attempt) needs the
-    // has-it-already-landed check below; a fresh bill this call just created cannot
-    // possibly have lines yet, so there is nothing to check.
-    const resuming = written !== null;
     let billId = written?.billId ?? null;
     if (billId === null) {
       const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
@@ -122,33 +121,16 @@ export default function Bill() {
         return fail(describeError(billError));
       }
       billId = bill.id as string;
-      setWritten({ billId, linesAdded: false });
+      setWritten({ billId });
     }
 
-    if (!written?.linesAdded) {
-      // Mitigation, not a fix, for a lost response after a committed addLines: a retry
-      // that never learned the first insert succeeded would insert the same lines again,
-      // and issue_token would recompute a doubled total. Checking for existing rows first
-      // narrows that window to a request still genuinely in flight -- it is not atomic
-      // with the check, so the race survives in principle. The proper fix is a
-      // replace-lines RPC (delete then insert in one transaction) for a later slice.
-      let alreadyLanded = false;
-      if (resuming) {
-        const { data: existing, error: checkError } = await billHasLines(billId);
-        if (checkError) {
-          return fail(describeError(checkError));
-        }
-        alreadyLanded = (existing?.length ?? 0) > 0;
-      }
-      if (!alreadyLanded) {
-        // addLines short-circuits an empty basket with { error: null } and NO data key, so
-        // only the error is read here.
-        const { error: linesError } = await addLines(vendorId, billId, lines);
-        if (linesError) {
-          return fail(describeError(linesError));
-        }
-      }
-      setWritten({ billId, linesAdded: true });
+    // Unconditional, first attempt or fifth. replace_bill_lines (0015) deletes and inserts
+    // in one transaction, so re-sending converges on the same rows rather than appending a
+    // second copy -- which is what the old check-then-insert could only narrow, never
+    // close.
+    const { error: linesError } = await replaceBillLines(billId, lines);
+    if (linesError) {
+      return fail(describeError(linesError));
     }
 
     const { data: issued, error: tokenError } = await issueToken(billId);
@@ -231,7 +213,7 @@ export default function Bill() {
             </p>
           )}
 
-          {!written?.linesAdded && (
+          {!written && (
             <ItemGrid
               items={items}
               lang={asLang(i18n.language)}
@@ -241,7 +223,7 @@ export default function Bill() {
 
           <Basket
             lines={lines}
-            frozen={written?.linesAdded ?? false}
+            frozen={written !== null}
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
           />
 

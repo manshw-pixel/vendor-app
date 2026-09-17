@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { lineTotal, type Draft } from "./billing";
+import type { Draft } from "./billing";
 import type { Customer } from "./customers";
 
 export type PostgrestErrorLike = { message?: string; code?: string } | null;
@@ -84,28 +84,6 @@ export async function createBill(vendorId: string, customerId: string, recorderI
     })
     .select("id")
     .single();
-}
-
-/** Whether a bill already has line items. Used only on retry, to avoid re-inserting lines
- *  addLines already committed but whose response was lost -- a mitigation, not a fix. It
- *  narrows the double-insert window to a request still genuinely in flight; the real fix
- *  is a replace-lines RPC (delete+insert in one transaction) for a later slice. */
-export async function billHasLines(billId: string) {
-  return supabase.from("bill_items").select("id").eq("bill_id", billId).limit(1);
-}
-
-export async function addLines(vendorId: string, billId: string, lines: readonly Draft[]) {
-  if (lines.length === 0) return { error: null as PostgrestErrorLike };
-  return supabase.from("bill_items").insert(
-    lines.map((l) => ({
-      bill_id: billId,
-      vendor_id: vendorId,
-      item_id: l.itemId,
-      qty_kg: l.qtyKg,
-      unit_price: l.unitPrice,
-      line_total: lineTotal(l.unitPrice, l.qtyKg),
-    })),
-  );
 }
 
 /**
