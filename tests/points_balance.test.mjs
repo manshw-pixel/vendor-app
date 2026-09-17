@@ -1,5 +1,9 @@
-import { test, assert, assertEqual } from "./framework.mjs";
+import { test, assert, assertEqual, assertDenied, once } from "./framework.mjs";
 import { sql } from "./fixtures.mjs";
+import { seedTwoVendors } from "./seed.mjs";
+
+// NOT seeded at import time -- see rls.test.mjs for why once() is needed here too.
+const getWorld = once(seedTwoVendors);
 
 async function customerWithLedger(entries) {
   const { rows: [v] } = await sql(`insert into vendors (name) values ('Balance Co') returning id`);
@@ -43,4 +47,18 @@ test("a customer with nothing has zero balance and no days_left", async () => {
   const { rows: [r] } = await sql(`select * from customer_points_balance($1)`, [id]);
   assertEqual(r.balance, 0, "expected zero");
   assert(r.days_left === null, "days_left should be null with no points");
+});
+
+test("a signed-in biller cannot read another vendor's customer balance", async () => {
+  // The receipt reads this RPC for its points block. customer_points_balance is
+  // SECURITY DEFINER and deliberately crosses tenants when current_vendor_id() is null
+  // (the WhatsApp webhook calls it as service_role after matching a phone number
+  // itself). From a signed-in biller that value is non-null, so the guard must fire. If
+  // it ever stopped firing, a biller could enumerate another shop's customers by id
+  // through the slip.
+  const world = await getWorld();
+  const { error } = await world.a.clients.biller.rpc("customer_points_balance", {
+    p_customer_id: world.b.customerId,
+  });
+  assertDenied(error, "expected the cross-tenant balance read to be refused");
 });

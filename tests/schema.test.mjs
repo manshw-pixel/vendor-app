@@ -65,3 +65,26 @@ test("app_users role is constrained to the three roles", async () => {
   } catch { threw = true; }
   assert(threw, "an invalid role was accepted");
 });
+
+test("vendors carries a nullable address and phone for the receipt header", async () => {
+  const { rows } = await sql(
+    `select column_name, is_nullable, data_type from information_schema.columns
+      where table_schema='public' and table_name='vendors'
+        and column_name in ('address','phone')`
+  );
+  assertEqual(rows.length, 2, "expected address and phone on vendors");
+  for (const r of rows) {
+    assertEqual(r.is_nullable, "YES", `${r.column_name} must stay nullable`);
+    assertEqual(r.data_type, "text", `${r.column_name} must be text`);
+  }
+});
+
+test("a vendor created without shop details is still valid", async () => {
+  // Nullable is the whole point: every vendor row predating 0014 has neither, and the
+  // slip omits a blank line rather than refusing to render.
+  const { rows } = await sql(
+    `insert into vendors (name) values ('No Details Co') returning address, phone`
+  );
+  assertEqual(rows[0].address, null, "address defaults to null");
+  assertEqual(rows[0].phone, null, "phone defaults to null");
+});
