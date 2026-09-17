@@ -67,6 +67,11 @@ export async function loadReceipt(billId: string): Promise<
     .from("bills")
     .select(RECEIPT_COLS)
     .eq("id", billId)
+    // Only a completed bill has a completed_at, a total actually collected, and points
+    // actually earned -- a pending bill's slip would print "Paid" for money never
+    // collected and `new Date(null)` as its date. Not reachable through the UI (ids are
+    // uuids), but the not-found path below already handles the resulting empty read.
+    .eq("status", "done")
     .maybeSingle();
 
   if (error || !bill) return { data: null, error: error ?? null };

@@ -16,6 +16,7 @@ import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
 import Receipt from "./screens/Receipt";
 import { homeFor } from "./routes";
+import type { Role } from "./config";
 
 /**
  * The screen a person sees when their sign-in has no linked staff record.
@@ -88,6 +89,35 @@ function SessionError({ detail }: { detail: string }) {
   );
 }
 
+/**
+ * Everything BUT the receipt, wrapped in the app chrome (header, nav, offline banner).
+ *
+ * Split out of Inner so /receipt/:billId can be routed OUTSIDE Shell entirely: the slip
+ * is printed with window.print(), and nothing above it -- the shell's header, nav and
+ * padded main -- may appear on customer paper. Routing it outside Shell rather than
+ * marking the chrome no-print also keeps Shell's `main` padding away from the 58mm page
+ * box, which is what previously clipped the right-hand column of every amount.
+ */
+function ShellRoutes({ role, vendorName, name }:
+  { role: Role; vendorName: string; name: string }) {
+  return (
+    <Shell role={role} vendorName={vendorName} name={name}>
+      <Routes>
+        <Route path="/bill" element={<Bill />} />
+        <Route path="/pending" element={<Pending />} />
+        <Route path="/items" element={<Items />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/requests" element={<Requests />} />
+        <Route path="/completed" element={<Completed />} />
+        <Route path="/dashboards" element={<Dashboards />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/staff" element={<Navigate to="/settings" replace />} />
+        <Route path="*" element={<Navigate to={homeFor(role)} replace />} />
+      </Routes>
+    </Shell>
+  );
+}
+
 function Inner() {
   const s = useSession();
   if (s.kind === "loading") return <div className="p-8 text-slate-400">…</div>;
@@ -97,23 +127,15 @@ function Inner() {
   if (s.kind === "mustChangePassword") return <ChangePassword email={s.email} />;
 
   return (
-    <Shell role={s.role} vendorName={s.vendorName} name={s.name}>
-      <Guard role={s.role}>
-        <Routes>
-          <Route path="/bill" element={<Bill />} />
-          <Route path="/pending" element={<Pending />} />
-          <Route path="/items" element={<Items />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/requests" element={<Requests />} />
-          <Route path="/completed" element={<Completed />} />
-          <Route path="/dashboards" element={<Dashboards />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/receipt/:billId" element={<Receipt />} />
-          <Route path="/staff" element={<Navigate to="/settings" replace />} />
-          <Route path="*" element={<Navigate to={homeFor(s.role)} replace />} />
-        </Routes>
-      </Guard>
-    </Shell>
+    <Guard role={s.role}>
+      <Routes>
+        <Route path="/receipt/:billId" element={<Receipt />} />
+        <Route
+          path="*"
+          element={<ShellRoutes role={s.role} vendorName={s.vendorName} name={s.name} />}
+        />
+      </Routes>
+    </Guard>
   );
 }
 

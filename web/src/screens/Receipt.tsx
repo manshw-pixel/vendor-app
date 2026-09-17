@@ -3,9 +3,14 @@ import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { loadReceipt, type Receipt as ReceiptData } from "../receipt";
 import { itemName, type Lang } from "../i18n/locales";
-import { rupees } from "../money";
 import { describeError } from "../errors";
 import "../i18n";
+
+/** Plain two-decimal, no currency sign and no digit grouping -- matching the item lines'
+ *  `.toFixed(2)` so every amount on the 32-character slip lines up the same way. The
+ *  spec's mock has no ₹ anywhere; `rupees()` (money.ts) is for on-screen amounts
+ *  elsewhere in the app and is deliberately not used here. */
+const amt = (n: number): string => n.toFixed(2);
 
 /**
  * The 58mm slip (Slice A).
@@ -27,13 +32,36 @@ export default function Receipt() {
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
 
   useEffect(() => {
+    // Reset on every id change: without this, navigating receipt -> receipt without an
+    // unmount in between could leave a prior bill's error banner sitting over a good
+    // load, or -- with `live` guarding the stale response -- briefly race a slow load of
+    // bill A into rendering under bill B's URL.
+    setData(null);
+    setProblem(null);
     if (!billId) return;
+    let live = true;
     void (async () => {
       const { data: r, error } = await loadReceipt(billId);
+      if (!live) return;
       if (r) setData(r);
       else setProblem(describeError(error) ?? { key: "receipt.notFound", detail: "" });
     })();
+    return () => {
+      live = false;
+    };
   }, [billId]);
+
+  // Scopes the 58mm @page rule to exactly the lifetime of this component -- see
+  // index.css. A plain <style> tag rather than a stylesheet import so it can be added and
+  // removed with the component instead of applying for the whole app.
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = "@page { size: 58mm auto; margin: 0; }";
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   if (problem) {
     return <p data-testid="receipt-problem" className="p-4 text-sm text-red-700">{t(problem.key)}</p>;
@@ -91,21 +119,21 @@ export default function Receipt() {
 
         <div data-testid="receipt-subtotal" className="flex justify-between">
           <span>{t("receipt.items", { n: data.lines.length })}</span>
-          <span>{`${t("receipt.subtotal")} ${rupees(data.gross)}`}</span>
+          <span>{`${t("receipt.subtotal")} ${amt(data.gross)}`}</span>
         </div>
         {data.redeemed_points > 0 && (
           <div data-testid="receipt-redeemed" className="flex justify-between">
             <span>{t("receipt.redeemed")}</span>
-            <span>{`- ${rupees(data.redeemed_points)}`}</span>
+            <span>{`- ${amt(data.redeemed_points)}`}</span>
           </div>
         )}
         <div data-testid="receipt-total" className="flex justify-between font-bold">
           <span>{t("receipt.total")}</span>
-          <span>{rupees(data.net)}</span>
+          <span>{amt(data.net)}</span>
         </div>
         <div className="flex justify-between">
           <span>{t("receipt.paid")}</span>
-          <span>{rupees(data.net)}</span>
+          <span>{amt(data.net)}</span>
         </div>
 
         {data.balance && (

@@ -7,12 +7,11 @@ body { margin: 0; background: #f6f8fb; color: #334155; overflow-x: hidden; }
 button, [role="button"], a.btn { min-height: 44px; }
 input, select { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming on focus */
 
-/* The 58mm slip. Height is auto because a receipt has no page length -- a fixed one
-   ejects a blank second page on every print. */
-@page {
-  size: 58mm auto;
-  margin: 0;
-}
+/* The 58mm page box is NOT set here. @page cannot be scoped by a selector -- it is
+   document-global -- so putting it in this app-wide stylesheet would shrink and clip
+   every OTHER screen's printout (Dashboards, the Completed list) to 58mm too. Receipt.tsx
+   injects and removes its own <style> tag carrying this rule for exactly as long as the
+   receipt is mounted; see the comment there. */
 
 .receipt-slip {
   width: 58mm;

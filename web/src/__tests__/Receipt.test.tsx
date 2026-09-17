@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { Receipt as ReceiptData } from "../receipt";
 
 const loadReceipt = vi.fn();
@@ -128,5 +129,40 @@ describe("Receipt", () => {
     loadReceipt.mockResolvedValue({ data: null, error: { message: "gone" } });
     renderAt();
     expect(await screen.findByTestId("receipt-problem")).toBeTruthy();
+  });
+
+  it("clears a prior bill's error when navigating to a different, valid bill id", async () => {
+    // Regression for a stale-state bug: without resetting `data`/`problem` on billId
+    // change, a failed load for one bill could sit on screen, unresolved, over a good
+    // load for the next -- or worse, a slow first response could land after a second
+    // navigation and render bill A's slip under bill B's URL.
+    loadReceipt.mockImplementation(async (billId: string) =>
+      billId === "b1"
+        ? { data: null, error: { message: "gone" } }
+        : { data: { ...FULL, token_no: 999 }, error: null },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/receipt/b1"]}>
+        <Routes>
+          <Route
+            path="/receipt/:billId"
+            element={
+              <>
+                <Link to="/receipt/b2" data-testid="go-b2">next</Link>
+                <Receipt />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("receipt-problem")).toBeTruthy();
+
+    screen.getByTestId("go-b2").click();
+
+    await waitFor(() => expect(screen.queryByTestId("receipt-problem")).toBeNull());
+    expect((await screen.findByTestId("receipt-token")).textContent).toMatch(/999/);
   });
 });

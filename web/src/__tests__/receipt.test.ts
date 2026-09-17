@@ -7,13 +7,15 @@ const rpcResult = { data: [{ balance: 260, days_left: 15 }], error: null as unkn
 // vi.mock's module replacement (a vi.spyOn over an already-mocked module is unreliable).
 const billsError = { value: null as unknown };
 
-const captured: { tables: string[]; selects: string[] } = { tables: [], selects: [] };
+const captured: { tables: string[]; selects: string[]; eqs: [string, unknown[]][] } =
+  { tables: [], selects: [], eqs: [] };
 
 const make = (table: string) => {
   const o: Record<string, unknown> = {};
   for (const k of ["select", "eq", "gt", "order", "limit"]) {
     o[k] = (...a: unknown[]) => {
       if (k === "select") captured.selects.push(a[0] as string);
+      if (k === "eq") captured.eqs.push([table, a]);
       return o;
     };
   }
@@ -48,6 +50,7 @@ const BILL = {
 beforeEach(() => {
   captured.tables = [];
   captured.selects = [];
+  captured.eqs = [];
   responses.bills = { ...BILL };
   responses.lines = [
     { id: "l1", qty_kg: "2.5", unit_price: "40.00", line_total: "100.00",
@@ -117,6 +120,15 @@ describe("loadReceipt", () => {
   it("carries the shop header through", async () => {
     const { data } = await loadReceipt("b1");
     expect(data!.shop).toEqual({ name: "Taji Bhaji", address: "Shop 12", phone: "9876543210" });
+  });
+
+  it("only ever reads a completed bill, never a pending one", async () => {
+    // A pending bill has no completed_at and no collected total; printing one would show
+    // "Paid" for money never taken. The id is a uuid so this is not reachable through the
+    // UI, but the query itself must not trust that.
+    await loadReceipt("b1");
+    const billsFilters = captured.eqs.filter(([table]) => table === "bills");
+    expect(billsFilters).toContainEqual(["bills", ["status", "done"]]);
   });
 
   it("returns the error and no data when the bill cannot be read", async () => {
