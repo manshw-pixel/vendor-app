@@ -150,5 +150,22 @@
     "hideHandled": "Hide handled",
     "empty": "No requests logged yet.",
     "loading": "Loading…"
+  },
+  "receipt": {
+    "token": "Token #{{n}}",
+    "items": "Items: {{n}}",
+    "subtotal": "Subtotal",
+    "redeemed": "Points redeemed",
+    "total": "Total",
+    "paid": "Paid",
+    "pointsEarned": "Points earned",
+    "balance": "Balance",
+    "expires": "Expires {{date}} ({{days}} days)",
+    "servedBy": "Served by {{name}}",
+    "thanks": "Thank you!",
+    "print": "Print",
+    "loading": "Loading…",
+    "notFound": "That bill could not be found.",
+    "walkIn": "Walk-in"
   }
 }

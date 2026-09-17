@@ -6,3 +6,30 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: #f6f8fb; color: #334155; overflow-x: hidden; }
 button, [role="button"], a.btn { min-height: 44px; }
 input, select { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming on focus */
+
+/* The 58mm slip. Height is auto because a receipt has no page length -- a fixed one
+   ejects a blank second page on every print. */
+@page {
+  size: 58mm auto;
+  margin: 0;
+}
+
+.receipt-slip {
+  width: 58mm;
+  /* An EXPLICIT Devanagari fallback. Most monospace stacks carry none, and the browser
+     then silently substitutes a proportional face -- which breaks column alignment on
+     exactly the lines holding item names, the ones this layout depends on. */
+  font-family: ui-monospace, "Cascadia Mono", "Noto Sans Mono", "Noto Sans Devanagari",
+    "Nirmala UI", monospace;
+}
+
+@media print {
+  /* Everything that is app, not receipt. The route renders the slip alone, so this is
+     belt-and-braces against a future layout wrapping it in chrome. */
+  .receipt-noprint {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}

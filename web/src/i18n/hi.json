@@ -150,5 +150,22 @@
     "hideHandled": "पूरे हुए छिपाएं",
     "empty": "अभी तक कोई अनुरोध दर्ज नहीं है।",
     "loading": "लोड हो रहा है…"
+  },
+  "receipt": {
+    "token": "टोकन #{{n}}",
+    "items": "वस्तुएँ: {{n}}",
+    "subtotal": "उप-योग",
+    "redeemed": "अंक इस्तेमाल हुए",
+    "total": "कुल",
+    "paid": "भुगतान",
+    "pointsEarned": "अंक मिले",
+    "balance": "शेष अंक",
+    "expires": "{{date}} तक ({{days}} दिन)",
+    "servedBy": "{{name}} द्वारा",
+    "thanks": "धन्यवाद!",
+    "print": "प्रिंट करें",
+    "loading": "लोड हो रहा है…",
+    "notFound": "वह बिल नहीं मिला.",
+    "walkIn": "ग्राहक"
   }
 }

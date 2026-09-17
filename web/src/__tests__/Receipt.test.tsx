@@ -1,0 +1,132 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import type { Receipt as ReceiptData } from "../receipt";
+
+const loadReceipt = vi.fn();
+vi.mock("../receipt", () => ({ loadReceipt: (...a: unknown[]) => loadReceipt(...a) }));
+
+const Receipt = (await import("../screens/Receipt")).default;
+
+const FULL: ReceiptData = {
+  token_no: 147,
+  completed_at: "2026-09-17T14:12:00.000Z",
+  net: 166,
+  gross: 216,
+  redeemed_points: 50,
+  lines: [
+    { id: "l1", qty_kg: 2.5, unit_price: 40, line_total: 100,
+      items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो" } },
+  ],
+  customer: { name: "Sunita Kale", flat_no: "B-304" },
+  biller_name: "Sunil",
+  shop: { name: "Taji Bhaji", address: "Shop 12, Kothrud", phone: "9876543210" },
+  points_earned: 0,
+  balance: { balance: 260, days_left: 15 },
+};
+
+const renderAt = () =>
+  render(
+    <MemoryRouter initialEntries={["/receipt/b1"]}>
+      <Routes><Route path="/receipt/:billId" element={<Receipt />} /></Routes>
+    </MemoryRouter>,
+  );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  loadReceipt.mockResolvedValue({ data: FULL, error: null });
+});
+
+describe("Receipt", () => {
+  it("prints the token, the shop header and the customer", async () => {
+    renderAt();
+    expect((await screen.findByTestId("receipt-token")).textContent).toMatch(/147/);
+    expect(screen.getByTestId("receipt-shop").textContent).toMatch(/Taji Bhaji/);
+    expect(screen.getByTestId("receipt-shop").textContent).toMatch(/Shop 12, Kothrud/);
+    expect(screen.getByTestId("receipt-customer").textContent).toMatch(/Sunita Kale/);
+    expect(screen.getByTestId("receipt-customer").textContent).toMatch(/B-304/);
+  });
+
+  it("shows the subtotal as the gross, not the stored net", async () => {
+    renderAt();
+    expect((await screen.findByTestId("receipt-subtotal")).textContent).toMatch(/216.00/);
+    expect(screen.getByTestId("receipt-total").textContent).toMatch(/166.00/);
+  });
+
+  // Split from the brief's single combined test, which rendered the component TWICE and
+  // asserted queryAllByTestId(...).toHaveLength(1) across two separate mounted trees --
+  // an assertion that could pass even if the feature were broken, because it never
+  // compares the two mounts to each other. Two independent fixtures, two independent
+  // assertions, same intent.
+  it("shows the redemption line when points were spent", async () => {
+    renderAt();
+    expect(await screen.findByTestId("receipt-redeemed")).toBeTruthy();
+  });
+
+  it("omits the redemption line when no points were spent", async () => {
+    loadReceipt.mockResolvedValue({ data: { ...FULL, redeemed_points: 0, gross: 166 }, error: null });
+    renderAt();
+    await screen.findByTestId("receipt-total");
+    expect(screen.queryByTestId("receipt-redeemed")).toBeNull();
+  });
+
+  it("omits the expiry line when the balance is zero", async () => {
+    loadReceipt.mockResolvedValue({
+      data: { ...FULL, balance: { balance: 0, days_left: null } }, error: null,
+    });
+    renderAt();
+    await screen.findByTestId("receipt-token");
+    expect(screen.queryByTestId("receipt-expires")).toBeNull();
+  });
+
+  it("renders a walk-in bill with no customer and no points block", async () => {
+    // Every existing screen joins customers optionally; the slip must too.
+    loadReceipt.mockResolvedValue({
+      data: { ...FULL, customer: null, balance: null, points_earned: 0 }, error: null,
+    });
+    renderAt();
+    await screen.findByTestId("receipt-token");
+    expect(screen.queryByTestId("receipt-customer")).toBeNull();
+    expect(screen.queryByTestId("receipt-points")).toBeNull();
+  });
+
+  it("still renders when the biller name is missing", async () => {
+    loadReceipt.mockResolvedValue({ data: { ...FULL, biller_name: null }, error: null });
+    renderAt();
+    expect((await screen.findByTestId("receipt-token")).textContent).toMatch(/147/);
+    expect(screen.queryByTestId("receipt-served-by")).toBeNull();
+  });
+
+  it("omits a shop line that is blank", async () => {
+    loadReceipt.mockResolvedValue({
+      data: { ...FULL, shop: { name: "Taji Bhaji", address: null, phone: null } }, error: null,
+    });
+    renderAt();
+    const shop = await screen.findByTestId("receipt-shop");
+    expect(shop.textContent).toMatch(/Taji Bhaji/);
+    expect(screen.queryByTestId("receipt-shop-address")).toBeNull();
+  });
+
+  it("names the item in the active language", async () => {
+    renderAt();
+    // The test environment's navigator.language isn't controlled here (see Bill.test.tsx
+    // for the same pattern), so this only pins down that itemName's chosen name shows up
+    // -- not which of the three languages resolveLang lands on in jsdom.
+    expect((await screen.findByTestId("receipt-line-l1")).textContent ?? "").toMatch(
+      /Tomato|टमाटर|टोमॅटो/,
+    );
+  });
+
+  it("calls window.print when Print is pressed", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderAt();
+    (await screen.findByTestId("receipt-print")).click();
+    expect(print).toHaveBeenCalled();
+  });
+
+  it("says so when the bill cannot be loaded", async () => {
+    loadReceipt.mockResolvedValue({ data: null, error: { message: "gone" } });
+    renderAt();
+    expect(await screen.findByTestId("receipt-problem")).toBeTruthy();
+  });
+});
