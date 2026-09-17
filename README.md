@@ -331,6 +331,10 @@ environment where you can see them.
   and `[auth]` sections describe a stack that is never brought up.
 - Points expiry is correct on *read* regardless (`customer_points_balance` filters on
   `expires_at`); the sweep exists to make the lapse an auditable ledger event.
+- **No test asserts the receipt physically prints.** The render, the data composition and
+  the routing are covered; whether a 58mm roll produces a readable slip needs paper and a
+  paired printer. See "Setting up the receipt printer" in the runbook for what to check by
+  hand the first time.
 
 ## Turning WhatsApp on
 

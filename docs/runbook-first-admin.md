@@ -156,3 +156,27 @@ So the expiry date it names can belong to a batch that has, in reality, already 
 spent by an earlier redemption -- the function has no per-batch ledger to check against.
 The balance itself is always correct; only the date attached to it can undersell how much
 time is actually left.
+
+## Setting up the receipt printer
+
+The app prints through the operating system's print dialog, not through a driver of its
+own. That means any printer the device can already see will work, and no printer is
+required at all — the slip stays on screen for the customer to read or photograph.
+
+For a paper slip, a **58mm Bluetooth thermal printer** is the expected hardware
+(around ₹1,500–2,500).
+
+1. Pair the printer with the Android device in the usual Bluetooth settings.
+2. **Install the printer vendor's Android print service app.** Most inexpensive models do
+   not appear in Chrome's print dialog without it. Check that this app exists before
+   buying a particular model — it is the one part of this that a code change cannot fix.
+3. In Settings → Shop details, fill in the address and phone that head every slip.
+4. Complete a test bill, press **Receipt**, then **Print**, and check the slip against
+   the list below.
+
+What to check on the first physical print, none of which any automated test covers:
+
+- The slip is not cut off at the right edge, and the amounts line up in a column.
+- Marathi and Hindi item names render as text, not as boxes. If they are boxes, the
+  device is missing a Devanagari font rather than the app being wrong.
+- Only one slip feeds — no blank second page.
