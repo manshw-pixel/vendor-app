@@ -31,12 +31,33 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
   ],
 };
 
+/**
+ * Paths reachable but never listed. BY_ROLE is the nav; these are screens reached from
+ * inside another screen, so putting them in BY_ROLE would print a menu entry for a page
+ * that needs an id to mean anything.
+ *
+ * Matched by prefix + one segment, NOT by String.startsWith alone -- a bare startsWith
+ * would grant /receiptxyz/b1 as well.
+ */
+const UNLISTED: Record<Role, readonly string[]> = {
+  recorder: [],
+  biller: ["/receipt"],
+  admin: ["/receipt"],
+};
+
+const matchesUnlisted = (prefix: string, path: string): boolean => {
+  if (!path.startsWith(`${prefix}/`)) return false;
+  const rest = path.slice(prefix.length + 1);
+  return rest.length > 0 && !rest.includes("/");
+};
+
 export function routesForRole(role: Role): RouteDef[] {
   return BY_ROLE[role];
 }
 
 export function canAccess(role: Role, path: string): boolean {
-  return BY_ROLE[role].some((r) => r.path === path);
+  if (BY_ROLE[role].some((r) => r.path === path)) return true;
+  return UNLISTED[role].some((prefix) => matchesUnlisted(prefix, path));
 }
 
 export function homeFor(role: Role): string {

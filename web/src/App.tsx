@@ -14,6 +14,7 @@ import Requests from "./screens/Requests";
 import Completed from "./screens/Completed";
 import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
+import Receipt from "./screens/Receipt";
 import { homeFor } from "./routes";
 
 /**
@@ -107,6 +108,7 @@ function Inner() {
           <Route path="/completed" element={<Completed />} />
           <Route path="/dashboards" element={<Dashboards />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/receipt/:billId" element={<Receipt />} />
           <Route path="/staff" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<Navigate to={homeFor(s.role)} replace />} />
         </Routes>

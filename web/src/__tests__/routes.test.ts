@@ -77,3 +77,32 @@ describe("homeFor", () => {
     expect(homeFor("admin")).toBe("/bill");
   });
 });
+
+describe("the receipt route", () => {
+  it("is open to the biller and the admin", () => {
+    expect(canAccess("biller", "/receipt/b1")).toBe(true);
+    expect(canAccess("admin", "/receipt/b1")).toBe(true);
+  });
+
+  it("is closed to the recorder", () => {
+    // A recorder hands off at the token stage and never sees money; the slip carries a
+    // points balance they have no reason to read. Politeness, not protection -- RLS on
+    // bills, customers and points_ledger is what actually refuses the data.
+    expect(canAccess("recorder", "/receipt/b1")).toBe(false);
+  });
+
+  it("does not put the receipt in the nav", () => {
+    // It is reached from a bill, not from a menu: there is no useful receipt list.
+    for (const role of ["admin", "recorder", "biller"] as const) {
+      expect(routesForRole(role).some((r) => r.path.startsWith("/receipt"))).toBe(false);
+    }
+  });
+
+  it("still matches exact paths exactly", () => {
+    // The parameterised match must not turn into a prefix match: /completed must not
+    // start granting /completedxyz.
+    expect(canAccess("biller", "/completedxyz")).toBe(false);
+    expect(canAccess("biller", "/receipt")).toBe(false);
+    expect(canAccess("biller", "/receiptxyz/b1")).toBe(false);
+  });
+});
