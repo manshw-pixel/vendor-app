@@ -6,6 +6,31 @@
  *   - a policy-FILTERED READ arrives as zero rows, not an error at all.
  * Callers rendering an empty list must say "nothing yet", never "not allowed".
  */
+/**
+ * True only for replace_bill_lines' status guard: "bill <id> is <status>, expected
+ * recording" (0015_replace_bill_lines.sql:46).
+ *
+ * Why the caller is allowed to treat THIS one error as non-fatal: it is raised before any
+ * write, and it says the bill has already left `recording` -- i.e. issue_token has
+ * committed, the token exists and the total has been quoted to the customer. The lines are
+ * final and correct; re-sending them is exactly what the guard is there to refuse. A retry
+ * after a lost issue_token reply must therefore carry on to the token read-back rather
+ * than stopping here, or the recorder can never learn the token that was issued.
+ *
+ * Matched on the MESSAGE, not the code: plpgsql `raise exception` with no errcode is
+ * SQLSTATE P0001 for every guard in that function, so the code alone cannot tell this
+ * refusal apart from "bill not found", "does not belong to your vendor" or "may not record
+ * bill lines" -- all of which are genuine failures that must still be reported. The
+ * wording is this one guard's own, the same reasoning the PGRST202 branch above uses for
+ * preferring message text over a code that has moved between versions. An RLS refusal
+ * (42501) or a network failure carries no such text and is unaffected.
+ */
+export function isBillNoLongerRecording(
+  error: { message?: string; code?: string } | null,
+): boolean {
+  return /\bbill\b.*\bis\b.*\bexpected recording\b/i.test(error?.message ?? "");
+}
+
 export function describeError(
   error: { message?: string; code?: string } | null,
 ): { key: string; detail: string } | null {

@@ -148,7 +148,15 @@ class Client {
 
   async rpc(fn, args = {}) {
     const names = Object.keys(args);
-    const params = names.map(n => args[n]);
+    // A non-scalar argument goes over the wire as JSON, because that is what PostgREST
+    // receives from supabase-js and hands to a json/jsonb parameter. node-pg would
+    // otherwise render a JS array as a Postgres ARRAY literal ({"..."}), which no jsonb
+    // parameter can accept -- a shim artefact that would make a call the real stack
+    // performs fine look like a 22P02. Scalars (uuid, timestamptz, numbers, null) are
+    // passed through untouched, as before.
+    const encode = (v) =>
+      v !== null && typeof v === "object" && !(v instanceof Date) ? JSON.stringify(v) : v;
+    const params = names.map(n => encode(args[n]));
     const call = names.length
       ? `select * from ${ident(fn)}(${names.map((n, i) => `${ident(n)} => $${i + 1}`).join(", ")})`
       : `select * from ${ident(fn)}()`;

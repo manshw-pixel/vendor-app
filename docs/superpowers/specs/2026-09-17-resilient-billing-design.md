@@ -129,8 +129,11 @@ no longer takes `vendorId` (the function reads it from the bill) and no longer s
 not idempotent: the `resuming` flag, the `alreadyLanded` check, and the `billHasLines`
 round-trip. The call becomes unconditional on every attempt, first or fifth.
 
-The resume state narrows with it. `written` is `{ billId, linesAdded }` today; nothing
-needs `linesAdded` once the write is idempotent, so it becomes `{ billId }`. `billId` is
+The resume state narrows with it. `written` is `{ billId, linesAdded }` today and becomes
+`{ billId, linesWritten }`: the flag survives, but only as a UI gate -- it decides whether
+the item picker stays open and whether the basket is frozen, so a failed line write can
+still be corrected before the retry, and it is NOT a condition on the line-write call,
+which is unconditional on every attempt. `billId` is
 still required, because `createBill` is the one step that must not repeat — re-creating
 would orphan the first bill in `recording` with its lines attached, and `issue_token`'s
 guard cannot catch that, since it is a different bill.
@@ -191,5 +194,9 @@ flaky link is verified by reasoning, not by a test.
 - **Reading `unit_price` from `items`**, and with it the last of the forged-request
   surface.
 - **The `issue_token` read-back**, which already exists and is not improved here.
+- **Validating `item_id` against the bill's vendor.** A recorder can attach another
+  vendor's `item_id` to their own bill. This is pre-existing, not a regression:
+  `bill_items_write` in `0002_rls.sql` never checked it either, and `replace_bill_lines`
+  inherits the same gap. Written down here rather than left implicit.
 - Slices C (expiring-points visibility, largely absorbed by Slice A) and D (purchase cost
   and margin), each of which gets its own spec.

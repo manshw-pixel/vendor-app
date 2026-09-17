@@ -84,6 +84,26 @@ test("replace_bill_lines rounds the way billing.ts does", async () => {
   assertEqual(Number(rows[1].line_total), 99.99, "exact value drifted");
 });
 
+test("replace_bill_lines stores the exact figure where the client's float lands a paisa low",
+  async () => {
+  // A value where the two genuinely DISAGREE, which neither case above can show.
+  // 0.50 x 2.01: the float product is 1.00499999999999989, so billing.ts's
+  // Math.round(p * q * 100) / 100 gives 1.00, while Postgres round(0.50 * 2.01, 2) on
+  // exact numeric gives 1.01. That is one paisa between the runningTotal() the recorder
+  // reads on screen and the amount issue_token sums onto the printed receipt.
+  //
+  // The DATABASE value is asserted, because the spec is explicit that where the two
+  // disagree the database wins -- it is the exact one. The client is NOT changed here:
+  // altering how billing.ts rounds would move displayed totals across the whole app and
+  // is outside this slice.
+  const w = await freshBill();
+  await sql(`select replace_bill_lines($1, $2::jsonb)`, [w.billId, JSON.stringify([
+    { item_id: w.itemA, qty_kg: 2.01, unit_price: 0.5 },
+  ])]);
+  const rows = await linesOf(w.billId);
+  assertEqual(Number(rows[0].line_total), 1.01, "the stored figure must be the exact one");
+});
+
 test("replace_bill_lines refuses a bill that is no longer recording", async () => {
   // A billed bill has had its token and total told to the customer, and the WhatsApp
   // message quoting that total is queued. Rewriting its lines would make both a lie.
@@ -109,6 +129,35 @@ test("replace_bill_lines refuses an empty basket", async () => {
   } catch (e) { raised = e; }
   assert(raised !== null, "expected an empty basket to be refused");
   assertEqual((await linesOf(w.billId)).length, 2, "the existing lines must survive a refusal");
+});
+
+test("a recorder replaces their own bill's lines through the real client path", async () => {
+  // Every other correctness test above goes through raw sql() with an explicit
+  // $2::jsonb STRING cast, and the two client tests below assert only that a call was
+  // DENIED -- which passes on any error at all, "function not found" included. So the
+  // wire shape the app actually uses was unverified: supabase-js sends p_lines as a
+  // JavaScript ARRAY for a jsonb parameter, and replace_bill_lines is the first
+  // jsonb-parameter function in this schema, so nothing else proves that coercion works.
+  // (client.mjs encodes a non-scalar argument as JSON for exactly this reason: node-pg
+  // would otherwise send a JS array as a Postgres ARRAY literal, which is not what
+  // PostgREST hands a jsonb parameter.)
+  const w = await getWorld();
+  const { rows: [b] } = await sql(
+    `insert into bills (vendor_id, customer_id, total, status)
+     values ($1,$2,0,'recording') returning id`, [w.a.vendorId, w.a.customerId]);
+
+  const { error } = await w.a.clients.recorder.rpc("replace_bill_lines", {
+    p_bill_id: b.id,
+    p_lines: [{ item_id: w.a.itemId, qty_kg: 2.5, unit_price: 40 }],
+  });
+  assertEqual(error, null, `the recorder's own bill was refused: ${error?.message}`);
+
+  const rows = await linesOf(b.id);
+  assertEqual(rows.length, 1, "exactly the sent line should be stored");
+  assertEqual(rows[0].item_id, w.a.itemId, "wrong item stored");
+  assertEqual(Number(rows[0].qty_kg), 2.5, "qty_kg did not survive the jsonb round trip");
+  assertEqual(Number(rows[0].unit_price), 40, "unit_price did not survive the jsonb round trip");
+  assertEqual(Number(rows[0].line_total), 100, "line_total was not computed server-side");
 });
 
 test("a recorder cannot replace another vendor's bill lines", async () => {

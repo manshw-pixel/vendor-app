@@ -15,7 +15,7 @@ import {
   replaceBillLines,
   type Item,
 } from "../data";
-import { describeError } from "../errors";
+import { describeError, isBillNoLongerRecording } from "../errors";
 import { LANGS, type Lang } from "../i18n/locales";
 import { CustomerStep } from "./bill/CustomerStep";
 import { ItemGrid } from "./bill/ItemGrid";
@@ -135,9 +135,18 @@ export default function Bill() {
     // second copy -- which is what the old check-then-insert could only narrow, never
     // close.
     const { error: linesError } = await replaceBillLines(billId, lines);
-    if (linesError) {
+    // One error from that call is NOT a failure: 0015's status guard, "bill ... is billed,
+    // expected recording". It means issue_token already committed and only its reply was
+    // lost -- the very case the read-back below exists for. Stopping here would strand the
+    // recorder: every retry would fail at this line and never reach the token read-back,
+    // so they could never learn the token the customer was already sent. Fall through
+    // instead. Every other error -- a vanished bill, the tenant guard, a role refusal, an
+    // RLS block, a dropped connection -- still fails here; see isBillNoLongerRecording.
+    if (linesError && !isBillNoLongerRecording(linesError)) {
       return fail(describeError(linesError));
     }
+    // True in both surviving cases: either the write landed, or the bill is past
+    // `recording` and its lines are final. Editing the basket is pointless either way.
     setWritten({ billId, linesWritten: true });
 
     const { data: issued, error: tokenError } = await issueToken(billId);

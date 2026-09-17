@@ -335,6 +335,76 @@ describe("the bill screen", () => {
     ]);
   });
 
+  it("retries past 0015's status guard, so a lost token reply cannot strand the recorder", async () => {
+    // The stranding case. Attempt 1: the lines land, issue_token COMMITS but its reply is
+    // lost, and the read-back after it fails too -- so the recorder is told the token is
+    // unknown and presses Done again. On that retry the bill is already `billed`, so the
+    // unconditional replaceBillLines hits 0015's status guard. Treating that as a failure
+    // meant the retry never reached issueToken or the read-back, and every later press
+    // failed identically: the recorder could NEVER learn the token the customer already
+    // has. No existing test caught it because replaceBillLines is mocked as
+    // always-succeeding here, so the web suite assumed a guard the DB suite proves fires.
+    (data.issueToken as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "XX000", message: "reply lost" },
+    });
+    (data.billToken as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "XX000", message: "read failed" },
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText(/token could not be confirmed|टोकन की पुष्टि|टोकनची खात्री/i))
+      .toBeTruthy();
+
+    // The retry now meets the guard: the bill has moved to `billed` server-side.
+    (data.replaceBillLines as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "P0001", message: "bill b1 is billed, expected recording" },
+    });
+    (data.billToken as unknown as Mock).mockResolvedValueOnce({
+      data: { token_no: 7, status: "billed" }, error: null,
+    });
+    (data.issueToken as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "XX000", message: "reply lost again" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    // The recorder finally learns the token: the guard did not stop the retry.
+    expect(await screen.findByText("7")).toBeTruthy();
+    expect(data.issueToken).toHaveBeenCalledTimes(2);
+    expect(data.billToken).toHaveBeenCalledTimes(2);
+    expect(data.createBill).toHaveBeenCalledTimes(1);
+  });
+
+  it("still fails on a line-write error that is NOT the status guard", async () => {
+    // The fall-through above must stay narrow. A tenant-guard refusal, a vanished bill or
+    // an RLS block are all raised as P0001/42501 from the same call, and must still stop
+    // the flow rather than being carried past into issueToken.
+    (data.replaceBillLines as unknown as Mock).mockResolvedValueOnce({
+      data: null,
+      error: { code: "P0001", message: "bill b1 does not belong to your vendor" },
+    });
+
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
+    expect(data.issueToken).not.toHaveBeenCalled();
+  });
+
   it("closes the basket for good once the token is issued -- the policies freeze it", async () => {
     // Requirement 2, the one-way door. Once issue_token moves the bill to 'billed',
     // bills_recorder_update and bill_items_write both stop applying. A basket left
