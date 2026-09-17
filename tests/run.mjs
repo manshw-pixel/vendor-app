@@ -18,6 +18,7 @@ import "./redemption.test.mjs";
 import "./claim_outbound.test.mjs";
 import "./kick.test.mjs";
 import "./stock_requests.test.mjs";
+import "./replace_bill_lines.test.mjs";
 
 try {
   await bootstrap();
