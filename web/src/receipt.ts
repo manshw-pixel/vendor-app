@@ -60,7 +60,8 @@ const RECEIPT_COLS =
 const num = (v: unknown): number => Number(v ?? 0);
 
 export async function loadReceipt(billId: string): Promise<
-  { data: Receipt; error: null } | { data: null; error: unknown }
+  | { data: Receipt; error: null }
+  | { data: null; error: { message?: string; code?: string } | null }
 > {
   const { data: bill, error } = await supabase
     .from("bills")

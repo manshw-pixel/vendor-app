@@ -18,7 +18,9 @@ const clearVendorData = vi.fn(async (): Promise<{
   data: unknown; error: { code?: string; message?: string } | null;
 }> => ({ data: [{ bills: 4, customers: 2, points_rows: 3 }], error: null }));
 
-const loadShopDetails = vi.fn(async (..._a: unknown[]) => ({
+const loadShopDetails = vi.fn(async (..._a: unknown[]): Promise<{
+  data: { address: string | null; phone: string | null } | null; error: null;
+}> => ({
   data: { address: null, phone: null }, error: null,
 }));
 const updateShopDetails = vi.fn(async (..._a: unknown[]): Promise<{
