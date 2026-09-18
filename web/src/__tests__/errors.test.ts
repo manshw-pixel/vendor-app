@@ -95,4 +95,9 @@ describe("describeError", () => {
     const r = describeError({ code: "P0001", message: "wastage exceeds stock" });
     expect(r?.key).toBe("stock.overStock");
   });
+
+  it("maps the void window and not-done refusals", () => {
+    expect(describeError({ code: "P0001", message: "void window closed" })?.key).toBe("void.windowClosed");
+    expect(describeError({ code: "P0001", message: "bill is not done" })?.key).toBe("void.notDone");
+  });
 });

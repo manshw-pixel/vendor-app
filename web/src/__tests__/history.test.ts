@@ -21,8 +21,10 @@ vi.mock("../supabase", () => ({
   supabase: { from: (...a: unknown[]) => from(...a), rpc: (...a: unknown[]) => rpc(...a) },
 }));
 
-const { listCompleted, billLines, collectedBetween, topItemsBetween, pairsBetween, PAGE_SIZE } =
+const { listCompleted, billLines, collectedBetween, topItemsBetween, pairsBetween, PAGE_SIZE,
+  voidBill, voidedBetween, listVoided } =
   await import("../history");
+const { presetRange } = await import("../dateRange");
 
 const RANGE = { from: "2026-09-09", to: "2026-09-09" };
 
@@ -103,5 +105,32 @@ describe("the analytics RPCs", () => {
     expect(rpc).toHaveBeenCalledWith("bought_together_between", {
       p_from: expect.any(String), p_to: expect.any(String),
     });
+  });
+});
+
+describe("voidBill", () => {
+  it("calls void_bill with the exact parameter names", async () => {
+    await voidBill("b1", "wrong customer");
+    expect(rpc).toHaveBeenCalledWith("void_bill", { p_bill_id: "b1", p_reason: "wrong customer" });
+  });
+});
+
+describe("voidedBetween", () => {
+  it("calls voided_between with p_from and p_to", async () => {
+    await voidedBetween(presetRange("today", new Date()));
+    const [fn, args] = rpc.mock.calls[0] as [string, Record<string, string>];
+    expect(fn).toBe("voided_between");
+    expect(Object.keys(args).sort()).toEqual(["p_from", "p_to"]);
+  });
+});
+
+describe("listVoided", () => {
+  it("selects voided bills with who voided them", async () => {
+    await listVoided(presetRange("today", new Date()));
+    expect(from).toHaveBeenCalledWith("bills");
+    expect(chain.eq).toHaveBeenCalledWith("status", "voided");
+    const selectArg = chain.select.mock.calls[0]?.[0] as string;
+    expect(selectArg).toContain("void_reason");
+    expect(selectArg).toContain("app_users!bills_voided_by_fkey(name)");
   });
 });

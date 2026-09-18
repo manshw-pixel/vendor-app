@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
-  listCompleted, billLines, PAGE_SIZE,
-  type CompletedBill, type BillLine, type Cursor,
+  listCompleted, billLines, voidBill, listVoided, PAGE_SIZE,
+  type CompletedBill, type BillLine, type Cursor, type VoidedBill,
 } from "../history";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
@@ -21,11 +21,24 @@ export default function Completed() {
   const [lines, setLines] = useState<BillLine[]>([]);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [voiding, setVoiding] = useState(false);
+  const [voidedOpen, setVoidedOpen] = useState(false);
+  const [voidedRows, setVoidedRows] = useState<VoidedBill[]>([]);
+  const [doneToken, setDoneToken] = useState<number | null>(null);
 
   /** Which range the newest request was for. Tapping "This month" then "Today" fires two
    *  overlapping fetches; without this guard the slower month response lands last and
    *  appends the previous period's bills to the new one. Same idiom as Customers.tsx. */
   const wanted = useRef<string>("");
+  /** Same idiom as `wanted` above, but for the voided list. A range STRING is not enough
+   *  here: reloading the voided list twice for the SAME range (e.g. a void followed
+   *  immediately by the toggle staying open) produces two in-flight requests keyed
+   *  identically, so an older one landing after the newer one would still overwrite it.
+   *  A monotonically increasing counter distinguishes "this call" from "any earlier
+   *  call", same range or not. */
+  const voidedRequest = useRef(0);
 
   const lang = i18n.language as Lang;
 
@@ -50,17 +63,40 @@ export default function Completed() {
     setRows((prev) => (after ? [...prev, ...visible] : visible));
   }, []);
 
+  const loadVoided = useCallback(async (r: Range) => {
+    const requestId = ++voidedRequest.current;
+    const { data, error } = await listVoided(r);
+    if (voidedRequest.current !== requestId) return;   // a later call has since been made
+    const described = describeError(error);
+    setProblem(described);
+    if (described) setDoneToken(null);
+    setVoidedRows((data ?? []) as unknown as VoidedBill[]);
+  }, []);
+
   useEffect(() => {
     setOpen(null);
+    setDoneToken(null);
+    setVoidedRows([]);   // the previous period's voided bills must never flash here
     void load(range, null);
   }, [range, load]);
+
+  // The voided list only loads while its toggle is open; a range change while it's closed
+  // is picked up naturally next time it's opened.
+  useEffect(() => {
+    if (voidedOpen) void loadVoided(range);
+  }, [range, voidedOpen, loadVoided]);
 
   async function openBill(id: string) {
     if (open === id) { setOpen(null); return; }
     setOpen(id);
     setLines([]);
+    setVoidingId(null);
+    setReason("");
+    setDoneToken(null);
     const { data, error } = await billLines(id);
-    setProblem(describeError(error));
+    const described = describeError(error);
+    setProblem(described);
+    if (described) setDoneToken(null);
     setLines((data ?? []) as unknown as BillLine[]);
   }
 
@@ -70,6 +106,28 @@ export default function Completed() {
     void load(range, { completedAt: last.completed_at, id: last.id });
   }
 
+  function startVoid(id: string) {
+    setVoidingId(id);
+    setReason("");
+  }
+
+  async function confirmVoid(id: string, tokenNo: number) {
+    setVoiding(true);
+    const { error } = await voidBill(id, reason.trim());
+    setVoiding(false);
+    if (error) {
+      setProblem(describeError(error));
+      return;
+    }
+    setProblem(null);
+    setRows((prev) => prev.filter((b) => b.id !== id));
+    setOpen(null);
+    setVoidingId(null);
+    setReason("");
+    setDoneToken(tokenNo);
+    if (voidedOpen) void loadVoided(range);
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="font-semibold text-slate-800">{t("completed.title")}</h2>
@@ -77,8 +135,21 @@ export default function Completed() {
       <DateFilter value={range} onChange={setRange} />
 
       {problem && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+        <p
+          data-testid="completed-problem"
+          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
+        >
           {t(problem.key)}
+        </p>
+      )}
+
+      {doneToken !== null && (
+        <p
+          data-testid="void-done"
+          role="status"
+          className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3"
+        >
+          {t("void.done", { n: doneToken })}
         </p>
       )}
 
@@ -137,13 +208,60 @@ export default function Completed() {
                       })}
                     </p>
                   )}
-                  <Link
-                    data-testid={`completed-receipt-${b.id}`}
-                    to={`/receipt/${b.id}`}
-                    className="inline-block mt-2 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
-                  >
-                    {t("completed.receipt")}
-                  </Link>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Link
+                      data-testid={`completed-receipt-${b.id}`}
+                      to={`/receipt/${b.id}`}
+                      className="inline-block border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                    >
+                      {t("completed.receipt")}
+                    </Link>
+                    {new Date(b.completed_at).toDateString() === new Date().toDateString() && (
+                      <button
+                        data-testid={`completed-void-${b.id}`}
+                        onClick={() => startVoid(b.id)}
+                        className="inline-block border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                      >
+                        {t("void.action")}
+                      </button>
+                    )}
+                  </div>
+
+                  {voidingId === b.id && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+                      <label
+                        htmlFor={`void-reason-${b.id}`}
+                        className="block text-sm text-slate-700"
+                      >
+                        {t("void.why")}
+                      </label>
+                      <input
+                        id={`void-reason-${b.id}`}
+                        data-testid="void-reason"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder={t("void.reasonPlaceholder")}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          data-testid="void-confirm"
+                          disabled={reason.trim() === "" || voiding}
+                          onClick={() => void confirmVoid(b.id, b.token_no)}
+                          className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+                        >
+                          {t("void.confirm")}
+                        </button>
+                        <button
+                          data-testid="void-cancel"
+                          onClick={() => { setVoidingId(null); setReason(""); }}
+                          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                        >
+                          {t("void.cancel")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </li>
@@ -161,6 +279,50 @@ export default function Completed() {
           {busy ? t("completed.loading") : t("completed.loadMore")}
         </button>
       )}
+
+      <div className="pt-2 border-t border-slate-100">
+        <button
+          data-testid="completed-voided-toggle"
+          onClick={() => setVoidedOpen((v) => !v)}
+          className="text-sm text-slate-600 underline min-h-[44px]"
+        >
+          {voidedOpen ? t("completed.hideVoided") : t("completed.showVoided")}
+        </button>
+
+        {voidedOpen && (
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-slate-500">{t("completed.voidedTitle")}</p>
+            {voidedRows.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("completed.noVoided")}</p>
+            ) : (
+              <ul className="space-y-2">
+                {voidedRows.map((v) => (
+                  <li
+                    key={v.id}
+                    data-testid={`voided-row-${v.id}`}
+                    className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-500"
+                  >
+                    <p className="flex justify-between">
+                      <span>
+                        {v.customers?.name ?? t("completed.noCustomer")}
+                        {" · "}
+                        {t("completed.token", { n: v.token_no })}
+                      </span>
+                      <span className="line-through">{rupees(v.total)}</span>
+                    </p>
+                    <p className="text-xs">{t("void.reason", { reason: v.void_reason })}</p>
+                    <p className="text-xs">
+                      {t("void.by", { name: v.app_users?.name ?? "" })}
+                      {" · "}
+                      {new Date(v.voided_at).toLocaleString()}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

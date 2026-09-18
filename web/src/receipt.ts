@@ -37,6 +37,9 @@ export type Receipt = {
   points_earned: number;
   /** Live balance and days to expiry; null when there is no customer. */
   balance: { balance: number; days_left: number | null } | null;
+  /** Set when this bill was voided after completion; the slip prints VOIDED and the
+   *  reason but every other figure below is left exactly as it was collected. */
+  voided: { at: string; reason: string } | null;
 };
 
 /**
@@ -51,7 +54,7 @@ export type Receipt = {
  * bills_biller_id_fkey.
  */
 const RECEIPT_COLS =
-  "token_no, completed_at, total, redeemed_points, customer_id, " +
+  "token_no, completed_at, total, redeemed_points, customer_id, status, voided_at, void_reason, " +
   "customers(name, flat_no), app_users!bills_biller_id_fkey(name), " +
   "vendors(name, address, phone)";
 
@@ -67,11 +70,14 @@ export async function loadReceipt(billId: string): Promise<
     .from("bills")
     .select(RECEIPT_COLS)
     .eq("id", billId)
-    // Only a completed bill has a completed_at, a total actually collected, and points
-    // actually earned -- a pending bill's slip would print "Paid" for money never
-    // collected and `new Date(null)` as its date. Not reachable through the UI (ids are
-    // uuids), but the not-found path below already handles the resulting empty read.
-    .eq("status", "done")
+    // A completed OR voided bill has a completed_at, a total actually collected, and
+    // points actually earned -- a pending bill's slip would print "Paid" for money never
+    // collected and `new Date(null)` as its date. Voiding never touches these figures
+    // (0017), so a voided bill's slip must still resolve here rather than fall into the
+    // not-found path -- a reprint of a voided bill should read VOIDED, not "not found".
+    // Not reachable through the UI (ids are uuids), but the query itself must not trust
+    // that.
+    .in("status", ["done", "voided"])
     .maybeSingle();
 
   if (error || !bill) return { data: null, error: error ?? null };
@@ -82,6 +88,9 @@ export async function loadReceipt(billId: string): Promise<
     total: string | number;
     redeemed_points: number;
     customer_id: string | null;
+    status: string;
+    voided_at: string | null;
+    void_reason: string | null;
     customers: { name: string; flat_no: string } | null;
     app_users: { name: string } | null;
     vendors: { name: string; address: string | null; phone: string | null } | null;
@@ -154,6 +163,10 @@ export async function loadReceipt(billId: string): Promise<
       0,
     ),
     balance,
+    voided:
+      b.status === "voided" && b.voided_at && b.void_reason
+        ? { at: b.voided_at, reason: b.void_reason }
+        : null,
   };
 
   return { data, error: null };

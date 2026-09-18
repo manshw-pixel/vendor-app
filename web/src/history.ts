@@ -169,3 +169,44 @@ export async function requestsBetween(range: Range) {
   const { fromTs, toTs } = toBounds(range);
   return supabase.rpc("stock_requests_between", { p_from: fromTs, p_to: toTs });
 }
+
+export type VoidedBill = {
+  id: string;
+  token_no: number;
+  total: number;
+  completed_at: string;
+  voided_at: string;
+  void_reason: string;
+  customers: { name: string; flat_no: string } | null;
+  app_users: { name: string } | null;
+};
+
+export type Voided = { void_count: string | number; voided_total: string | number };
+
+const VOIDED_COLS =
+  "id, token_no, total, completed_at, voided_at, void_reason, " +
+  "customers(name, flat_no), app_users!bills_voided_by_fkey(name)";
+
+/** Voided bills in the period, newest void first. Not paged: the same-day rule keeps
+ *  this list to what one day can produce. */
+export async function listVoided(range: Range) {
+  const { fromTs, toTs } = toBounds(range);
+  return supabase
+    .from("bills")
+    .select(VOIDED_COLS)
+    .eq("status", "voided")
+    .gte("completed_at", fromTs)
+    .lt("completed_at", toTs)
+    .order("voided_at", { ascending: false })
+    .limit(200);
+}
+
+/** Parameter names must match 0017_void_bill.sql exactly. */
+export async function voidBill(billId: string, reason: string) {
+  return supabase.rpc("void_bill", { p_bill_id: billId, p_reason: reason });
+}
+
+export async function voidedBetween(range: Range) {
+  const { fromTs, toTs } = toBounds(range);
+  return supabase.rpc("voided_between", { p_from: fromTs, p_to: toTs });
+}

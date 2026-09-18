@@ -121,7 +121,23 @@
     "qtyLine": "{{qty}} kg",
     "noCustomer": "No customer",
     "redeemed": "{{gross}} total — {{points}} points redeemed — {{net}} collected",
-    "receipt": "Receipt"
+    "receipt": "Receipt",
+    "showVoided": "Show voided bills",
+    "hideVoided": "Hide voided bills",
+    "voidedTitle": "Voided in this period",
+    "noVoided": "No voided bills in this period."
+  },
+  "void": {
+    "action": "Void bill",
+    "why": "Why is this bill being voided?",
+    "reasonPlaceholder": "Reason (required)",
+    "confirm": "Void this bill",
+    "cancel": "Cancel",
+    "done": "Bill {{n}} voided. Stock and points have been reversed.",
+    "windowClosed": "This bill can only be voided on the day it was completed.",
+    "notDone": "Only a completed bill can be voided.",
+    "reason": "Reason: {{reason}}",
+    "by": "Voided by {{name}}"
   },
   "dash": {
     "loading": "Loading…",
@@ -141,7 +157,8 @@
     "pairCount": "{{n}} bills",
     "requests": "Asked for, not stocked",
     "requestsSub": "What customers wanted that you do not carry",
-    "askedCount": "{{n}} asked"
+    "askedCount": "{{n}} asked",
+    "voided": "{{n}} voided · {{amount}}"
   },
   "req": {
     "title": "Customer requests",
@@ -191,6 +208,8 @@
     "thanks": "Thank you!",
     "print": "Print",
     "loading": "Loading…",
-    "notFound": "That bill could not be found."
+    "notFound": "That bill could not be found.",
+    "voided": "VOIDED",
+    "voidedReason": "Voided: {{reason}}"
   }
 }

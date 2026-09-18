@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import type { TopItem, Pair, RequestCount } from "../history";
+import type { TopItem, Pair, RequestCount, Voided } from "../history";
 import i18n from "../i18n";
 
 // collected_between returns ONE aggregate row, and `total` arrives as a string because
@@ -32,6 +32,10 @@ const pairsBetween = vi.fn(async (..._a: unknown[]): Promise<{ data: Pair[] | nu
 const requestsBetween = vi.fn(async (..._a: unknown[]): Promise<{
   data: RequestCount[] | null; error: null;
 }> => ({ data: [], error: null }));
+const voidedBetween = vi.fn(async (..._a: unknown[]): Promise<{
+  data: Voided[] | null;
+  error: { code?: string; message?: string } | null;
+}> => ({ data: [{ void_count: "0", voided_total: "0" }], error: null }));
 
 vi.mock("../history", async () => {
   const actual = await vi.importActual<typeof import("../history")>("../history");
@@ -41,6 +45,7 @@ vi.mock("../history", async () => {
     topItemsBetween: (...a: unknown[]) => topItemsBetween(...a),
     pairsBetween: (...a: unknown[]) => pairsBetween(...a),
     requestsBetween: (...a: unknown[]) => requestsBetween(...a),
+    voidedBetween: (...a: unknown[]) => voidedBetween(...a),
   };
 });
 
@@ -223,5 +228,33 @@ describe("the dashboard", () => {
     const card = await screen.findByTestId("dash-req-dragon fruit");
     expect(card.textContent).toContain("dragon fruit");
     expect(card.textContent).toContain("11");
+  });
+
+  it("hides the voided line when nothing was voided", async () => {
+    render(<Dashboards />);
+    await screen.findByTestId("dash-bill-count");
+    expect(screen.queryByTestId("dash-voided")).toBeNull();
+  });
+
+  it("shows how many bills were voided and for how much", async () => {
+    voidedBetween.mockResolvedValueOnce({
+      data: [{ void_count: "2", voided_total: "450.00" }], error: null });
+    render(<Dashboards />);
+    const line = await screen.findByTestId("dash-voided");
+    expect(line.textContent).toContain("2");
+    expect(line.textContent).toContain("₹450.00");
+  });
+
+  it("surfaces an error from voidedBetween like the other cards", async () => {
+    voidedBetween.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "PGRST202",
+        message: "Could not find the function public.voided_between(p_from, p_to) in the schema cache",
+      },
+    });
+    render(<Dashboards />);
+    expect(await screen.findByTestId("dash-problem-detail")).toBeTruthy();
+    expect(screen.getByTestId("dash-problem-detail").textContent).toContain("voided_between");
   });
 });

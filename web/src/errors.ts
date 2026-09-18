@@ -43,6 +43,9 @@ export function describeError(
   if (/wastage exceeds stock/i.test(detail)) {
     return { key: "stock.overStock", detail };
   }
+  // void_bill's guards (0017), plpgsql P0001 like the others: matched on message.
+  if (/void window closed/i.test(detail)) return { key: "void.windowClosed", detail };
+  if (/bill is not done/i.test(detail)) return { key: "void.notDone", detail };
   if (error.code === "42501" || /row-level security/i.test(detail)) {
     return { key: "error.notAllowed", detail };
   }
