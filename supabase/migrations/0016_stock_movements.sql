@@ -310,3 +310,108 @@ end $$;
 
 revoke all on function clear_vendor_data() from public, anon;
 grant execute on function clear_vendor_data() to authenticated;
+
+-- Analytics: cost and profit beside revenue. DROP then CREATE because the return types
+-- change and CREATE OR REPLACE cannot do that. Argument lists are unchanged, so the
+-- PostgREST overload ambiguity 0010 warns about does not arise.
+--
+-- Cost sums only lines with a known unit_cost. uncosted_lines says how many were left
+-- out, so the screen can say the profit figure is incomplete rather than silently high.
+
+drop function if exists collected_between(timestamptz, timestamptz);
+
+create function collected_between(p_from timestamptz, p_to timestamptz)
+  returns table (total numeric, bill_count bigint, cost numeric, profit numeric, uncosted_lines bigint)
+  language sql stable as $$
+  with done as (
+    select b.id, b.total
+      from bills b
+     where b.status = 'done'
+       and b.completed_at >= p_from
+       and b.completed_at <  p_to
+  ), lines as (
+    select coalesce(sum(bi.qty_kg * bi.unit_cost), 0)            as cost,
+           count(*) filter (where bi.unit_cost is null)          as uncosted
+      from bill_items bi
+      join done d on d.id = bi.bill_id
+  )
+  select coalesce((select sum(total) from done), 0)                       as total,
+         (select count(*) from done)                                      as bill_count,
+         round(l.cost, 2)                                                 as cost,
+         round(coalesce((select sum(total) from done), 0) - l.cost, 2)    as profit,
+         l.uncosted                                                       as uncosted_lines
+    from lines l;
+$$;
+
+revoke all on function collected_between(timestamptz, timestamptz) from public, anon;
+grant execute on function collected_between(timestamptz, timestamptz) to authenticated, service_role;
+
+drop function if exists top_items_between(timestamptz, timestamptz);
+
+create function top_items_between(p_from timestamptz, p_to timestamptz)
+  returns table (
+    item_id        uuid,
+    name_en        text,
+    name_hi        text,
+    name_mr        text,
+    total_qty_kg   numeric,
+    total_revenue  numeric,
+    total_cost     numeric,
+    margin         numeric,
+    uncosted_lines bigint
+  )
+  language sql stable as $$
+  select bi.item_id, i.name_en, i.name_hi, i.name_mr,
+         sum(bi.qty_kg)                                   as total_qty_kg,
+         sum(bi.line_total)                               as total_revenue,
+         -- sum() over all-null input is null, which is what "cost unknown" should be.
+         round(sum(bi.qty_kg * bi.unit_cost), 2)          as total_cost,
+         -- Margin over the COSTED lines only. Subtracting a partial cost from the full
+         -- revenue would overstate margin for a half-costed item.
+         round(sum(bi.line_total) filter (where bi.unit_cost is not null)
+               - sum(bi.qty_kg * bi.unit_cost), 2)        as margin,
+         count(*) filter (where bi.unit_cost is null)     as uncosted_lines
+    from bill_items bi
+    join bills b on b.id = bi.bill_id
+                and b.status = 'done'
+                and b.completed_at >= p_from
+                and b.completed_at <  p_to
+    join items i on i.id = bi.item_id
+   group by bi.item_id, i.name_en, i.name_hi, i.name_mr
+   order by sum(bi.qty_kg) desc, bi.item_id
+   limit 10;
+$$;
+
+revoke all on function top_items_between(timestamptz, timestamptz) from public, anon;
+grant execute on function top_items_between(timestamptz, timestamptz) to authenticated, service_role;
+
+-- The /stock screen's list. Plain language sql with no security definer, so RLS on
+-- stock_movements, items and app_users scopes it to the caller's shop.
+create function stock_movements_between(p_from timestamptz, p_to timestamptz)
+  returns table (
+    id              uuid,
+    item_id         uuid,
+    name_en         text,
+    name_hi         text,
+    name_mr         text,
+    kind            text,
+    qty_kg          numeric,
+    unit_cost       numeric,
+    note            text,
+    created_by_name text,
+    created_at      timestamptz
+  )
+  language sql stable as $$
+  select m.id, m.item_id, i.name_en, i.name_hi, i.name_mr,
+         m.kind, m.qty_kg, m.unit_cost, m.note, u.name, m.created_at
+    from stock_movements m
+    join items i on i.id = m.item_id
+    left join app_users u on u.id = m.created_by
+   where m.created_at >= p_from
+     and m.created_at <  p_to
+   order by m.created_at desc, m.id desc
+   limit 500;
+$$;
+
+revoke all on function stock_movements_between(timestamptz, timestamptz) from public, anon;
+grant execute on function stock_movements_between(timestamptz, timestamptz) to authenticated, service_role;

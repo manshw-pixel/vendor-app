@@ -21,6 +21,7 @@ import "./stock_requests.test.mjs";
 import "./replace_bill_lines.test.mjs";
 import "./stock_movements.test.mjs";
 import "./cost_snapshot.test.mjs";
+import "./analytics_cost.test.mjs";
 
 try {
   await bootstrap();
