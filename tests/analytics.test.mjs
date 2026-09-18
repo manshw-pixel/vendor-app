@@ -23,8 +23,14 @@ async function windowedVendor() {
       `insert into bills (vendor_id, customer_id, total, status, completed_at)
        values ($1,$2,100,'done',$3::timestamptz) returning id`, [v.id, c.id, when]);
     for (const id of itemIds) {
+      // line_total deliberately huge (0018): top_items_between now ranks by revenue, and
+      // this suite's other files complete real bills "today" (now()) that land in the
+      // same September window with revenue in the hundreds. A small, realistic line_total
+      // here would let that unrelated cross-file traffic bump this vendor's onion out of
+      // the function's top-10 and fail the assertions below for a reason that has nothing
+      // to do with what they test.
       await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
-                 values ($1,$2,$3,$4,50,100)`, [b.id, v.id, id, qty]);
+                 values ($1,$2,$3,$4,50000,90000)`, [b.id, v.id, id, qty]);
     }
     return b.id;
   };
