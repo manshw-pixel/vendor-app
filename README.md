@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 186 cases, 0 failures
+## ✅ Verified: 211 cases, 0 failures
 
-`npm test` runs **186 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all sixteen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **211 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all seventeen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -65,6 +65,14 @@ Covered:
   `stock_movements` directly. `complete_bill()` stamps each line's `unit_cost` once and a
   later purchase does not move it. `collected_between` and `top_items_between` report
   cost, profit and margin over costed lines only, with unknown cost kept null.
+
+- **Voiding a completed bill.** `void_bill()` admits admin and biller in their own shop,
+  refuses recorder and cross-tenant callers, only on the day the bill was completed
+  (Asia/Kolkata), with a reason. It restores stock by the billed quantities, mirrors every
+  ledger row of the bill with the opposite sign and the same expiry (an award becomes a
+  claw-back that may drive the balance negative; a redemption becomes a refund), queues one
+  `bill_voided` message, and is idempotent. Voided bills leave every analytics function
+  and view without those queries changing, and the receipt still prints, marked VOIDED.
 
 ### What the local suite does not cover
 
