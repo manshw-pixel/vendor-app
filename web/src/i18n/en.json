@@ -157,7 +157,8 @@
     "pairCount": "{{n}} bills",
     "requests": "Asked for, not stocked",
     "requestsSub": "What customers wanted that you do not carry",
-    "askedCount": "{{n}} asked"
+    "askedCount": "{{n}} asked",
+    "voided": "{{n}} voided · {{amount}}"
   },
   "req": {
     "title": "Customer requests",

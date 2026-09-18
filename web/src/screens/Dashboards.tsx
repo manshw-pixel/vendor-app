@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  collectedBetween, topItemsBetween, pairsBetween, requestsBetween,
-  type TopItem, type Pair, type Collected, type RequestCount,
+  collectedBetween, topItemsBetween, pairsBetween, requestsBetween, voidedBetween,
+  type TopItem, type Pair, type Collected, type RequestCount, type Voided,
 } from "../history";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
@@ -34,6 +34,8 @@ export default function Dashboards() {
   const [top, setTop] = useState<TopItem[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [requests, setRequests] = useState<RequestCount[]>([]);
+  const [voidCount, setVoidCount] = useState(0);
+  const [voidedTotal, setVoidedTotal] = useState(0);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(true);
 
@@ -48,15 +50,16 @@ export default function Dashboards() {
     const key = `${r.from}..${r.to}`;
     wanted.current = key;
     setBusy(true);
-    const [money, items, together, asked] = await Promise.all([
-      collectedBetween(r), topItemsBetween(r), pairsBetween(r), requestsBetween(r),
+    const [money, items, together, asked, voided] = await Promise.all([
+      collectedBetween(r), topItemsBetween(r), pairsBetween(r), requestsBetween(r), voidedBetween(r),
     ]);
     if (wanted.current !== key) return;   // superseded; a later range owns the screen now
     setBusy(false);
-    // First error wins: four cards failing for one reason should say it once.
+    // First error wins: five cards failing for one reason should say it once.
     setProblem(
       describeError(money.error) ?? describeError(items.error)
-        ?? describeError(together.error) ?? describeError(asked.error),
+        ?? describeError(together.error) ?? describeError(asked.error)
+        ?? describeError(voided.error),
     );
     // collected_between returns exactly one row. `total` is a Postgres numeric, which
     // PostgREST serialises as a STRING -- Number() it or rupees() renders a concatenation.
@@ -69,6 +72,9 @@ export default function Dashboards() {
     setTop((items.data ?? []) as TopItem[]);
     setPairs((together.data ?? []) as Pair[]);
     setRequests((asked.data ?? []) as RequestCount[]);
+    const voidedRow = (voided.data as Voided[] | null)?.[0];
+    setVoidCount(Number(voidedRow?.void_count ?? 0));
+    setVoidedTotal(Number(voidedRow?.voided_total ?? 0));
   }, []);
 
   useEffect(() => { void load(range); }, [range, load]);
@@ -117,6 +123,11 @@ export default function Dashboards() {
           <p data-testid="dash-bill-count" className="text-2xl font-semibold text-slate-800">
             {billCount}
           </p>
+          {voidCount > 0 && (
+            <p data-testid="dash-voided" className="mt-2 text-xs text-amber-700">
+              {t("dash.voided", { n: voidCount, amount: rupees(voidedTotal) })}
+            </p>
+          )}
         </Card>
       </div>
 
