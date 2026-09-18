@@ -239,7 +239,7 @@ export default function Items() {
                     <span className={
                       level === "out" ? "text-red-700" : level === "low" ? "text-amber-700" : ""
                     }>
-                      {level === "out" ? t("items.out") : qtyText(it.stock_kg, it.unit, (k, o) => t(k, o as Record<string, unknown>))}
+                      {level === "out" ? t("items.out") : qtyText(it.stock_kg, it.unit, t)}
                       {level === "low" && ` — ${t("items.low")}`}
                     </span>
                   </p>

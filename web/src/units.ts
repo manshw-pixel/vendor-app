@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { validateWeight } from "./billing";
 
 /** How an item is sold. Mirrors the CHECK on items.unit. Every unit but kg is counted in
@@ -32,10 +33,10 @@ export function validateQty(
   return { ok: true, value };
 }
 
-export function qtyText(qty: number | string, unit: Unit, t: (k: string, o?: object) => string): string {
+export function qtyText(qty: number | string, unit: Unit, t: TFunction): string {
   return t(`unit.qty.${unit}`, { n: Number(qty) });
 }
 
-export function perUnit(unit: Unit, t: (k: string) => string): string {
+export function perUnit(unit: Unit, t: TFunction): string {
   return t(`unit.per.${unit}`);
 }

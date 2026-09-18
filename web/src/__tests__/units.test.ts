@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
+import type { TFunction } from "i18next";
 import { UNITS, isUnit, isWholeUnit, validateQty, qtyText, perUnit } from "../units";
 
-const t = (k: string, o?: object) => (o ? `${k}${JSON.stringify(o)}` : k);
+// Narrow cast, test-only: a fake matching just the (key, options) shape we call.
+const t = ((k: string, o?: object) => (o ? `${k}${JSON.stringify(o)}` : k)) as unknown as TFunction;
 
 describe("units", () => {
   it("lists the four units and recognises them", () => {
