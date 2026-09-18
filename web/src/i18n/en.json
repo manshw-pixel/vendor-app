@@ -16,12 +16,11 @@
     "nameEn": "Name (English)",
     "nameHi": "Name (Hindi)",
     "nameMr": "Name (Marathi)",
-    "price": "Price per kg",
-    "stock": "Stock (kg)",
+    "price": "Price {{per}}",
+    "stock": "Stock ({{unit}})",
     "save": "Save",
     "cancel": "Cancel",
     "empty": "No items yet. Add the first one.",
-    "inStock": "{{kg}} kg",
     "low": "Low stock",
     "out": "Out of stock",
     "inactive": "Hidden",
@@ -239,6 +238,12 @@
       "piece": "Pieces",
       "bunch": "Bunches",
       "dozen": "Dozens"
+    },
+    "plural": {
+      "kg": "kg",
+      "piece": "pieces",
+      "bunch": "bunches",
+      "dozen": "dozens"
     },
     "label": "Sold by",
     "lowAt": "Low-stock warning below",

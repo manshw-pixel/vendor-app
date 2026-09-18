@@ -59,7 +59,7 @@ describe("the items screen", () => {
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Carrot" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "गाजर" } });
     fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "50" } });
-    fireEvent.change(screen.getByLabelText(/stock|साठा|स्टॉक/i), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "5" } });
     fireEvent.click(screen.getByTestId("item-save"));
     await waitFor(() => expect(createItem).not.toHaveBeenCalled());
   });
@@ -71,7 +71,7 @@ describe("the items screen", () => {
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "गाजर" } });
     fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "गाजर" } });
     fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "50" } });
-    fireEvent.change(screen.getByLabelText(/stock|साठा|स्टॉक/i), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "5" } });
     fireEvent.click(screen.getByTestId("item-save"));
     await waitFor(() => expect(createItem).toHaveBeenCalledWith("v1", expect.objectContaining({
       name_en: "Carrot", price: 50, stock_kg: 5,
@@ -81,7 +81,7 @@ describe("the items screen", () => {
   it("edits an existing item by id, not by insert", async () => {
     render(<Items />);
     fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
-    fireEvent.change(screen.getByLabelText(/stock|साठा|स्टॉक/i), { target: { value: "20" } });
+    fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "20" } });
     fireEvent.click(screen.getByTestId("item-save"));
     await waitFor(() => expect(updateItem)
       .toHaveBeenCalledWith("i1", expect.objectContaining({ stock_kg: 20 })));
@@ -124,5 +124,78 @@ describe("the items screen", () => {
     render(<Items />);
     fireEvent.click((await screen.findAllByTestId(/^item-toggle-/))[0]!);
     expect(await screen.findByText(/does not allow|परवानगी नाही|अनुमति नहीं/i)).toBeTruthy();
+  });
+
+  it("shows a unit select defaulting to kg for a new item", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    const select = screen.getByTestId("item-unit") as HTMLSelectElement;
+    expect(select.value).toBe("kg");
+    expect(select.disabled).toBe(false);
+  });
+
+  it("relabels price and stock when the unit changes to piece", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "piece" } });
+    expect(screen.getByText("Price per piece")).toBeTruthy();
+    expect(screen.getByText("Stock (pieces)")).toBeTruthy();
+  });
+
+  it("refuses a fractional stock for a piece item", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Coconut" } });
+    fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "नारियल" } });
+    fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "नारळ" } });
+    fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "piece" } });
+    fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/pieces/i), { target: { value: "2.5" } });
+    fireEvent.click(screen.getByTestId("item-save"));
+    await waitFor(() => expect(screen.getByText(/whole number/i)).toBeTruthy());
+    expect(createItem).not.toHaveBeenCalled();
+  });
+
+  it("sends the chosen unit and low-stock threshold to createItem", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Coconut" } });
+    fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "नारियल" } });
+    fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "नारळ" } });
+    fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "piece" } });
+    fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/pieces/i), { target: { value: "3" } });
+    fireEvent.change(screen.getByTestId("item-low_stock_at"), { target: { value: "5" } });
+    fireEvent.click(screen.getByTestId("item-save"));
+    await waitFor(() => expect(createItem).toHaveBeenCalledWith("v1", expect.objectContaining({
+      unit: "piece", low_stock_at: 5,
+    })));
+  });
+
+  it("locks the unit select when the item has already been sold", async () => {
+    listAllItems.mockResolvedValueOnce({
+      data: [{ ...rows[0]!, sold: true }],
+      error: null,
+    });
+    render(<Items />);
+    fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
+    const select = screen.getByTestId("item-unit") as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(screen.getByTestId("item-unit-locked")).toBeTruthy();
+  });
+
+  it("shows a dozen row's quantity and low colour, and a fine kg row as not low", async () => {
+    listAllItems.mockResolvedValueOnce({
+      data: [
+        { ...rows[0]!, id: "i4", unit: "dozen", stock_kg: 4, low_stock_at: 6 },
+        { ...rows[0]!, id: "i5", unit: "kg", stock_kg: 12.5, low_stock_at: 10 },
+      ],
+      error: null,
+    });
+    render(<Items />);
+    const dozenText = await screen.findByText((_, el) => el?.textContent === "4 dozen — Low stock");
+    expect(dozenText.className).toContain("amber");
+    const kgRow = screen.getByTestId(/^item-cost-i5$/).closest("li")!;
+    expect(kgRow.textContent).not.toMatch(/Low stock/);
   });
 });
