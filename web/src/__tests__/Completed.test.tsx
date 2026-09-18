@@ -30,8 +30,8 @@ const billLines = vi.fn(async (..._a: unknown[]): Promise<{
   data: BillLine[] | null; error: null;
 }> => ({
   data: [{
-    id: "l1", qty_kg: 2, unit_price: 40, line_total: 80,
-    items: { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg" },
+    id: "l1", qty_kg: 3, unit_price: 40, line_total: 120,
+    items: { name_en: "Lemon", name_hi: "नींबू", name_mr: "लिंबू", unit: "piece" },
   }],
   error: null,
 }));
@@ -72,11 +72,12 @@ describe("the completed bills screen", () => {
     expect(await screen.findByTestId("completed-empty")).toBeTruthy();
   });
 
-  it("shows a bill's items when a row is opened", async () => {
+  it("shows a bill's items, with quantity named in the item's unit", async () => {
     render(<MemoryRouter><Completed /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("completed-row-b1"));
     await waitFor(() => expect(billLines).toHaveBeenCalledWith("b1"));
-    expect(await screen.findByText(/Onion|कांदा|प्याज/)).toBeTruthy();
+    expect(await screen.findByText(/Lemon|लिंबू|नींबू/)).toBeTruthy();
+    expect(screen.getByText(/3 pcs/)).toBeTruthy();
   });
 
   it("hides load-more when the server returned no extra row", async () => {

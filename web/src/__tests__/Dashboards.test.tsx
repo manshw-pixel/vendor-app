@@ -81,6 +81,17 @@ describe("the dashboard", () => {
     expect(within(row).getByText(/Onion|कांदा|प्याज/)).toBeTruthy();
   });
 
+  it("names the top item's quantity in its own unit", async () => {
+    topItemsBetween.mockResolvedValueOnce({
+      data: [{ item_id: "i2", name_en: "Lemon", name_hi: "नींबू", name_mr: "लिंबू", unit: "piece",
+               total_qty_kg: 4, total_revenue: 400, total_cost: "0", margin: "0", uncosted_lines: "0" }],
+      error: null });
+    render(<Dashboards />);
+    const row = await screen.findByTestId("dash-top-i2");
+    expect(within(row).getByText(/4 pcs/)).toBeTruthy();
+    expect(within(row).getByText(/₹400\.00/)).toBeTruthy();
+  });
+
   it("lists bought-together pairs", async () => {
     render(<Dashboards />);
     expect(await screen.findByTestId("dash-pair-i1-i2")).toBeTruthy();

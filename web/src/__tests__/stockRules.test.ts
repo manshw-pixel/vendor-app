@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { validateMovement, signedKg, type MovementInput } from "../stockRules";
+import type { TFunction } from "i18next";
+import { validateMovement, signedQty, type MovementInput } from "../stockRules";
+
+// Real translations, not the narrow fake used in units.test.ts: signedQty's output is
+// asserted verbatim ("+3 pcs"), so the fake's `key{json}` shape would not do.
+import i18n from "../i18n";
+const t = i18n.getFixedT("en") as TFunction;
 
 const base: MovementInput = { itemId: "i1", kind: "purchase", qtyKg: "5", unitCost: "22.50", note: "" };
 
@@ -43,12 +49,15 @@ describe("validateMovement", () => {
   });
 });
 
-describe("signedKg", () => {
+describe("signedQty", () => {
   it("prefixes a purchase with a plus", () => {
-    expect(signedKg("purchase", 5)).toBe("+5 kg");
+    expect(signedQty("purchase", 5, "kg", t)).toBe("+5 kg");
   });
   it("prefixes a wastage with a minus sign", () => {
-    expect(signedKg("wastage", "2.50")).toBe("−2.5 kg");
+    expect(signedQty("wastage", "2.50", "kg", t)).toBe("−2.5 kg");
+  });
+  it("names the item's own unit, not kg", () => {
+    expect(signedQty("purchase", 3, "piece", t)).toBe("+3 pcs");
   });
 });
 

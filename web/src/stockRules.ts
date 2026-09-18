@@ -1,4 +1,5 @@
-import { isWholeUnit, type Unit } from "./units";
+import type { TFunction } from "i18next";
+import { isWholeUnit, qtyText, type Unit } from "./units";
 
 /**
  * Validation for the /stock intake form. Pure, so it is tested without a screen.
@@ -39,8 +40,9 @@ export function validateMovement(
   return { ok: true, value: { itemId: input.itemId, kind: input.kind, qtyKg: qty, unitCost: cost, note: input.note.trim() } };
 }
 
-/** "+5 kg" for a purchase, "−2.5 kg" for a wastage. The minus is U+2212, which lines up
- *  with the plus in a list; a hyphen sits visibly lower. */
-export function signedKg(kind: MovementKind, qty: number | string): string {
-  return `${kind === "purchase" ? "+" : "−"}${Number(qty)} kg`;
+/** "+5 kg" for a purchase, "−3 pcs" for a wastage. The minus is U+2212, which lines up
+ *  with the plus in a list; a hyphen sits visibly lower. The quantity is named in the
+ *  item's own unit through qtyText, not always kg. */
+export function signedQty(kind: MovementKind, qty: number | string, unit: Unit, t: TFunction): string {
+  return `${kind === "purchase" ? "+" : "−"}${qtyText(qty, unit, t)}`;
 }
