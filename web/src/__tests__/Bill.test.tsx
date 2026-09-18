@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("../data", () => ({
-  listItems: vi.fn(async () => ({ data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true }], error: null })),
+  listItems: vi.fn(async () => ({ data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true, unit: "kg", low_stock_at: 10 }], error: null })),
   listCustomers: vi.fn(async () => ({ data: [{ id: "c1", name: "Asha", flat_no: "A-1", mobile: "+9198" }], error: null })),
   createCustomer: vi.fn(),
   findCustomerByMobile: vi.fn(),
@@ -56,7 +56,7 @@ describe("the bill screen", () => {
 
   it("keeps the out-of-stock colour on the chosen item, which the option cannot carry", async () => {
     (data.listItems as Mock).mockResolvedValueOnce({
-      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true }],
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
     render(<Bill />);
@@ -75,6 +75,103 @@ describe("the bill screen", () => {
     expect(input.getAttribute("inputmode")).toBe("decimal");
     fireEvent.change(input, { target: { value: "1.35" } });
     expect(input.value).toBe("1.35");
+  });
+
+  it("shows a stepper, not a decimal keypad, for a whole-unit item", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    expect(screen.queryByTestId("weight-input")).toBeNull();
+    const input = screen.getByTestId("qty-input") as HTMLInputElement;
+    expect(input.getAttribute("inputmode")).toBe("numeric");
+    expect(screen.getByLabelText(/pieces/i)).toBeTruthy();
+
+    const minus = screen.getByTestId("qty-minus");
+    const plus = screen.getByTestId("qty-plus");
+    expect(minus.getAttribute("aria-label")).toBeTruthy();
+    expect(plus.getAttribute("aria-label")).toBeTruthy();
+
+    // Empty counts as 0; stepping never goes below 1.
+    fireEvent.click(plus);
+    expect(input.value).toBe("1");
+    fireEvent.click(minus);
+    expect(input.value).toBe("1");
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    expect(input.value).toBe("3");
+  });
+
+  it("rejects a fractional quantity for a whole-unit item, and adds nothing", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "1.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    expect(await screen.findByText(/whole numbers only|केवल पूर्ण संख्या|फक्त पूर्ण संख्या/i)).toBeTruthy();
+    expect(screen.getByTestId("running-total").textContent).toMatch(/0\.00/);
+  });
+
+  it("adds whole-unit pieces and shows the unit-aware basket line", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/90/));
+    expect(screen.getByText(/3 pcs × ₹30\.00/)).toBeTruthy();
+  });
+
+  it("shows unit-aware stock text on the option and the detail", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true, unit: "kg", low_stock_at: 10 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    const option = (await screen.findByTestId("item-select"))
+      .querySelector("option[value='i1']") as HTMLOptionElement;
+    expect(option.textContent ?? "").toMatch(/12\.5 kg in stock/);
+
+    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
+    const detail = await screen.findByTestId("item-detail");
+    expect(detail.textContent ?? "").toMatch(/12\.5 kg in stock/);
+  });
+
+  it("colours the detail amber using the item's own low_stock_at, not a fixed number", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12, is_active: true, unit: "kg", low_stock_at: 15 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    const detail = await screen.findByTestId("item-detail");
+    expect(detail.querySelector(".text-amber-600")).toBeTruthy();
+  });
+
+  it("does not colour the detail amber when stock is above the item's own low_stock_at", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12, is_active: true, unit: "kg", low_stock_at: 10 }],
+      error: null,
+    });
+    render(<Bill />);
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    const detail = await screen.findByTestId("item-detail");
+    expect(detail.querySelector(".text-amber-600")).toBeNull();
   });
 
   it("issues a token through the full flow", async () => {
@@ -99,7 +196,7 @@ describe("the bill screen", () => {
     await waitFor(() => expect(data.issueToken).toHaveBeenCalledWith("b1"));
     expect(data.createBill).toHaveBeenCalledWith("v1", "c1", "u1");
     expect(data.replaceBillLines).toHaveBeenCalledWith("b1", [
-      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2 },
+      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2, unit: "kg" },
     ]);
     expect(await screen.findByText("7")).toBeTruthy();
   });
@@ -141,7 +238,7 @@ describe("the bill screen", () => {
 
   it("still sells an item at zero stock -- complete_bill clamps the decrement deliberately", async () => {
     (data.listItems as unknown as Mock).mockResolvedValueOnce({
-      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true }],
+      data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
     render(<Bill />);
@@ -330,8 +427,8 @@ describe("the bill screen", () => {
     expect(data.replaceBillLines).toHaveBeenCalledTimes(2);
     // The second call carries the EDITED basket (two lines), not the original one.
     expect((data.replaceBillLines as unknown as Mock).mock.calls[1]?.[1]).toEqual([
-      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2 },
-      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 1 },
+      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 2, unit: "kg" },
+      { itemId: "i1", name: expect.any(String), unitPrice: 40, qtyKg: 1, unit: "kg" },
     ]);
   });
 
