@@ -32,6 +32,7 @@ const ident = (name) => {
 // chain (.from().select().eq()) can be awaited at any point, like supabase-js.
 class Query {
   #run; #table; #verb = "select"; #columns = "*"; #values = null; #filters = [];
+  #single = false;
 
   constructor(run, table) { this.#run = run; this.#table = table; }
 
@@ -45,13 +46,22 @@ class Query {
   insert(values) { this.#verb = "insert"; this.#values = values; return this; }
   update(values) { this.#verb = "update"; this.#values = values; return this; }
   delete() { this.#verb = "delete"; return this; }
-  eq(column, value) { this.#filters.push([column, value]); return this; }
+  eq(column, value) { this.#filters.push(["eq", column, value]); return this; }
+  in(column, values) { this.#filters.push(["in", column, values]); return this; }
+  // supabase-js returns the single matching row, or null when none match, instead of an
+  // array. Only ever awaited after a select, so it is a post-processing step, not its own
+  // verb.
+  maybeSingle() { this.#single = true; return this; }
 
   #returning = null;
 
   #where(params) {
     if (!this.#filters.length) return "";
-    const clauses = this.#filters.map(([col, val]) => {
+    const clauses = this.#filters.map(([op, col, val]) => {
+      if (op === "in") {
+        params.push(val);
+        return `${ident(col)} = any($${params.length})`;
+      }
       params.push(val);
       return `${ident(col)} = $${params.length}`;
     });
@@ -96,7 +106,12 @@ class Query {
 
   then(resolve, reject) {
     const [text, params] = this.#build();
-    return this.#run(text, params).then(resolve, reject);
+    return this.#run(text, params).then((result) => {
+      if (this.#single && !result.error) {
+        result = { ...result, data: result.data.length ? result.data[0] : null };
+      }
+      return result;
+    }).then(resolve, reject);
   }
 }
 

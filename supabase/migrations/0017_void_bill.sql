@@ -95,3 +95,19 @@ end $$;
 
 revoke all on function void_bill(uuid, text) from public, anon;
 grant execute on function void_bill(uuid, text) to authenticated;
+
+-- How much was voided in a period, for the dashboard's one-line note. Invoker rights, so
+-- RLS on bills scopes it. completed_at, not voided_at: the same-day rule makes them the
+-- same day, and the dashboard's other cards are keyed on completed_at.
+create function voided_between(p_from timestamptz, p_to timestamptz)
+  returns table (void_count bigint, voided_total numeric)
+  language sql stable as $$
+  select count(*), coalesce(sum(total), 0)
+    from bills
+   where status = 'voided'
+     and completed_at >= p_from
+     and completed_at <  p_to;
+$$;
+
+revoke all on function voided_between(timestamptz, timestamptz) from public, anon;
+grant execute on function voided_between(timestamptz, timestamptz) to authenticated, service_role;
