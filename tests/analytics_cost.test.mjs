@@ -94,7 +94,7 @@ test("collected_between reports cost, profit and uncosted lines", async () => {
   // profit covers costed sales only: total (350) minus the uncosted garlic line's own
   // revenue (50) minus cost (200). Not total - cost (150), which would book garlic's
   // whole ₹50 sale price as pure profit just because its cost is unknown.
-  assertEqual(Number(r.profit), 100, "profit = 350 - 50 (garlic revenue) - 200 (cost)");
+  assertEqual(Number(r.profit), 100, "profit = 100*150/150 + 200 - 200 (cost)");
   assertEqual(Number(r.uncosted_lines), 1, "the garlic line");
 });
 
@@ -209,4 +209,51 @@ test("stock_movements_between does not leak across vendors", async () => {
     p_from: new Date(now.getTime() - 3600e3).toISOString(),
     p_to: new Date(now.getTime() + 3600e3).toISOString() });
   assertInvisible(data.filter((r) => r.item_id === w.b.itemId), "A saw B's movement");
+});
+
+// Per-bill pro-rating of redeemed points (final-review finding 1). Each case sits in its
+// own month so it is the only bill in its window.
+const JAN = ["2027-01-01T00:00:00Z", "2027-02-01T00:00:00Z"];
+const FEB = ["2027-02-01T00:00:00Z", "2027-03-01T00:00:00Z"];
+async function proRataWorld() {
+  const w = await seedTwoVendors();
+  const v = w.a.vendorId;
+  const { rows: [it] } = await sql(
+    `insert into items (vendor_id, name_en, name_hi, name_mr, price, stock_kg)
+     values ($1,'Beans','Beans-hi','Beans-mr',100,100) returning id`, [v]);
+  const bill = async (total, when, lines) => {
+    const { rows: [b] } = await sql(
+      `insert into bills (vendor_id, customer_id, total, status, completed_at)
+       values ($1,$2,$3,'done',$4::timestamptz) returning id`, [v, w.a.customerId, total, when]);
+    for (const [lt, uc] of lines) {
+      await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total, unit_cost)
+                 values ($1,$2,$3,1,$4,$4,$5)`, [b.id, v, it.id, lt, uc]);
+    }
+  };
+  // Wholly uncosted: gross 100, 10 points redeemed -> total 90.
+  await bill(90, "2027-01-05T04:00:00Z", [[100, null]]);
+  // Mixed: costed 100 @ cost 60, uncosted 100; gross 200, total 180.
+  await bill(180, "2027-02-05T04:00:00Z", [[100, 60], [100, null]]);
+  return w;
+}
+const getPR = once(proRataWorld);
+
+test("collected_between: a wholly uncosted bill with redeemed points has profit 0", async () => {
+  const w = await getPR();
+  const { data, error } = await rpc(w, "collected_between", JAN[0], JAN[1]);
+  assert(!error, error?.message);
+  const r = data[0];
+  assertEqual(Number(r.total), 90, "total");
+  assertEqual(Number(r.profit), 0, "no costed share, so no profit and no negative");
+  assert(Number(r.uncosted_lines) >= 1, "uncosted_lines >= 1");
+});
+
+test("collected_between pro-rates a mixed bill's redemption over its costed share", async () => {
+  const w = await getPR();
+  const { data, error } = await rpc(w, "collected_between", FEB[0], FEB[1]);
+  assert(!error, error?.message);
+  const r = data[0];
+  assertEqual(Number(r.total), 180, "total");
+  assertEqual(Number(r.cost), 60, "cost");
+  assertEqual(Number(r.profit), 30, "profit = 100 * 180/200 - 60");
 });

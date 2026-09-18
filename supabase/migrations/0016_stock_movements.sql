@@ -62,7 +62,9 @@ begin
       using errcode = '42501';
   end if;
 
-  select * into v_item from items where id = p_item_id for update;
+  select * into v_item from items
+   where id = p_item_id and vendor_id = current_vendor_id()
+     for update;  -- another shop's row: no match, no lock
   if not found or v_item.vendor_id <> current_vendor_id() then
     raise exception 'item % is not in your shop', p_item_id using errcode = '42501';
   end if;
@@ -318,13 +320,13 @@ grant execute on function clear_vendor_data() to authenticated;
 -- Cost sums only lines with a known unit_cost. uncosted_lines says how many were left
 -- out, so the screen can say the profit figure is incomplete rather than silently high.
 --
--- profit covers COSTED sales only: total minus the revenue of uncosted lines minus cost.
--- Uncosted revenue is left OUT of profit -- it is not counted as free profit, which is
--- what a plain (total - cost) would do (an uncosted line's whole sale price would land as
--- pure margin). This matches top_items_between.margin, which is also computed over costed
--- lines. Any bill-level redeemed points are folded into `total` (bills.total is already
--- net of them, see 0010) and so are charged wholly against the costed portion here -- a
--- conservative choice, since points cannot be attributed back to a specific line.
+-- profit covers COSTED sales only. Per bill, the costed share of what was actually
+-- collected is costed_gross * bill.total / bill_gross (bill_gross = sum of its line_totals,
+-- costed_gross = sum of line_totals with a known unit_cost), i.e. each bill's redeemed
+-- points are pro-rated over its own costed share. profit = sum of that over done bills
+-- minus cost. A wholly uncosted bill contributes 0 (its revenue is not free profit, and its
+-- redeemed points are not charged to other bills' costed sales); bill_gross = 0 contributes
+-- 0. This matches top_items_between.margin, which is also computed over costed lines.
 drop function if exists collected_between(timestamptz, timestamptz);
 
 create function collected_between(p_from timestamptz, p_to timestamptz)
@@ -338,19 +340,29 @@ create function collected_between(p_from timestamptz, p_to timestamptz)
        and b.completed_at <  p_to
   ), totals as (
     select coalesce(sum(total), 0) as total, count(*) as bill_count from done
+  ), per_bill as (
+    select d.total,
+           coalesce(sum(bi.line_total), 0)                                      as gross,
+           coalesce(sum(bi.line_total) filter (where bi.unit_cost is not null), 0) as costed_gross
+      from done d
+      left join bill_items bi on bi.bill_id = d.id
+     group by d.id, d.total
+  ), earned as (
+    select coalesce(sum(case when gross = 0 then 0
+                             else costed_gross * total / gross end), 0) as costed_revenue
+      from per_bill
   ), lines as (
-    select coalesce(sum(bi.qty_kg * bi.unit_cost), 0)                          as cost,
-           coalesce(sum(bi.line_total) filter (where bi.unit_cost is null), 0) as uncosted_revenue,
-           count(*) filter (where bi.unit_cost is null)                        as uncosted
+    select coalesce(sum(bi.qty_kg * bi.unit_cost), 0) as cost,
+           count(*) filter (where bi.unit_cost is null) as uncosted
       from bill_items bi
       join done d on d.id = bi.bill_id
   )
   select t.total                                                     as total,
          t.bill_count                                                as bill_count,
          round(l.cost, 2)                                            as cost,
-         round(t.total - l.uncosted_revenue - l.cost, 2)             as profit,
+         round(e.costed_revenue - l.cost, 2)                         as profit,
          l.uncosted                                                  as uncosted_lines
-    from totals t, lines l;
+    from totals t, earned e, lines l;
 $$;
 
 revoke all on function collected_between(timestamptz, timestamptz) from public, anon;
