@@ -7,15 +7,15 @@ import i18n from "../i18n";
 // PostgREST serialises Postgres numeric as text. The mock mirrors that exactly -- a mock
 // returning a JS number would hide a missing Number() coercion in the screen.
 const collectedBetween = vi.fn(async (..._a: unknown[]): Promise<{
-  data: { total: string; bill_count: number }[] | null;
+  data: { total: string; bill_count: number; cost: string; profit: string; uncosted_lines: string }[] | null;
   error: { code?: string; message?: string } | null;
-}> => ({ data: [{ total: "350.50", bill_count: 2 }], error: null }));
+}> => ({ data: [{ total: "350.50", bill_count: 2, cost: "200.00", profit: "150.50", uncosted_lines: "0" }], error: null }));
 const topItemsBetween = vi.fn(async (..._a: unknown[]): Promise<{
   data: TopItem[] | null; error: null;
 }> => ({
   data: [{
     item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
-    total_qty_kg: 12, total_revenue: 480,
+    total_qty_kg: 12, total_revenue: 480, total_cost: "300.00", margin: "180.00", uncosted_lines: "0",
   }],
   error: null,
 }));
@@ -95,7 +95,8 @@ describe("the dashboard", () => {
   });
 
   it("says nothing in this period rather than showing an error", async () => {
-    collectedBetween.mockResolvedValueOnce({ data: [{ total: "0", bill_count: 0 }], error: null });
+    collectedBetween.mockResolvedValueOnce({
+      data: [{ total: "0", bill_count: 0, cost: "0", profit: "0", uncosted_lines: "0" }], error: null });
     topItemsBetween.mockResolvedValueOnce({ data: [], error: null });
     pairsBetween.mockResolvedValueOnce({ data: [], error: null });
     render(<Dashboards />);
@@ -106,11 +107,14 @@ describe("the dashboard", () => {
   it("says it is loading rather than showing a confident zero", async () => {
     // Before the fetches land the cards would otherwise read "0.00", "0" and "Nothing in
     // this period" -- a wrong answer indistinguishable from a genuinely empty month.
-    let release: (v: { data: { total: string; bill_count: number }[] | null; error: null }) => void = () => {};
+    let release: (v: {
+      data: { total: string; bill_count: number; cost: string; profit: string; uncosted_lines: string }[] | null;
+      error: null;
+    }) => void = () => {};
     collectedBetween.mockImplementationOnce(() => new Promise((r) => { release = r; }));
     render(<Dashboards />);
     expect(screen.getByTestId("dash-loading")).toBeTruthy();
-    release({ data: [{ total: "1", bill_count: 1 }], error: null });
+    release({ data: [{ total: "1", bill_count: 1, cost: "0", profit: "1", uncosted_lines: "0" }], error: null });
     await waitFor(() => expect(screen.queryByTestId("dash-loading")).toBeNull());
   });
 
@@ -120,16 +124,21 @@ describe("the dashboard", () => {
     render(<Dashboards />);
     await screen.findByText(/350\.50/);   // the mount fetch settles first
 
-    let releaseMonth: (v: { data: { total: string; bill_count: number }[] | null; error: null }) => void = () => {};
+    let releaseMonth: (v: {
+      data: { total: string; bill_count: number; cost: string; profit: string; uncosted_lines: string }[] | null;
+      error: null;
+    }) => void = () => {};
     collectedBetween
       .mockImplementationOnce(() => new Promise((r) => { releaseMonth = r; }))
-      .mockResolvedValueOnce({ data: [{ total: "11", bill_count: 1 }], error: null });
+      .mockResolvedValueOnce({
+        data: [{ total: "11", bill_count: 1, cost: "3", profit: "8", uncosted_lines: "0" }], error: null });
 
     fireEvent.click(screen.getByTestId("range-month"));   // slow, deferred
     fireEvent.click(screen.getByTestId("range-today"));   // fast, wins
     await screen.findByText(/₹11\.00/);
 
-    releaseMonth({ data: [{ total: "9999", bill_count: 999 }], error: null });
+    releaseMonth({
+      data: [{ total: "9999", bill_count: 999, cost: "0", profit: "9999", uncosted_lines: "0" }], error: null });
     await waitFor(() => expect(screen.queryByText(/9,999/)).toBeNull());
     expect(screen.getByText(/₹11\.00/)).toBeTruthy();
   });
@@ -167,6 +176,41 @@ describe("the dashboard", () => {
     expect(row.textContent).toContain("टोमॅटो");
     expect(row.textContent).not.toContain("Onion");
     await i18n.changeLanguage("en");
+  });
+
+  it("shows cost and profit through rupees()", async () => {
+    render(<Dashboards />);
+    expect((await screen.findByTestId("dash-cost")).textContent).toContain("₹200.00");
+    expect((await screen.findByTestId("dash-profit")).textContent).toContain("₹150.50");
+  });
+
+  it("says how many lines had no purchase cost", async () => {
+    collectedBetween.mockResolvedValueOnce({
+      data: [{ total: "100", bill_count: 1, cost: "0", profit: "100", uncosted_lines: "3" }], error: null });
+    render(<Dashboards />);
+    expect((await screen.findByTestId("dash-uncosted")).textContent).toContain("3");
+  });
+
+  it("hides the uncosted note when every line had a cost", async () => {
+    render(<Dashboards />);
+    await screen.findByTestId("dash-profit");
+    expect(screen.queryByTestId("dash-uncosted")).toBeNull();
+  });
+
+  it("shows each top item's margin", async () => {
+    render(<Dashboards />);
+    const row = await screen.findByTestId("dash-top-i1");
+    expect(row.textContent).toContain("₹180.00");
+  });
+
+  it("shows a dash for a top item whose margin is unknown", async () => {
+    topItemsBetween.mockResolvedValueOnce({
+      data: [{ item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
+               total_qty_kg: 12, total_revenue: 480, total_cost: null, margin: null, uncosted_lines: "4" }],
+      error: null });
+    render(<Dashboards />);
+    const margin = await screen.findByTestId("dash-top-margin-i1");
+    expect(margin.textContent).toBe("—");
   });
 
   it("lists what customers asked for that the shop does not stock", async () => {

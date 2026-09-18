@@ -28,6 +28,9 @@ export default function Dashboards() {
   const [range, setRange] = useState<Range>(() => presetRange("month", new Date()));
   const [collected, setCollected] = useState(0);
   const [billCount, setBillCount] = useState(0);
+  const [cost, setCost] = useState(0);
+  const [profit, setProfit] = useState(0);
+  const [uncosted, setUncosted] = useState(0);
   const [top, setTop] = useState<TopItem[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [requests, setRequests] = useState<RequestCount[]>([]);
@@ -60,6 +63,9 @@ export default function Dashboards() {
     const row = (money.data as Collected[] | null)?.[0];
     setCollected(Number(row?.total ?? 0));
     setBillCount(Number(row?.bill_count ?? 0));
+    setCost(Number(row?.cost ?? 0));
+    setProfit(Number(row?.profit ?? 0));
+    setUncosted(Number(row?.uncosted_lines ?? 0));
     setTop((items.data ?? []) as TopItem[]);
     setPairs((together.data ?? []) as Pair[]);
     setRequests((asked.data ?? []) as RequestCount[]);
@@ -95,6 +101,17 @@ export default function Dashboards() {
       <div className="grid gap-3 sm:grid-cols-2">
         <Card title={t("dash.collected")}>
           <p className="text-2xl font-semibold text-slate-800">{rupees(collected)}</p>
+          <dl className="mt-2 text-sm grid grid-cols-2 gap-y-1">
+            <dt className="text-slate-500">{t("dash.cost")}</dt>
+            <dd data-testid="dash-cost" className="text-right text-slate-700">{rupees(cost)}</dd>
+            <dt className="text-slate-500">{t("dash.profit")}</dt>
+            <dd data-testid="dash-profit" className="text-right font-semibold text-slate-800">{rupees(profit)}</dd>
+          </dl>
+          {uncosted > 0 && (
+            <p data-testid="dash-uncosted" className="mt-2 text-xs text-amber-700">
+              {t("dash.uncosted", { n: uncosted })}
+            </p>
+          )}
         </Card>
         <Card title={t("dash.billCount")}>
           <p data-testid="dash-bill-count" className="text-2xl font-semibold text-slate-800">
@@ -113,6 +130,12 @@ export default function Dashboards() {
                 <span className="text-slate-700">{itemName(i, lang)}</span>
                 <span className="text-slate-600">
                   {t("dash.kg", { kg: i.total_qty_kg })} · {rupees(Number(i.total_revenue))}
+                  {" · "}
+                  <span data-testid={`dash-top-margin-${i.item_id}`}
+                        title={t("dash.margin")}
+                        className="text-green-700">
+                    {i.margin === null ? "—" : rupees(Number(i.margin))}
+                  </span>
                 </span>
               </li>
             ))}

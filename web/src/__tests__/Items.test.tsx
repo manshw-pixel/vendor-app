@@ -3,8 +3,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { AdminItem } from "../admin";
 
 const rows: AdminItem[] = [
-  { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true },
-  { id: "i2", name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट", price: 30, stock_kg: 0, is_active: false },
+  { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true, last_cost: "31.25" },
+  { id: "i2", name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट", price: 30, stock_kg: 0, is_active: false, last_cost: null },
 ];
 
 const listAllItems = vi.fn(async (..._a: unknown[]): Promise<{ data: AdminItem[] | null; error: null }> =>
@@ -105,6 +105,12 @@ describe("the items screen", () => {
     listAllItems.mockResolvedValueOnce({ data: [], error: null });
     render(<Items />);
     expect(await screen.findByText(/no items yet|अजून माल नाही|कोई सामान नहीं/i)).toBeTruthy();
+  });
+
+  it("shows the last purchase cost, or says there is none", async () => {
+    render(<Items />);
+    expect((await screen.findByTestId("item-cost-i1")).textContent).toContain("₹31.25");
+    expect((await screen.findByTestId("item-cost-i2")).textContent).toContain("No cost yet");
   });
 
   it("shows a problem banner when a toggle is rejected", async () => {

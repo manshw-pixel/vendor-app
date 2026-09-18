@@ -168,6 +168,11 @@ export default function Items() {
                       {level === "low" && ` — ${t("items.low")}`}
                     </span>
                   </p>
+                  <span data-testid={`item-cost-${it.id}`} className="block text-xs text-slate-500">
+                    {it.last_cost === null
+                      ? t("stock.noCost")
+                      : t("stock.lastCost", { amount: rupees(Number(it.last_cost)) })}
+                  </span>
                 </div>
                 <button
                   data-testid={`item-edit-${it.id}`}

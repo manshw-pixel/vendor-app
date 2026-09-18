@@ -37,6 +37,12 @@ export function describeError(
   if (!error) return null;
   const detail = error.message ?? "";
 
+  // log_stock_movement's over-stock guard (0016): raised as plpgsql P0001, same as
+  // isBillNoLongerRecording above, so it is matched on the message before the generic
+  // P0001/unknown fallthrough could otherwise swallow it into "something went wrong".
+  if (/wastage exceeds stock/i.test(detail)) {
+    return { key: "stock.overStock", detail };
+  }
   if (error.code === "42501" || /row-level security/i.test(detail)) {
     return { key: "error.notAllowed", detail };
   }

@@ -12,14 +12,15 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 142 cases, 0 failures
+## ✅ Verified: 186 cases, 0 failures
 
-`npm test` runs **142 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all thirteen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **186 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all sixteen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
-**RLS is genuinely exercised, not merely present.** Sessions connect as the owner and
-then `set role authenticated` with `request.jwt.claims` set, so every policy applies. This
+**RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
+each transaction runs `set local role authenticated` with `request.jwt.claims` set, so
+every policy applies. This
 was confirmed by mutation rather than assumed: replacing `items_read`'s tenant check with
 `using (true)` makes a cross-tenant read start returning rows, and restoring it blocks
 them again. An earlier shim run on this project reported the schema healthy while
@@ -57,6 +58,13 @@ Covered:
   still counts a request already marked handled, and does not leak across vendors.
   `bought_together_between()` is pinned to returning all three names per side — the
   card rendered English under a Marathi UI until it did.
+
+- **Stock movements and cost.** `log_stock_movement()` admits admin and recorder and
+  refuses biller and cross-tenant items; a purchase adds stock and sets `last_cost`, a
+  wastage subtracts and is refused beyond current stock; nobody can write
+  `stock_movements` directly. `complete_bill()` stamps each line's `unit_cost` once and a
+  later purchase does not move it. `collected_between` and `top_items_between` report
+  cost, profit and margin over costed lines only, with unknown cost kept null.
 
 ### What the local suite does not cover
 

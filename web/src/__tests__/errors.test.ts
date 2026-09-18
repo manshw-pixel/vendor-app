@@ -90,4 +90,9 @@ describe("describeError", () => {
     const d = describeError({ code: "PGRST116", message: "JSON object requested, multiple rows returned" });
     expect(d?.key).toBe("error.unknown");
   });
+
+  it("names an over-stock wastage in the staff member's terms", () => {
+    const r = describeError({ code: "P0001", message: "wastage exceeds stock" });
+    expect(r?.key).toBe("stock.overStock");
+  });
 });
