@@ -19,7 +19,7 @@ const rows: Movement[] = [{
 }];
 const movementsBetween = vi.fn(async (..._a: unknown[]) => ({ data: rows, error: null }));
 const logMovement = vi.fn(async (..._a: unknown[]): Promise<{
-  data: unknown; error: { code?: string; message?: string } | null;
+  data: unknown; error: { code?: string; message?: string; details?: string } | null;
 }> => ({ data: {}, error: null }));
 vi.mock("../stock", () => ({
   movementsBetween: (...a: unknown[]) => movementsBetween(...a),
@@ -80,5 +80,30 @@ describe("the stock screen", () => {
     fireEvent.click(screen.getByTestId("stock-submit"));
     const p = await screen.findByTestId("stock-problem");
     expect(p.textContent).toContain("12");
+  });
+
+  it("quotes the kg from the server's error detail, not the list, and refreshes items", async () => {
+    logMovement.mockResolvedValueOnce({ data: null,
+      error: { code: "P0001", message: "wastage exceeds stock", details: "7.25" } });
+    render(<Stock />);
+    await screen.findByTestId("stock-row-m1");
+    fireEvent.click(screen.getByTestId("stock-kind-wastage"));
+    fireEvent.change(screen.getByTestId("stock-item"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByTestId("stock-kg"), { target: { value: "50" } });
+    fireEvent.click(screen.getByTestId("stock-submit"));
+    const p = await screen.findByTestId("stock-problem");
+    expect(p.textContent).toContain("7.25");
+    expect(p.textContent).not.toContain("12 ");
+    await waitFor(() => expect(listItems).toHaveBeenCalledTimes(2));
+    fireEvent.change(screen.getByTestId("stock-item"), { target: { value: "" } });
+    expect(screen.getByTestId("stock-problem").textContent).toContain("7.25");
+  });
+
+  it("clears a stale problem box when a later load succeeds", async () => {
+    movementsBetween.mockResolvedValueOnce({ data: null as unknown as Movement[], error: { message: "boom" } } as never);
+    render(<Stock />);
+    expect(await screen.findByTestId("stock-problem")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("range-month"));
+    await waitFor(() => expect(screen.queryByTestId("stock-problem")).toBeNull());
   });
 });

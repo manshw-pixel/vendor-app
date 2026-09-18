@@ -24,7 +24,7 @@ export default function Stock() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<MovementField, string>>>({});
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
+  const [problem, setProblem] = useState<{ key: string; detail: string; kg?: number | "" } | null>(null);
   // Same stale-response guard as Dashboards.tsx: two quick range taps must not let the
   // slower, older fetch paint last.
   const wanted = useRef("");
@@ -36,7 +36,7 @@ export default function Stock() {
     const { data, error } = await movementsBetween(r);
     if (wanted.current !== key) return;
     setBusy(false);
-    if (error) setProblem(describeError(error));
+    setProblem(error ? describeError(error) : null);
     setRows((data ?? []) as Movement[]);
   }, []);
 
@@ -55,7 +55,23 @@ export default function Stock() {
     setSaving(true);
     const { error } = await logMovement(r.value);
     setSaving(false);
-    if (error) { setProblem(describeError(error)); return; }
+    if (error) {
+      const p = describeError(error);
+      if (p?.key === "stock.overStock") {
+        // Quote the stock the SERVER saw (0016 puts it in the error's detail), frozen at
+        // error time, so switching items or a concurrent sale cannot change the number.
+        const fromServer = Number((error as { details?: string | null }).details ?? NaN);
+        const kg = Number.isFinite(fromServer) && (error as { details?: string | null }).details?.trim()
+          ? fromServer
+          : chosen ? Number(chosen.stock_kg) : "";
+        setProblem({ ...p, kg });
+        const fresh = await listItems();
+        setItems((fresh.data ?? []) as Item[]);
+      } else {
+        setProblem(p);
+      }
+      return;
+    }
     setProblem(null);
     setQtyKg(""); setUnitCost(""); setNote("");
     // Refresh the item list too: its stock_kg is what the over-stock message quotes.
@@ -129,7 +145,7 @@ export default function Stock() {
       {problem && (
         <div data-testid="stock-problem" className="bg-red-50 border border-red-200 rounded-lg p-3">
           <p className="text-sm text-red-700">
-            {t(problem.key, { kg: chosen ? Number(chosen.stock_kg) : "" })}
+            {t(problem.key, { kg: problem.kg ?? "" })}
           </p>
           {problem.detail && (
             <p className="text-xs text-red-600 mt-1 break-words">{t("error.details")}: {problem.detail}</p>
