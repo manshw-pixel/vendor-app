@@ -91,3 +91,12 @@ test("voided_between is zero out of range and does not leak across vendors", asy
   const { data: b } = await w.b.clients.admin.rpc("voided_between", range());
   assertEqual(Number(b[0].void_count), 0, "B sees A's void");
 });
+
+test("maybeSingle errors, rather than silently picking one, when more than one row matches", async () => {
+  const w = await getW();
+  const { data, error } = await w.a.clients.biller
+    .from("bills").select("id").eq("vendor_id", w.a.vendorId).maybeSingle();
+  assert(error, "expected an error for multiple matching rows");
+  assertEqual(error.code, "PGRST116", "error code");
+  assertEqual(data, null, "data must be null alongside the error");
+});

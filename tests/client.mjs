@@ -108,7 +108,17 @@ class Query {
     const [text, params] = this.#build();
     return this.#run(text, params).then((result) => {
       if (this.#single && !result.error) {
-        result = { ...result, data: result.data.length ? result.data[0] : null };
+        // Mirrors PostgREST's "Accept: application/vnd.pgrst.object+json": zero rows is
+        // data: null with no error, exactly one row unwraps to that row, and more than
+        // one is itself an error rather than a silently arbitrary pick.
+        if (result.data.length > 1) {
+          result = { data: null, error: {
+            code: "PGRST116",
+            message: "JSON object requested, multiple (or no) rows returned",
+          } };
+        } else {
+          result = { ...result, data: result.data.length ? result.data[0] : null };
+        }
       }
       return result;
     }).then(resolve, reject);
