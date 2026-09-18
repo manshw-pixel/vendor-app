@@ -249,7 +249,8 @@
     },
     "label": "Sold by",
     "lowAt": "Low-stock warning below",
-    "lockedNote": "The unit cannot change after the item has been sold.",
-    "notWhole": "Whole numbers only for this unit."
+    "lockedNote": "The unit cannot change after the item has been sold. To sell it by a different unit, hide this item and add a new one.",
+    "notWhole": "Whole numbers only for this unit.",
+    "locked": "This item has already been sold, so its unit cannot change. Hide it and add a new item with the right unit."
   }
 }

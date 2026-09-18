@@ -46,6 +46,13 @@ export function describeError(
   // void_bill's guards (0017), plpgsql P0001 like the others: matched on message.
   if (/void window closed/i.test(detail)) return { key: "void.windowClosed", detail };
   if (/bill is not done/i.test(detail)) return { key: "void.notDone", detail };
+  // Item unit guards (0018), plpgsql P0001 like the others: matched on message.
+  if (/unit is locked once the item has been sold/i.test(detail)) {
+    return { key: "unit.locked", detail };
+  }
+  if (/whole number for this unit/i.test(detail)) {
+    return { key: "unit.notWhole", detail };
+  }
   if (error.code === "42501" || /row-level security/i.test(detail)) {
     return { key: "error.notAllowed", detail };
   }
