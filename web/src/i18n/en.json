@@ -7,7 +7,7 @@
     "migrationMissing": "This screen needs a database update that has not been applied yet.", "notAllowed": "Your role does not allow this.", "customerExists": "A customer with this mobile number already exists.", "duplicate": "This already exists.", "offline": "No connection. Check the network and try again.", "unknown": "Something went wrong.", "staffHasHistory": "This person has recorded or completed bills, so their record cannot be removed. Change their role instead.", "staffNotFound": "That person is no longer on your staff list. The list below is up to date.", "staffPartlyRemoved": "They are off your staff list, but their sign-in account could not be deleted, so their email is not free to reuse yet.", "details": "Details", "emailTaken": "That email address already has an account, which may belong to someone previously removed from this shop.", "weakPassword": "That password is too short. Use at least 8 characters.", "staffNotCreated": "The account could not be created, and nothing was saved. Try again.", "clearRace": "Nothing was deleted. A sale was being completed at the same moment -- try again.", "staffPartlyCreated": "The account may have been created but is not attached to this shop. Do not retry with the same address -- contact whoever administers the database." },
   "offline": { "banner": "You are offline. Changes cannot be saved." },
   "soon": { "title": "Coming soon", "body": "This screen arrives in a later stage. Dashboards are still available in the old console." },
-  "bill": { "chooseCustomer": "Choose a customer", "searchCustomer": "Search by name, flat or mobile", "newCustomer": "New customer", "name": "Name", "flatNo": "Flat no", "mobile": "Mobile", "save": "Save", "customerExists": "That customer already exists — using their record.", "customerNotShown": "The record cannot be shown here. Search the list or try again.", "tokenUnknown": "The token could not be confirmed. Do not start this bill again — check the pending queue before re-recording it.", "required": "All three fields are required.", "chooseItem": "Choose an item", "addItem": "Add item", "weightKg": "Weight (kg)", "add": "Add", "basket": "Basket", "total": "Total", "empty": "No items yet.", "done": "Done", "confirmTitle": "Issue the token?", "confirmBody": "The bill cannot be changed after this.", "cancel": "Cancel", "tokenTitle": "Token", "startNew": "Start new bill", "remove": "Remove", "qtyLine": "{{qty}} kg", "stock": "{{kg}} kg in stock", "outOfStock": "Out of stock", "badWeight": { "empty": "Enter a weight.", "notANumber": "That is not a number.", "notPositive": "Weight must be more than zero.", "tooPrecise": "At most two decimal places." } },
+  "bill": { "chooseCustomer": "Choose a customer", "searchCustomer": "Search by name, flat or mobile", "newCustomer": "New customer", "name": "Name", "flatNo": "Flat no", "mobile": "Mobile", "save": "Save", "customerExists": "That customer already exists — using their record.", "customerNotShown": "The record cannot be shown here. Search the list or try again.", "tokenUnknown": "The token could not be confirmed. Do not start this bill again — check the pending queue before re-recording it.", "required": "All three fields are required.", "chooseItem": "Choose an item", "addItem": "Add item", "weightKg": "Weight (kg)", "add": "Add", "basket": "Basket", "total": "Total", "empty": "No items yet.", "done": "Done", "confirmTitle": "Issue the token?", "confirmBody": "The bill cannot be changed after this.", "cancel": "Cancel", "tokenTitle": "Token", "startNew": "Start new bill", "remove": "Remove", "qtyLine": "{{qty}} kg", "stock": "{{kg}} kg in stock", "outOfStock": "Out of stock", "badWeight": { "empty": "Enter a weight.", "notANumber": "That is not a number.", "notPositive": "Weight must be more than zero.", "tooPrecise": "At most two decimal places.", "notWhole": "Whole numbers only for this unit." } },
   "pending": { "title": "Waiting to be billed", "empty": "Nothing waiting.", "token": "Token {{n}}", "complete": "Complete", "confirmTitle": "Complete this bill?", "confirmBody": "Complete this bill and award points?", "confirmAccept": "Complete this bill", "completed": "Completed.", "pointsAwarded": "{{n}} points awarded", "pointsUnknown": "The bill is complete, but points could not be checked.", "balance": "{{points}} points available", "redeem": "Points to use", "redeemSummary": "Collect {{net}} — {{used}} paid from points", "redeemAll": "Use all", "completionUnknown": "This bill may or may not have completed. Check the completed list before completing it again." },
   "items": {
     "title": "Items and stock",
@@ -32,6 +32,8 @@
     "required": "This field is required.",
     "badPrice": "Enter a price between 0 and 99,999,999.99.",
     "badStock": "Enter a stock figure between 0 and 99,999,999.99.",
+    "badWholeStock": "Stock must be a whole number for this unit.",
+    "badLowAt": "Enter a threshold of 0 or more.",
     "lowBadge": "{{n}} items low on stock"
   },
   "customersScreen": {
@@ -188,6 +190,7 @@
     "empty": "Nothing logged in this period.",
     "needItem": "Choose an item.",
     "badKg": "Enter kg above zero, at most two decimals.",
+    "badWhole": "Whole numbers only for this unit.",
     "badCost": "Enter the cost per kg, at most two decimals.",
     "overStock": "That is more than the {{kg}} kg in stock.",
     "by": "by {{name}}",
@@ -211,5 +214,35 @@
     "notFound": "That bill could not be found.",
     "voided": "VOIDED",
     "voidedReason": "Voided: {{reason}}"
+  },
+  "unit": {
+    "name": {
+      "kg": "Kilogram",
+      "piece": "Piece",
+      "bunch": "Bunch",
+      "dozen": "Dozen"
+    },
+    "qty": {
+      "kg": "{{n}} kg",
+      "piece": "{{n}} pcs",
+      "bunch": "{{n}} bunches",
+      "dozen": "{{n}} dozen"
+    },
+    "per": {
+      "kg": "per kg",
+      "piece": "per piece",
+      "bunch": "per bunch",
+      "dozen": "per dozen"
+    },
+    "field": {
+      "kg": "Weight (kg)",
+      "piece": "Pieces",
+      "bunch": "Bunches",
+      "dozen": "Dozens"
+    },
+    "label": "Sold by",
+    "lowAt": "Low-stock warning below",
+    "lockedNote": "The unit cannot change after the item has been sold.",
+    "notWhole": "Whole numbers only for this unit."
   }
 }

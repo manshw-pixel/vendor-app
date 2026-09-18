@@ -14,7 +14,7 @@ const topItemsBetween = vi.fn(async (..._a: unknown[]): Promise<{
   data: TopItem[] | null; error: null;
 }> => ({
   data: [{
-    item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
+    item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg",
     total_qty_kg: 12, total_revenue: 480, total_cost: "300.00", margin: "180.00", uncosted_lines: "0",
   }],
   error: null,
@@ -210,7 +210,7 @@ describe("the dashboard", () => {
 
   it("shows a dash for a top item whose margin is unknown", async () => {
     topItemsBetween.mockResolvedValueOnce({
-      data: [{ item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
+      data: [{ item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg",
                total_qty_kg: 12, total_revenue: 480, total_cost: null, margin: null, uncosted_lines: "4" }],
       error: null });
     render(<Dashboards />);

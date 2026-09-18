@@ -49,7 +49,10 @@ export default function Stock() {
   useEffect(() => { void load(range); }, [range, load]);
 
   async function submit() {
-    const r = validateMovement({ itemId, kind, qtyKg, unitCost, note });
+    const r = validateMovement(
+      { itemId, kind, qtyKg, unitCost, note },
+      items.find((i) => i.id === itemId)?.unit ?? "kg",
+    );
     if (!r.ok) { setFieldErrors(r.errors); return; }
     setFieldErrors({});
     setSaving(true);

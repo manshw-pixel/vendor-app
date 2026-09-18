@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { ItemValue, SettingsField } from "./adminRules";
+import type { Unit } from "./units";
 import type { Role } from "./config";
 
 /**
@@ -26,18 +27,30 @@ export type AdminItem = {
   /** The purchase cost of the item's most recent stock intake. Null means it has never
    *  been purchased through stock intake. */
   last_cost: string | number | null;
+  unit: Unit;
+  low_stock_at: number;
+  /** True once any bill line references the item. The unit is locked from then on
+   *  (the server refuses the change); derived from the bill_items(count) embed. */
+  sold: boolean;
 };
 
 export type StaffRow = { id: string; name: string; role: Role };
 
 export type VendorConfig = Record<SettingsField, number>;
 
-const ITEM_COLS = "id, name_en, name_hi, name_mr, price, stock_kg, is_active, last_cost";
+const ITEM_COLS = "id, name_en, name_hi, name_mr, price, stock_kg, is_active, last_cost, unit, low_stock_at, bill_items(count)";
 
 /** Unlike listItems() in data.ts, this does NOT filter is_active. The bill grid hides
  *  inactive items; the admin list must show them or they can never be brought back. */
 export async function listAllItems() {
-  return supabase.from("items").select(ITEM_COLS).order("name_en");
+  const res = await supabase.from("items").select(ITEM_COLS).order("name_en");
+  if (res.error || !res.data) return { data: null, error: res.error };
+  type Row = Omit<AdminItem, "sold"> & { bill_items?: { count: number }[] | null };
+  const data: AdminItem[] = (res.data as unknown as Row[]).map(({ bill_items, ...row }) => ({
+    ...row,
+    sold: (bill_items?.[0]?.count ?? 0) > 0,
+  }));
+  return { data, error: null };
 }
 
 export async function createItem(vendorId: string, value: ItemValue) {

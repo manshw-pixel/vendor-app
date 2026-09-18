@@ -15,7 +15,7 @@ describe("lineTotal", () => {
 
 describe("runningTotal", () => {
   const line = (unitPrice: number, qtyKg: number) =>
-    ({ itemId: "i", name: "n", unitPrice, qtyKg });
+    ({ itemId: "i", name: "n", unitPrice, qtyKg, unit: "kg" as const });
 
   it("is zero for an empty basket", () => {
     expect(runningTotal([])).toBe(0);

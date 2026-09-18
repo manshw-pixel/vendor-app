@@ -3,8 +3,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { AdminItem } from "../admin";
 
 const rows: AdminItem[] = [
-  { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true, last_cost: "31.25" },
-  { id: "i2", name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट", price: 30, stock_kg: 0, is_active: false, last_cost: null },
+  { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true, last_cost: "31.25",
+    unit: "kg", low_stock_at: 10, sold: false },
+  { id: "i2", name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट", price: 30, stock_kg: 0, is_active: false, last_cost: null,
+    unit: "kg", low_stock_at: 10, sold: false },
 ];
 
 const listAllItems = vi.fn(async (..._a: unknown[]): Promise<{ data: AdminItem[] | null; error: null }> =>

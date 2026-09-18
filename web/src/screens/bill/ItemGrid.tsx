@@ -48,6 +48,7 @@ export function ItemGrid({
       itemId: selected.id,
       name: itemName(selected, lang),
       unitPrice: selected.price,
+      unit: selected.unit,
       qtyKg: check.value,
     });
     setSelected(null);

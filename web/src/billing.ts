@@ -1,8 +1,11 @@
+import type { Unit } from "./units";
+
 export type Draft = {
   itemId: string;
   name: string;
   unitPrice: number;
   qtyKg: number;
+  unit: Unit;
 };
 
 /** numeric(10,2): two decimal places, so round here rather than let Postgres do it

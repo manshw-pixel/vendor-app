@@ -1,3 +1,4 @@
+import type { Unit } from "./units";
 import { supabase } from "./supabase";
 
 /**
@@ -19,7 +20,7 @@ export type ReceiptLine = {
   qty_kg: number;
   unit_price: number;
   line_total: number;
-  items: { name_en: string; name_hi: string; name_mr: string } | null;
+  items: { name_en: string; name_hi: string; name_mr: string; unit: Unit } | null;
 };
 
 export type Receipt = {
@@ -98,7 +99,7 @@ export async function loadReceipt(billId: string): Promise<
 
   const { data: lineRows, error: lineError } = await supabase
     .from("bill_items")
-    .select("id, qty_kg, unit_price, line_total, items(name_en, name_hi, name_mr)")
+    .select("id, qty_kg, unit_price, line_total, items(name_en, name_hi, name_mr, unit)")
     .eq("bill_id", billId);
 
   if (lineError) return { data: null, error: lineError };

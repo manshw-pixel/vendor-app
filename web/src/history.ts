@@ -1,3 +1,4 @@
+import type { Unit } from "./units";
 import { supabase } from "./supabase";
 import { toBounds, type Range } from "./dateRange";
 
@@ -29,7 +30,7 @@ export type BillLine = {
   qty_kg: number;
   unit_price: number;
   line_total: number;
-  items: { name_en: string; name_hi: string; name_mr: string } | null;
+  items: { name_en: string; name_hi: string; name_mr: string; unit: Unit } | null;
 };
 
 export type TopItem = {
@@ -37,6 +38,7 @@ export type TopItem = {
   name_en: string;
   name_hi: string;
   name_mr: string;
+  unit: Unit;
   total_qty_kg: number;
   total_revenue: number;
   /** Null when no line of this item had a purchase cost. Never read null as zero. */
@@ -128,7 +130,7 @@ export async function listCompleted(range: Range, after: Cursor | null) {
 export async function billLines(billId: string) {
   return supabase
     .from("bill_items")
-    .select("id, qty_kg, unit_price, line_total, items(name_en, name_hi, name_mr)")
+    .select("id, qty_kg, unit_price, line_total, items(name_en, name_hi, name_mr, unit)")
     .eq("bill_id", billId);
 }
 

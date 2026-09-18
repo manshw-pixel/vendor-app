@@ -31,7 +31,7 @@ const billLines = vi.fn(async (..._a: unknown[]): Promise<{
 }> => ({
   data: [{
     id: "l1", qty_kg: 2, unit_price: 40, line_total: 80,
-    items: { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा" },
+    items: { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg" },
   }],
   error: null,
 }));

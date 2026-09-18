@@ -1,3 +1,5 @@
+import { isWholeUnit, type Unit } from "./units";
+
 /**
  * Validation for the /stock intake form. Pure, so it is tested without a screen.
  *
@@ -16,6 +18,7 @@ const TWO_DP = /^\d+(\.\d{1,2})?$/;
 
 export function validateMovement(
   input: MovementInput,
+  unit: Unit,
 ): { ok: true; value: MovementValue } | { ok: false; errors: Partial<Record<MovementField, string>> } {
   const errors: Partial<Record<MovementField, string>> = {};
   if (input.itemId === "") errors.itemId = "stock.needItem";
@@ -23,6 +26,7 @@ export function validateMovement(
   const qtyRaw = input.qtyKg.trim();
   const qty = Number(qtyRaw);
   if (!TWO_DP.test(qtyRaw) || !(qty > 0)) errors.qtyKg = "stock.badKg";
+  else if (isWholeUnit(unit) && !Number.isInteger(qty)) errors.qtyKg = "stock.badWhole";
 
   let cost: number | null = null;
   if (input.kind === "purchase") {
