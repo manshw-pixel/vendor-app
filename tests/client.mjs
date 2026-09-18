@@ -160,7 +160,17 @@ class Client {
     const call = names.length
       ? `select * from ${ident(fn)}(${names.map((n, i) => `${ident(n)} => $${i + 1}`).join(", ")})`
       : `select * from ${ident(fn)}()`;
-    return this.#tx(() => this.#run(call, params));
+    const result = await this.#tx(() => this.#run(call, params));
+    if (result.error) return result;
+    // PostgREST unwraps a function's result to a single object when the function is
+    // declared to return one row (not SETOF/TABLE); a set-returning function keeps the
+    // array. proretset carries that distinction, so we look it up rather than guess from
+    // the row count -- a purchase-only movement legitimately returns exactly one row of a
+    // setof function too.
+    if (!(await isSetReturning(this.#conn, fn))) {
+      result.data = result.data.length ? result.data[0] : null;
+    }
+    return result;
   }
 
   get auth() {
@@ -194,6 +204,19 @@ class Client {
   }
 
   async close() { await this.#conn.end().catch(() => {}); }
+}
+
+// Cached per function name, per process: proretset never changes mid-run, and this is
+// looked up on every rpc() call.
+const SETOF_CACHE = new Map();
+async function isSetReturning(conn, fn) {
+  if (SETOF_CACHE.has(fn)) return SETOF_CACHE.get(fn);
+  const { rows } = await conn.query(
+    `select proretset from pg_proc where proname = $1 limit 1`, [fn]
+  );
+  const setof = rows.length ? rows[0].proretset : true;
+  SETOF_CACHE.set(fn, setof);
+  return setof;
 }
 
 const open = async (connectionString, role) => {
