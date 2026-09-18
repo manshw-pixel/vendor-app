@@ -211,4 +211,47 @@ describe("the completed bills screen", () => {
     expect(row.textContent).toContain("Biller A");
     expect(row.textContent).toContain("₹250.00");
   });
+
+  it("announces the voided token after a successful void", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("completed-void-b1"));
+    fireEvent.change(screen.getByTestId("void-reason"), { target: { value: "wrong item" } });
+    fireEvent.click(screen.getByTestId("void-confirm"));
+    const done = await screen.findByTestId("void-done");
+    expect(done.textContent).toContain("1");
+    expect(done.getAttribute("role")).toBe("status");
+  });
+
+  it("gives the void reason field an accessible name", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("completed-void-b1"));
+    expect(screen.getByLabelText(/why is this bill being voided/i)).toBeTruthy();
+  });
+
+  it("does not let an older voided-list response overtake a newer one for the same range", async () => {
+    let resolveFirst: (v: { data: unknown[]; error: null }) => void = () => {};
+    listVoided
+      .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }))
+      .mockResolvedValueOnce({ data: [{
+        id: "v2", token_no: 5, total: 100, completed_at: new Date().toISOString(),
+        voided_at: new Date().toISOString(), void_reason: "second",
+        customers: { name: "Cust 2", flat_no: "A-2" }, app_users: { name: "Biller B" },
+      }], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-voided-toggle"));
+    fireEvent.click(screen.getByTestId("completed-voided-toggle"));   // close
+    fireEvent.click(screen.getByTestId("completed-voided-toggle"));   // reopen -> second call
+    await screen.findByTestId("voided-row-v2");
+    resolveFirst({ data: [{
+      id: "v1", token_no: 1, total: 50, completed_at: new Date().toISOString(),
+      voided_at: new Date().toISOString(), void_reason: "first",
+      customers: null, app_users: null,
+    }], error: null });
+    await waitFor(() => expect(screen.queryByTestId("voided-row-v1")).toBeNull());
+    expect(screen.getByTestId("voided-row-v2")).toBeTruthy();
+  });
 });

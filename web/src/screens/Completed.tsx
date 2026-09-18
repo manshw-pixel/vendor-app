@@ -26,15 +26,19 @@ export default function Completed() {
   const [voiding, setVoiding] = useState(false);
   const [voidedOpen, setVoidedOpen] = useState(false);
   const [voidedRows, setVoidedRows] = useState<VoidedBill[]>([]);
+  const [doneToken, setDoneToken] = useState<number | null>(null);
 
   /** Which range the newest request was for. Tapping "This month" then "Today" fires two
    *  overlapping fetches; without this guard the slower month response lands last and
    *  appends the previous period's bills to the new one. Same idiom as Customers.tsx. */
   const wanted = useRef<string>("");
-  /** Same idiom as `wanted` above, but for the voided list: which range its newest
-   *  request was for, so a stale response (e.g. range changed while it was open) never
-   *  paints. */
-  const voidedWanted = useRef<string>("");
+  /** Same idiom as `wanted` above, but for the voided list. A range STRING is not enough
+   *  here: reloading the voided list twice for the SAME range (e.g. a void followed
+   *  immediately by the toggle staying open) produces two in-flight requests keyed
+   *  identically, so an older one landing after the newer one would still overwrite it.
+   *  A monotonically increasing counter distinguishes "this call" from "any earlier
+   *  call", same range or not. */
+  const voidedRequest = useRef(0);
 
   const lang = i18n.language as Lang;
 
@@ -60,16 +64,19 @@ export default function Completed() {
   }, []);
 
   const loadVoided = useCallback(async (r: Range) => {
-    const key = `${r.from}..${r.to}`;
-    voidedWanted.current = key;
+    const requestId = ++voidedRequest.current;
     const { data, error } = await listVoided(r);
-    if (voidedWanted.current !== key) return;   // superseded; a later range owns the screen now
-    setProblem(describeError(error));
+    if (voidedRequest.current !== requestId) return;   // a later call has since been made
+    const described = describeError(error);
+    setProblem(described);
+    if (described) setDoneToken(null);
     setVoidedRows((data ?? []) as unknown as VoidedBill[]);
   }, []);
 
   useEffect(() => {
     setOpen(null);
+    setDoneToken(null);
+    setVoidedRows([]);   // the previous period's voided bills must never flash here
     void load(range, null);
   }, [range, load]);
 
@@ -85,8 +92,11 @@ export default function Completed() {
     setLines([]);
     setVoidingId(null);
     setReason("");
+    setDoneToken(null);
     const { data, error } = await billLines(id);
-    setProblem(describeError(error));
+    const described = describeError(error);
+    setProblem(described);
+    if (described) setDoneToken(null);
     setLines((data ?? []) as unknown as BillLine[]);
   }
 
@@ -101,7 +111,7 @@ export default function Completed() {
     setReason("");
   }
 
-  async function confirmVoid(id: string) {
+  async function confirmVoid(id: string, tokenNo: number) {
     setVoiding(true);
     const { error } = await voidBill(id, reason.trim());
     setVoiding(false);
@@ -114,6 +124,7 @@ export default function Completed() {
     setOpen(null);
     setVoidingId(null);
     setReason("");
+    setDoneToken(tokenNo);
     if (voidedOpen) void loadVoided(range);
   }
 
@@ -129,6 +140,16 @@ export default function Completed() {
           className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
         >
           {t(problem.key)}
+        </p>
+      )}
+
+      {doneToken !== null && (
+        <p
+          data-testid="void-done"
+          role="status"
+          className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3"
+        >
+          {t("void.done", { n: doneToken })}
         </p>
       )}
 
@@ -208,8 +229,14 @@ export default function Completed() {
 
                   {voidingId === b.id && (
                     <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
-                      <p className="text-sm text-slate-700">{t("void.why")}</p>
+                      <label
+                        htmlFor={`void-reason-${b.id}`}
+                        className="block text-sm text-slate-700"
+                      >
+                        {t("void.why")}
+                      </label>
                       <input
+                        id={`void-reason-${b.id}`}
                         data-testid="void-reason"
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
@@ -220,7 +247,7 @@ export default function Completed() {
                         <button
                           data-testid="void-confirm"
                           disabled={reason.trim() === "" || voiding}
-                          onClick={() => void confirmVoid(b.id)}
+                          onClick={() => void confirmVoid(b.id, b.token_no)}
                           className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
                         >
                           {t("void.confirm")}
