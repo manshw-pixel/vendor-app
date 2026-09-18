@@ -317,7 +317,14 @@ grant execute on function clear_vendor_data() to authenticated;
 --
 -- Cost sums only lines with a known unit_cost. uncosted_lines says how many were left
 -- out, so the screen can say the profit figure is incomplete rather than silently high.
-
+--
+-- profit covers COSTED sales only: total minus the revenue of uncosted lines minus cost.
+-- Uncosted revenue is left OUT of profit -- it is not counted as free profit, which is
+-- what a plain (total - cost) would do (an uncosted line's whole sale price would land as
+-- pure margin). This matches top_items_between.margin, which is also computed over costed
+-- lines. Any bill-level redeemed points are folded into `total` (bills.total is already
+-- net of them, see 0010) and so are charged wholly against the costed portion here -- a
+-- conservative choice, since points cannot be attributed back to a specific line.
 drop function if exists collected_between(timestamptz, timestamptz);
 
 create function collected_between(p_from timestamptz, p_to timestamptz)
@@ -329,18 +336,21 @@ create function collected_between(p_from timestamptz, p_to timestamptz)
      where b.status = 'done'
        and b.completed_at >= p_from
        and b.completed_at <  p_to
+  ), totals as (
+    select coalesce(sum(total), 0) as total, count(*) as bill_count from done
   ), lines as (
-    select coalesce(sum(bi.qty_kg * bi.unit_cost), 0)            as cost,
-           count(*) filter (where bi.unit_cost is null)          as uncosted
+    select coalesce(sum(bi.qty_kg * bi.unit_cost), 0)                          as cost,
+           coalesce(sum(bi.line_total) filter (where bi.unit_cost is null), 0) as uncosted_revenue,
+           count(*) filter (where bi.unit_cost is null)                        as uncosted
       from bill_items bi
       join done d on d.id = bi.bill_id
   )
-  select coalesce((select sum(total) from done), 0)                       as total,
-         (select count(*) from done)                                      as bill_count,
-         round(l.cost, 2)                                                 as cost,
-         round(coalesce((select sum(total) from done), 0) - l.cost, 2)    as profit,
-         l.uncosted                                                       as uncosted_lines
-    from lines l;
+  select t.total                                                     as total,
+         t.bill_count                                                as bill_count,
+         round(l.cost, 2)                                            as cost,
+         round(t.total - l.uncosted_revenue - l.cost, 2)             as profit,
+         l.uncosted                                                  as uncosted_lines
+    from totals t, lines l;
 $$;
 
 revoke all on function collected_between(timestamptz, timestamptz) from public, anon;
@@ -368,6 +378,11 @@ create function top_items_between(p_from timestamptz, p_to timestamptz)
          round(sum(bi.qty_kg * bi.unit_cost), 2)          as total_cost,
          -- Margin over the COSTED lines only. Subtracting a partial cost from the full
          -- revenue would overstate margin for a half-costed item.
+         --
+         -- On gross line_total, not bills.total: redeemed points are a bill-level discount
+         -- (see 0010) that this per-item query has no way to attribute to one line among
+         -- several. So per-item margins can sum to MORE than collected_between's headline
+         -- profit, by the amount of points redeemed in the window -- expected, not a bug.
          round(sum(bi.line_total) filter (where bi.unit_cost is not null)
                - sum(bi.qty_kg * bi.unit_cost), 2)        as margin,
          count(*) filter (where bi.unit_cost is null)     as uncosted_lines
