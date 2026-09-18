@@ -60,7 +60,7 @@ beforeEach(() => {
   responses.bills = { ...BILL };
   responses.lines = [
     { id: "l1", qty_kg: "2.5", unit_price: "40.00", line_total: "100.00",
-      items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो" } },
+      items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो", unit: "kg" } },
   ];
   responses.ledger = [{ points: 0 }];
   rpcResult.data = [{ balance: 260, days_left: 15 }];
@@ -69,6 +69,12 @@ beforeEach(() => {
 });
 
 describe("loadReceipt", () => {
+  it("selects each line's item unit", async () => {
+    await loadReceipt("b1");
+    expect(captured.selects.some((c) => c.includes("items(name_en, name_hi, name_mr, unit)"))).toBe(true);
+  });
+
+
   it("computes gross as the net plus the points redeemed", async () => {
     // bills.total is the NET (0010). Printing it as the subtotal shows the discount
     // twice: once in the subtotal and again on the redemption line.

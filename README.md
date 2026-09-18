@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 211 cases, 0 failures
+## ✅ Verified: 225 cases, 0 failures
 
-`npm test` runs **211 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all seventeen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **225 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all eighteen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -73,6 +73,13 @@ Covered:
   claw-back that may drive the balance negative; a redemption becomes a refund), queues one
   `bill_voided` message, and is idempotent. Voided bills leave every analytics function
   and view without those queries changing, and the receipt still prints, marked VOIDED.
+
+- **Item units.** Every item sells in one of kg, piece, bunch or dozen, with a per-item
+  low-stock threshold that `v_low_stock` honours. Non-kg quantities must be whole numbers,
+  enforced by the `items` trigger, `replace_bill_lines` and `log_stock_movement`; the unit is
+  locked once the item has been sold. `top_items_between` ranks by sales value and returns
+  the unit. Existing items default to kg with threshold 10, so nothing changes until an
+  admin edits an item.
 
 ### What the local suite does not cover
 

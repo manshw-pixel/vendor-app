@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { loadReceipt, type Receipt as ReceiptData } from "../receipt";
 import { itemName, type Lang } from "../i18n/locales";
+import { qtyText } from "../units";
 import { describeError } from "../errors";
 import "../i18n";
 
@@ -115,7 +116,7 @@ export default function Receipt() {
             <li key={l.id} data-testid={`receipt-line-${l.id}`}>
               <div className="truncate">{l.items ? itemName(l.items, lang) : "—"}</div>
               <div className="flex justify-between pl-2">
-                <span>{`${l.qty_kg} kg x ${l.unit_price.toFixed(2)}`}</span>
+                <span>{`${qtyText(l.qty_kg, l.items?.unit ?? "kg", t)} x ${l.unit_price.toFixed(2)}`}</span>
                 <span>{l.line_total.toFixed(2)}</span>
               </div>
             </li>

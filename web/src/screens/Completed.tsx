@@ -8,6 +8,7 @@ import {
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
 import { itemName, type Lang } from "../i18n/locales";
+import { qtyText } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 import "../i18n";
@@ -190,7 +191,7 @@ export default function Completed() {
                         <span className="text-slate-700">
                           {l.items ? itemName(l.items, lang) : "—"}
                           {" · "}
-                          {t("completed.qtyLine", { qty: l.qty_kg })}
+                          {qtyText(l.qty_kg, l.items?.unit ?? "kg", t)}
                         </span>
                         <span className="text-slate-600">{rupees(l.line_total)}</span>
                       </li>

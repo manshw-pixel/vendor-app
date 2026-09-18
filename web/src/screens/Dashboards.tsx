@@ -7,6 +7,7 @@ import {
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
 import { itemName, type Lang } from "../i18n/locales";
+import { qtyText } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 import "../i18n";
@@ -140,7 +141,7 @@ export default function Dashboards() {
               <li key={i.item_id} data-testid={`dash-top-${i.item_id}`} className="flex justify-between text-sm">
                 <span className="text-slate-700">{itemName(i, lang)}</span>
                 <span className="text-slate-600">
-                  {t("dash.kg", { kg: i.total_qty_kg })} · {rupees(Number(i.total_revenue))}
+                  {qtyText(i.total_qty_kg, i.unit, t)} · {rupees(Number(i.total_revenue))}
                   {" · "}
                   <span data-testid={`dash-top-margin-${i.item_id}`}
                         title={t("dash.margin")}

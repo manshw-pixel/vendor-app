@@ -16,8 +16,10 @@ const FULL: ReceiptData = {
   gross: 216,
   redeemed_points: 50,
   lines: [
-    { id: "l1", qty_kg: 2.5, unit_price: 40, line_total: 100,
-      items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो" } },
+    { id: "l1", qty_kg: 1.5, unit_price: 40, line_total: 60,
+      items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो", unit: "kg" } },
+    { id: "l2", qty_kg: 3, unit_price: 30, line_total: 90,
+      items: { name_en: "Lemon", name_hi: "नींबू", name_mr: "लिंबू", unit: "piece" } },
   ],
   customer: { name: "Sunita Kale", flat_no: "B-304" },
   biller_name: "Sunil",
@@ -107,6 +109,12 @@ describe("Receipt", () => {
     const shop = await screen.findByTestId("receipt-shop");
     expect(shop.textContent).toMatch(/Taji Bhaji/);
     expect(screen.queryByTestId("receipt-shop-address")).toBeNull();
+  });
+
+  it("names each line's quantity in the item's own unit", async () => {
+    renderAt();
+    expect((await screen.findByTestId("receipt-line-l1")).textContent).toContain("1.5 kg x 40.00");
+    expect(screen.getByTestId("receipt-line-l2").textContent).toContain("3 pcs x 30.00");
   });
 
   it("names the item in the active language", async () => {

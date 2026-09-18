@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { lineTotal, runningTotal, type Draft } from "../../billing";
 import { rupees } from "../../money";
+import { qtyText } from "../../units";
 
 /** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
  *  nothing on this screen ever sends a total to the server. */
@@ -41,7 +42,7 @@ export function Basket({
                   </span>
                 </span>
                 <span className="block text-xs text-slate-500">
-                  {t("bill.qtyLine", { qty: l.qtyKg })} × {rupees(l.unitPrice)}
+                  {qtyText(l.qtyKg, l.unit, t)} × {rupees(l.unitPrice)}
                   {!frozen && ` · ${t("bill.remove")}`}
                 </span>
               </button>

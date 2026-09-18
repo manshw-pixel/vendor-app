@@ -134,3 +134,11 @@ describe("listVoided", () => {
     expect(selectArg).toContain("app_users!bills_voided_by_fkey(name)");
   });
 });
+
+describe("billLines unit", () => {
+  it("selects each line's item unit", async () => {
+    chain.select.mockClear();
+    await billLines("b1");
+    expect(chain.select.mock.calls[0]?.[0]).toContain("items(name_en, name_hi, name_mr, unit)");
+  });
+});

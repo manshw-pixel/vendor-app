@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import type { Range } from "./dateRange";
 import { toBounds } from "./dateRange";
+import type { Unit } from "./units";
 import type { MovementKind } from "./stockRules";
 
 /** One row of stock_movements_between (0016). Numeric columns arrive as strings from
@@ -11,6 +12,7 @@ export type Movement = {
   name_en: string;
   name_hi: string;
   name_mr: string;
+  unit: Unit;
   kind: MovementKind;
   qty_kg: string | number;
   unit_cost: string | number | null;

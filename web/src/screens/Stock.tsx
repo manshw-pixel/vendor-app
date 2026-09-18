@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listItems, type Item } from "../data";
 import { logMovement, movementsBetween, type Movement } from "../stock";
-import { validateMovement, signedKg, type MovementField, type MovementKind } from "../stockRules";
+import { validateMovement, signedQty, type MovementField, type MovementKind } from "../stockRules";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
 import { itemName, type Lang } from "../i18n/locales";
+import { qtyText, perUnit, type Unit } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 import "../i18n";
@@ -24,7 +25,7 @@ export default function Stock() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<MovementField, string>>>({});
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<{ key: string; detail: string; kg?: number | "" } | null>(null);
+  const [problem, setProblem] = useState<{ key: string; detail: string; kg?: number | ""; unit?: Unit } | null>(null);
   // Same stale-response guard as Dashboards.tsx: two quick range taps must not let the
   // slower, older fetch paint last.
   const wanted = useRef("");
@@ -49,7 +50,10 @@ export default function Stock() {
   useEffect(() => { void load(range); }, [range, load]);
 
   async function submit() {
-    const r = validateMovement({ itemId, kind, qtyKg, unitCost, note });
+    const r = validateMovement(
+      { itemId, kind, qtyKg, unitCost, note },
+      items.find((i) => i.id === itemId)?.unit ?? "kg",
+    );
     if (!r.ok) { setFieldErrors(r.errors); return; }
     setFieldErrors({});
     setSaving(true);
@@ -64,7 +68,9 @@ export default function Stock() {
         const kg = Number.isFinite(fromServer) && (error as { details?: string | null }).details?.trim()
           ? fromServer
           : chosen ? Number(chosen.stock_kg) : "";
-        setProblem({ ...p, kg });
+        // The unit is captured NOW, from the item chosen at submit time, so a later
+        // switch to a different item cannot change what this message names.
+        setProblem({ ...p, kg, unit: chosen?.unit ?? "kg" });
         const fresh = await listItems();
         setItems((fresh.data ?? []) as Item[]);
       } else {
@@ -108,7 +114,7 @@ export default function Stock() {
                   data-testid="stock-item" className={input}>
             <option value="">{t("stock.pickItem")}</option>
             {items.map((i) => (
-              <option key={i.id} value={i.id}>{itemName(i, lang)} ({Number(i.stock_kg)} kg)</option>
+              <option key={i.id} value={i.id}>{itemName(i, lang)} ({qtyText(i.stock_kg, i.unit, t)})</option>
             ))}
           </select>
           {fieldErrors.itemId && <span data-testid="stock-err-itemId" className="text-xs text-red-600">{t(fieldErrors.itemId)}</span>}
@@ -116,14 +122,14 @@ export default function Stock() {
 
         <div className="grid grid-cols-2 gap-2">
           <label className="block text-sm text-slate-600">
-            {t("stock.kg")}
+            {t("stock.kg", { unit: t(`unit.plural.${chosen?.unit ?? "kg"}`) })}
             <input inputMode="decimal" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)}
                    data-testid="stock-kg" className={input} />
             {fieldErrors.qtyKg && <span data-testid="stock-err-qtyKg" className="text-xs text-red-600">{t(fieldErrors.qtyKg)}</span>}
           </label>
           {kind === "purchase" && (
             <label className="block text-sm text-slate-600">
-              {t("stock.cost")}
+              {t("stock.cost", { per: perUnit(chosen?.unit ?? "kg", t) })}
               <input inputMode="decimal" value={unitCost} onChange={(e) => setUnitCost(e.target.value)}
                      data-testid="stock-cost" className={input} />
               {fieldErrors.unitCost && <span data-testid="stock-err-unitCost" className="text-xs text-red-600">{t(fieldErrors.unitCost)}</span>}
@@ -145,7 +151,7 @@ export default function Stock() {
       {problem && (
         <div data-testid="stock-problem" className="bg-red-50 border border-red-200 rounded-lg p-3">
           <p className="text-sm text-red-700">
-            {t(problem.key, { kg: problem.kg ?? "" })}
+            {t(problem.key, { qty: problem.kg !== undefined && problem.kg !== "" ? qtyText(problem.kg, problem.unit ?? "kg", t) : "" })}
           </p>
           {problem.detail && (
             <p className="text-xs text-red-600 mt-1 break-words">{t("error.details")}: {problem.detail}</p>
@@ -165,7 +171,7 @@ export default function Stock() {
             <div className="flex justify-between gap-3">
               <span className="text-slate-800">{itemName(m, lang)}</span>
               <span className={m.kind === "purchase" ? "text-green-700" : "text-red-700"}>
-                {signedKg(m.kind, m.qty_kg)}
+                {signedQty(m.kind, m.qty_kg, m.unit, t)}
               </span>
             </div>
             <div className="flex justify-between gap-3 text-xs text-slate-500">
@@ -174,7 +180,7 @@ export default function Stock() {
                 {m.created_by_name ? ` · ${t("stock.by", { name: m.created_by_name })}` : ""}
                 {m.note ? ` · ${m.note}` : ""}
               </span>
-              {m.unit_cost !== null && <span>{rupees(Number(m.unit_cost))}/kg</span>}
+              {m.unit_cost !== null && <span>{rupees(Number(m.unit_cost))} {perUnit(m.unit, t)}</span>}
             </div>
           </li>
         ))}

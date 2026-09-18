@@ -7,6 +7,7 @@
  * actually hold. Rejecting here only buys a clearer message than a 400 from PostgREST.
  */
 
+import { isWholeUnit, type Unit } from "./units";
 import { ROLES, type Role } from "./config";
 import { MIN_PASSWORD_LENGTH } from "../../supabase/functions/admin-create-user/guards";
 
@@ -16,6 +17,8 @@ export type ItemInput = {
   name_mr: string;
   price: string;
   stock_kg: string;
+  unit: Unit;
+  low_stock_at: string;
 };
 export type ItemField = keyof ItemInput;
 
@@ -25,27 +28,21 @@ export type ItemValue = {
   name_mr: string;
   price: number;
   stock_kg: number;
+  unit: Unit;
+  low_stock_at: number;
 };
-
-/**
- * Below this many kg, a row is coloured. EXCLUSIVE, and deliberately the same figure and
- * the same comparison as the two other places that decide "low": `v_low_stock`
- * (`0004_views.sql:46`, `stock_kg < 10`) and the bill grid
- * (`screens/bill/ItemGrid.tsx:18`, `kg < 10`).
- *
- * This read 2 with a `<=` while its comment already claimed to match the bill grid, so an
- * item at 5 kg went amber on the bill screen, counted toward the low-stock nav badge, and
- * rendered plain on the items list. Requirement #9 fixes the threshold at 10; if it ever
- * moves, it moves in the view first and these follow.
- */
-export const LOW_STOCK_KG = 10;
 
 /** Maximum value for numeric(10,2) columns in 0001_schema.sql. */
 const MAX_NUMERIC = 99999999.99;
 
-export function stockLevel(kg: number): "out" | "low" | "ok" {
+/**
+ * Below the item's own low_stock_at, a row is coloured. EXCLUSIVE, the same comparison
+ * v_low_stock makes (`stock_kg < low_stock_at`), so the list, the badge and the bill grid
+ * agree on what "low" means.
+ */
+export function stockLevel(kg: number, lowAt: number): "out" | "low" | "ok" {
   if (kg <= 0) return "out";
-  return kg < LOW_STOCK_KG ? "low" : "ok";
+  return kg < lowAt ? "low" : "ok";
 }
 
 /** A non-negative decimal, or null. Rejects "", "x", "1e3" and "-1". */
@@ -74,6 +71,10 @@ export function validateItem(
 
   const stock = nonNegative(input.stock_kg);
   if (stock === null) errors.stock_kg = "items.badStock";
+  else if (isWholeUnit(input.unit) && !Number.isInteger(stock)) errors.stock_kg = "items.badWholeStock";
+
+  const lowAt = nonNegative(input.low_stock_at);
+  if (lowAt === null) errors.low_stock_at = "items.badLowAt";
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
@@ -84,6 +85,8 @@ export function validateItem(
       name_mr: input.name_mr.trim(),
       price: price as number,
       stock_kg: stock as number,
+      unit: input.unit,
+      low_stock_at: lowAt as number,
     },
   };
 }

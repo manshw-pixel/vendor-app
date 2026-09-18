@@ -10,7 +10,7 @@ const rpc = vi.fn(async (..._a: unknown[]) => ({ data: 120, error: null }));
 const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
 const eq = vi.fn((..._a: unknown[]) => ({ maybeSingle }));
 const select = vi.fn((..._a: unknown[]) => ({
-  order: async () => ({ data: [], error: null }),
+  order: async (): Promise<{ data: unknown[]; error: null }> => ({ data: [], error: null }),
   eq,
 }));
 const chain = { select, eq, maybeSingle, update };
@@ -30,7 +30,8 @@ const {
   loadShopDetails, updateShopDetails,
 } = await import("../admin");
 
-const value = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5 };
+const value = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5,
+  unit: "piece" as const, low_stock_at: 5 };
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -40,6 +41,40 @@ describe("listAllItems", () => {
     // admin who cannot see a hidden item cannot bring it back.
     await listAllItems();
     expect(from).toHaveBeenCalledWith("items");
+  });
+
+  it("selects unit, low_stock_at and the bill_items count", async () => {
+    await listAllItems();
+    const cols = select.mock.calls[0]?.[0] as string;
+    expect(cols).toContain("unit");
+    expect(cols).toContain("low_stock_at");
+    expect(cols).toContain("bill_items(count)");
+  });
+
+  it("derives sold from the bill_items count and drops the embed", async () => {
+    select.mockImplementationOnce(() => ({
+      order: async () => ({
+        data: [
+          { id: "a", unit: "piece", bill_items: [{ count: 2 }] },
+          { id: "b", unit: "kg", bill_items: [] },
+          { id: "c", unit: "kg", bill_items: [{ count: 0 }] },
+        ],
+        error: null,
+      }),
+      eq,
+    }));
+    const { data } = await listAllItems();
+    expect(data!.map((r) => r.sold)).toEqual([true, false, false]);
+    expect(data![0]).not.toHaveProperty("bill_items");
+  });
+});
+
+describe("createItem and updateItem send unit and low_stock_at", () => {
+  it("includes both on insert and update", async () => {
+    await createItem("v1", value);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ unit: "piece", low_stock_at: 5 }));
+    await updateItem("i1", value);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ unit: "piece", low_stock_at: 5 }));
   });
 });
 

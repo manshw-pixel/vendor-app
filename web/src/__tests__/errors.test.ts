@@ -100,4 +100,21 @@ describe("describeError", () => {
     expect(describeError({ code: "P0001", message: "void window closed" })?.key).toBe("void.windowClosed");
     expect(describeError({ code: "P0001", message: "bill is not done" })?.key).toBe("void.notDone");
   });
+
+  it("maps the unit-lock refusal", () => {
+    const r = describeError({
+      code: "P0001",
+      message: "unit is locked once the item has been sold",
+    });
+    expect(r?.key).toBe("unit.locked");
+  });
+
+  it("maps the whole-number refusals for both stock and quantity", () => {
+    expect(
+      describeError({ code: "P0001", message: "stock must be a whole number for this unit" })?.key,
+    ).toBe("unit.notWhole");
+    expect(
+      describeError({ code: "P0001", message: "quantity must be a whole number for this unit" })?.key,
+    ).toBe("unit.notWhole");
+  });
 });

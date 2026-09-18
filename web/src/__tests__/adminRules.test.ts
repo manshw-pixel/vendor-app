@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  validateItem, validateSettings, validateNewStaff, canEditStaff, stockLevel, LOW_STOCK_KG,
+  validateItem, validateSettings, validateNewStaff, canEditStaff, stockLevel,
 } from "../adminRules";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 
-const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5" };
+const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5",
+  unit: "kg" as const, low_stock_at: "10" };
 
 describe("validateItem", () => {
   it("accepts a complete item and returns numbers, not strings", () => {
@@ -12,6 +13,7 @@ describe("validateItem", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toEqual({
       name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5,
+      unit: "kg", low_stock_at: 10,
     });
   });
 
@@ -24,7 +26,7 @@ describe("validateItem", () => {
   });
 
   it("reports every problem at once", () => {
-    const r = validateItem({ name_en: "", name_hi: "", name_mr: "", price: "x", stock_kg: "-1" });
+    const r = validateItem({ ...item, name_en: "", name_hi: "", name_mr: "", price: "x", stock_kg: "-1" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort())
       .toEqual(["name_en", "name_hi", "name_mr", "price", "stock_kg"]);
@@ -56,6 +58,32 @@ describe("validateItem", () => {
 
   it("rejects a price exceeding the maximum numeric(10,2) value", () => {
     expect(validateItem({ ...item, price: "100000000" }).ok).toBe(false);
+  });
+
+  it("refuses fractional stock for a whole unit", () => {
+    const r = validateItem({ ...item, unit: "piece", stock_kg: "2.5" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.stock_kg).toBe("items.badWholeStock");
+  });
+
+  it("accepts fractional stock for kg and whole stock for a piece", () => {
+    expect(validateItem({ ...item, stock_kg: "2.5" }).ok).toBe(true);
+    const r = validateItem({ ...item, unit: "piece", stock_kg: "12", low_stock_at: "5" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.unit).toBe("piece");
+      expect(r.value.low_stock_at).toBe(5);
+    }
+  });
+
+  it.each(["-1", "", "x"])("refuses low_stock_at %j", (low_stock_at) => {
+    const r = validateItem({ ...item, low_stock_at });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.low_stock_at).toBe("items.badLowAt");
+  });
+
+  it("accepts a zero threshold", () => {
+    expect(validateItem({ ...item, low_stock_at: "0" }).ok).toBe(true);
   });
 });
 
@@ -135,27 +163,18 @@ describe("canEditStaff", () => {
 
 describe("stockLevel", () => {
   it("calls zero out of stock", () => {
-    expect(stockLevel(0)).toBe("out");
+    expect(stockLevel(0, 10)).toBe("out");
   });
 
-  it("calls anything under the threshold low", () => {
-    expect(stockLevel(LOW_STOCK_KG - 0.01)).toBe("low");
-    expect(stockLevel(0.5)).toBe("low");
+  it("calls anything under the item's own threshold low, exclusively", () => {
+    expect(stockLevel(9.99, 10)).toBe("low");
+    expect(stockLevel(10, 10)).toBe("ok");
+    expect(stockLevel(4, 5)).toBe("low");
+    expect(stockLevel(5, 5)).toBe("ok");
   });
 
-  it("calls a healthy figure ok", () => {
-    expect(stockLevel(LOW_STOCK_KG + 0.01)).toBe("ok");
-  });
-
-  /* The boundary is EXCLUSIVE, and these three pin it together because they have drifted
-     apart before: v_low_stock (0004_views.sql:46) is `stock_kg < 10`, the bill grid
-     (screens/bill/ItemGrid.tsx:18) is `kg < 10`, and this was `kg <= 2` while its own
-     comment claimed to match the bill grid. The visible symptom was an item reading amber
-     on the bill screen, counting toward the low-stock badge, and rendering plain on the
-     items list. */
-  it("agrees with v_low_stock and the bill grid on the threshold itself", () => {
-    expect(LOW_STOCK_KG).toBe(10);
-    expect(stockLevel(LOW_STOCK_KG)).toBe("ok");
+  it("never calls positive stock low with a zero threshold", () => {
+    expect(stockLevel(1, 0)).toBe("ok");
   });
 });
 

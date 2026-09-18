@@ -17,7 +17,7 @@ const from = vi.fn((..._a: unknown[]) => ({
 
 vi.mock("../supabase", () => ({ supabase: { from: (...a: unknown[]) => from(...a), rpc: (...a: unknown[]) => rpc(...a) } }));
 
-const { createBill, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
+const { listItems, createBill, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
 
 beforeEach(() => { insert.mockClear(); rpc.mockClear(); from.mockClear(); select.mockClear(); gt.mockClear(); });
 
@@ -45,7 +45,7 @@ describe("replaceBillLines", () => {
     // line_total is computed in the function. Sending one would be ignored, and having it
     // in the payload would suggest the client's figure still matters.
     await replaceBillLines("b1", [
-      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5 },
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5, unit: "kg" },
     ]);
     expect(rpc).toHaveBeenCalledWith("replace_bill_lines", {
       p_bill_id: "b1",
@@ -57,7 +57,7 @@ describe("replaceBillLines", () => {
     // The function reads vendor_id off the bill. Sending one would be a weaker second
     // copy of a value the server already holds authoritatively.
     await replaceBillLines("b1", [
-      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 1 },
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 1, unit: "kg" },
     ]);
     const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(Object.keys(args)).toEqual(["p_bill_id", "p_lines"]);
@@ -65,8 +65,8 @@ describe("replaceBillLines", () => {
 
   it("carries every line of a multi-item basket in order", async () => {
     await replaceBillLines("b1", [
-      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5 },
-      { itemId: "i2", name: "Onion", unitPrice: 32, qtyKg: 1 },
+      { itemId: "i1", name: "Tomato", unitPrice: 40, qtyKg: 2.5, unit: "kg" },
+      { itemId: "i2", name: "Onion", unitPrice: 32, qtyKg: 1, unit: "kg" },
     ]);
     const args = rpc.mock.calls[0]?.[1] as { p_lines: unknown[] };
     expect(args.p_lines).toEqual([
@@ -113,5 +113,14 @@ describe("the billing data layer, with redemption", () => {
     // the customer earned, or go negative on a bill that earned nothing.
     await pointsForBill("b1");
     expect(gt).toHaveBeenCalledWith("points", 0);
+  });
+});
+
+describe("listItems", () => {
+  it("selects unit and low_stock_at", async () => {
+    await listItems();
+    const cols = select.mock.calls[0]?.[0] as string;
+    expect(cols).toContain("unit");
+    expect(cols).toContain("low_stock_at");
   });
 });

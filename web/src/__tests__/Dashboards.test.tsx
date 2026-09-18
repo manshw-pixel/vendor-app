@@ -14,7 +14,7 @@ const topItemsBetween = vi.fn(async (..._a: unknown[]): Promise<{
   data: TopItem[] | null; error: null;
 }> => ({
   data: [{
-    item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
+    item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg",
     total_qty_kg: 12, total_revenue: 480, total_cost: "300.00", margin: "180.00", uncosted_lines: "0",
   }],
   error: null,
@@ -79,6 +79,17 @@ describe("the dashboard", () => {
     // i18n-init.test.ts -- so itemName() renders the literal English name here too).
     const row = await screen.findByTestId("dash-top-i1");
     expect(within(row).getByText(/Onion|कांदा|प्याज/)).toBeTruthy();
+  });
+
+  it("names the top item's quantity in its own unit", async () => {
+    topItemsBetween.mockResolvedValueOnce({
+      data: [{ item_id: "i2", name_en: "Lemon", name_hi: "नींबू", name_mr: "लिंबू", unit: "piece",
+               total_qty_kg: 4, total_revenue: 400, total_cost: "0", margin: "0", uncosted_lines: "0" }],
+      error: null });
+    render(<Dashboards />);
+    const row = await screen.findByTestId("dash-top-i2");
+    expect(within(row).getByText(/4 pcs/)).toBeTruthy();
+    expect(within(row).getByText(/₹400\.00/)).toBeTruthy();
   });
 
   it("lists bought-together pairs", async () => {
@@ -210,7 +221,7 @@ describe("the dashboard", () => {
 
   it("shows a dash for a top item whose margin is unknown", async () => {
     topItemsBetween.mockResolvedValueOnce({
-      data: [{ item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा",
+      data: [{ item_id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg",
                total_qty_kg: 12, total_revenue: 480, total_cost: null, margin: null, uncosted_lines: "4" }],
       error: null });
     render(<Dashboards />);

@@ -13,7 +13,7 @@ describe("billing translations", () => {
     for (const key of [
       "bill.chooseCustomer", "bill.searchCustomer", "bill.newCustomer", "bill.name",
       "bill.flatNo", "bill.mobile", "bill.save", "bill.customerExists", "bill.required",
-      "bill.addItem", "bill.weightKg", "bill.add", "bill.basket", "bill.total",
+      "bill.addItem", "unit.field.kg", "bill.add", "bill.basket", "bill.total",
       "bill.empty", "bill.done", "bill.confirmTitle", "bill.confirmBody", "bill.cancel",
       "bill.tokenTitle", "bill.startNew", "bill.remove", "bill.stock", "bill.outOfStock",
       "bill.badWeight.empty", "bill.badWeight.notANumber",

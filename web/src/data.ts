@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { Draft } from "./billing";
+import type { Unit } from "./units";
 import type { Customer } from "./customers";
 
 export type PostgrestErrorLike = { message?: string; code?: string } | null;
@@ -12,6 +13,8 @@ export type Item = {
   price: number;
   stock_kg: number;
   is_active: boolean;
+  unit: Unit;
+  low_stock_at: number;
 };
 
 export type PendingBill = {
@@ -40,7 +43,7 @@ export type PendingBill = {
 export async function listItems() {
   return supabase
     .from("items")
-    .select("id, name_en, name_hi, name_mr, price, stock_kg, is_active")
+    .select("id, name_en, name_hi, name_mr, price, stock_kg, is_active, unit, low_stock_at")
     .eq("is_active", true)
     .order("name_en");
 }
