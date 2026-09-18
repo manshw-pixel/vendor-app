@@ -23,13 +23,16 @@ export type AdminItem = {
   price: number;
   stock_kg: number;
   is_active: boolean;
+  /** The purchase cost of the item's most recent stock intake. Null means it has never
+   *  been purchased through stock intake. */
+  last_cost: string | number | null;
 };
 
 export type StaffRow = { id: string; name: string; role: Role };
 
 export type VendorConfig = Record<SettingsField, number>;
 
-const ITEM_COLS = "id, name_en, name_hi, name_mr, price, stock_kg, is_active";
+const ITEM_COLS = "id, name_en, name_hi, name_mr, price, stock_kg, is_active, last_cost";
 
 /** Unlike listItems() in data.ts, this does NOT filter is_active. The bill grid hides
  *  inactive items; the admin list must show them or they can never be brought back. */

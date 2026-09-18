@@ -39,6 +39,10 @@ export type TopItem = {
   name_mr: string;
   total_qty_kg: number;
   total_revenue: number;
+  /** Null when no line of this item had a purchase cost. Never read null as zero. */
+  total_cost: string | number | null;
+  margin: string | number | null;
+  uncosted_lines: string | number;
 };
 
 export type Pair = {
@@ -63,7 +67,13 @@ export type RequestCount = {
 
 /** One row. `total` arrives as a STRING: it is a Postgres numeric, and PostgREST
  *  serialises numeric as text to avoid float rounding. Coerce before arithmetic. */
-export type Collected = { total: string | number; bill_count: number };
+export type Collected = {
+  total: string | number;
+  bill_count: number;
+  cost: string | number;
+  profit: string | number;
+  uncosted_lines: string | number;
+};
 
 /** The keyset a "load more" resumes from. completed_at alone is not unique. */
 export type Cursor = { completedAt: string; id: string };
