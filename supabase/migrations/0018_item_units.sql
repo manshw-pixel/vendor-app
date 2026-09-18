@@ -57,6 +57,8 @@ begin
   end if;
 end $$;
 
+revoke all on function assert_whole_qty(uuid, numeric) from public, anon;
+
 -- Slice B (0015), re-created here to add the 0018 whole-quantity guard.
 create or replace function replace_bill_lines(p_bill_id uuid, p_lines jsonb)
   returns void

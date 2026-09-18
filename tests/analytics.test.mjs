@@ -23,23 +23,22 @@ async function windowedVendor() {
       `insert into bills (vendor_id, customer_id, total, status, completed_at)
        values ($1,$2,100,'done',$3::timestamptz) returning id`, [v.id, c.id, when]);
     for (const id of itemIds) {
-      // line_total deliberately huge (0018): top_items_between now ranks by revenue, and
-      // this suite's other files complete real bills "today" (now()) that land in the
-      // same September window with revenue in the hundreds. A small, realistic line_total
-      // here would let that unrelated cross-file traffic bump this vendor's onion out of
-      // the function's top-10 and fail the assertions below for a reason that has nothing
-      // to do with what they test.
       await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
-                 values ($1,$2,$3,$4,50000,90000)`, [b.id, v.id, id, qty]);
+                 values ($1,$2,$3,$4,50,100)`, [b.id, v.id, id, qty]);
     }
     return b.id;
   };
-  // Inside the window: three onion+tomato bills on the 9th.
-  await bill([onion, tomato], "2026-09-09T04:00:00Z", 2);
-  await bill([onion, tomato], "2026-09-09T05:00:00Z", 2);
-  await bill([onion, tomato], "2026-09-09T06:00:00Z", 2);
+  // Inside the window: three onion+tomato bills on the 9th. The window is 2020, not the
+  // current month: top_items_between (0018) ranks by revenue, and other test files
+  // complete real bills "now" under this same RLS-bypassing connection -- a current-month
+  // window would put this vendor's onion in competition with all of that unrelated
+  // traffic for the function's top-10, for a reason that has nothing to do with what
+  // these tests check.
+  await bill([onion, tomato], "2020-09-09T04:00:00Z", 2);
+  await bill([onion, tomato], "2020-09-09T05:00:00Z", 2);
+  await bill([onion, tomato], "2020-09-09T06:00:00Z", 2);
   // Outside: a big onion bill the month before, which must not leak into the window.
-  await bill([onion], "2026-08-09T04:00:00Z", 999);
+  await bill([onion], "2020-08-09T04:00:00Z", 999);
   // A bill still recording -- never counted, whatever its date.
   const { rows: [open] } = await sql(
     `insert into bills (vendor_id, customer_id, total, status) values ($1,$2,100,'recording') returning id`,
@@ -50,7 +49,7 @@ async function windowedVendor() {
 }
 
 const getW = once(windowedVendor);
-const SEP = ["2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z"];
+const SEP = ["2020-09-01T00:00:00Z", "2020-10-01T00:00:00Z"];
 
 test("top_items_between counts only bills completed inside the window", async () => {
   const w = await getW();
@@ -64,9 +63,14 @@ test("top_items_between counts only bills completed inside the window", async ()
 
 test("top_items_between ignores bills that are not done", async () => {
   const w = await getW();
+  // Wide enough to catch both of this vendor's bills (2020-08 and 2020-09) regardless of
+  // which one is "inside" SEP, but capped at 2021 -- not truly open-ended -- so it can't
+  // also catch other suites' bills completed "now" and lose this row to revenue
+  // competition in top_items_between's top-10 (0018 rank-by-revenue, same reasoning as
+  // windowedVendor's 2020 window above).
   const { rows } = await sql(
     `select * from top_items_between('2000-01-01T00:00:00Z'::timestamptz,
-                                     '2100-01-01T00:00:00Z'::timestamptz)
+                                     '2021-01-01T00:00:00Z'::timestamptz)
       where item_id = $1`, [w.onion]);
   // 6 kg in September + 999 kg in August. The 500 kg still 'recording' must not appear.
   assertEqual(Number(rows[0].total_qty_kg), 1005, "a recording bill was counted");
@@ -99,8 +103,8 @@ test("bought_together_between drops a pair that only qualifies outside the windo
   // Scoped the same way -- a global count would pass by luck if no other suite happens
   // to seed a qualifying pair inside this one-hour window.
   const { rows } = await sql(
-    `select * from bought_together_between('2026-09-09T03:30:00Z'::timestamptz,
-                                           '2026-09-09T04:30:00Z'::timestamptz)
+    `select * from bought_together_between('2020-09-09T03:30:00Z'::timestamptz,
+                                           '2020-09-09T04:30:00Z'::timestamptz)
       where item_a in ($1,$2) and item_b in ($1,$2)`, [w.onion, w.tomato]);
   assertEqual(rows.length, 0, "a pair under the threshold was returned");
 });
