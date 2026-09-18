@@ -207,6 +207,8 @@
     "thanks": "Thank you!",
     "print": "Print",
     "loading": "Loading…",
-    "notFound": "That bill could not be found."
+    "notFound": "That bill could not be found.",
+    "voided": "VOIDED",
+    "voidedReason": "Voided: {{reason}}"
   }
 }

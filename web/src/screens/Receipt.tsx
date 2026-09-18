@@ -82,6 +82,12 @@ export default function Receipt() {
       </button>
 
       <div className="receipt-slip font-mono text-[11px] leading-tight text-black bg-white p-2">
+        {data.voided && (
+          <div data-testid="receipt-voided" className="text-center font-bold">
+            <div>{t("receipt.voided")}</div>
+            <div>{t("receipt.voidedReason", { reason: data.voided.reason })}</div>
+          </div>
+        )}
         <div data-testid="receipt-shop" className="text-center">
           <div className="font-bold">{data.shop.name}</div>
           {data.shop.address && <div data-testid="receipt-shop-address">{data.shop.address}</div>}
@@ -131,6 +137,11 @@ export default function Receipt() {
           <span>{t("receipt.total")}</span>
           <span>{amt(data.net)}</span>
         </div>
+        {data.voided && (
+          <div data-testid="receipt-voided-foot" className="font-bold text-center">
+            {t("receipt.voided")} — {t("receipt.voidedReason", { reason: data.voided.reason })}
+          </div>
+        )}
         <div className="flex justify-between">
           <span>{t("receipt.paid")}</span>
           <span>{amt(data.net)}</span>

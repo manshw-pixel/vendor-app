@@ -207,6 +207,8 @@
     "thanks": "धन्यवाद!",
     "print": "प्रिंट करा",
     "loading": "लोड होत आहे…",
-    "notFound": "ते बिल सापडले नाही."
+    "notFound": "ते बिल सापडले नाही.",
+    "voided": "रद्द",
+    "voidedReason": "रद्द: {{reason}}"
   }
 }

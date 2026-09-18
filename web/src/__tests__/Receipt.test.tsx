@@ -24,6 +24,7 @@ const FULL: ReceiptData = {
   shop: { name: "Taji Bhaji", address: "Shop 12, Kothrud", phone: "9876543210" },
   points_earned: 0,
   balance: { balance: 260, days_left: 15 },
+  voided: null,
 };
 
 const renderAt = () =>
@@ -123,6 +124,23 @@ describe("Receipt", () => {
     renderAt();
     (await screen.findByTestId("receipt-print")).click();
     expect(print).toHaveBeenCalled();
+  });
+
+  it("shows a VOIDED banner with the reason when the bill was voided", async () => {
+    loadReceipt.mockResolvedValue({
+      data: { ...FULL, voided: { at: "2026-09-18T09:00:00.000Z", reason: "typed twice" } },
+      error: null,
+    });
+    renderAt();
+    const banner = await screen.findByTestId("receipt-voided");
+    expect(banner.textContent).toMatch(/VOIDED/);
+    expect(banner.textContent).toMatch(/typed twice/);
+  });
+
+  it("shows no VOIDED banner for a normal receipt", async () => {
+    renderAt();
+    await screen.findByTestId("receipt-token");
+    expect(screen.queryByTestId("receipt-voided")).toBeNull();
   });
 
   it("says so when the bill cannot be loaded", async () => {
