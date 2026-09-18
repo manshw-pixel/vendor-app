@@ -5,15 +5,22 @@ import type { CompletedBill, BillLine } from "../history";
 
 const PAGE_SIZE = 50;
 
-function bill(n: number, redeemed_points = 0): CompletedBill {
+function bill(n: number, redeemed_points = 0, completed_at?: string): CompletedBill {
   return {
     id: `b${n}`,
     token_no: n,
     total: 100 + n,
     redeemed_points,
-    completed_at: `2026-09-09T10:00:${String(n % 60).padStart(2, "0")}.000Z`,
+    completed_at: completed_at ?? `2026-09-09T10:00:${String(n % 60).padStart(2, "0")}.000Z`,
     customers: { name: `Cust ${n}`, flat_no: `A-${n}` },
   };
+}
+
+/** A bill completed on the browser's local "today" -- used to exercise the Void button,
+ *  which only shows on same-day bills. new Date().toISOString() lands on today regardless
+ *  of when the suite runs, unlike a fixed literal. */
+function todayBill(n: number): CompletedBill {
+  return bill(n, 0, new Date().toISOString());
 }
 
 const listCompleted = vi.fn(async (..._a: unknown[]): Promise<{
@@ -28,6 +35,12 @@ const billLines = vi.fn(async (..._a: unknown[]): Promise<{
   }],
   error: null,
 }));
+const voidBill = vi.fn(async (..._a: unknown[]): Promise<{
+  data: unknown; error: { code?: string; message?: string } | null;
+}> => ({ data: null, error: null }));
+const listVoided = vi.fn(async (..._a: unknown[]): Promise<{
+  data: unknown[] | null; error: { code?: string; message?: string } | null;
+}> => ({ data: [], error: null }));
 
 vi.mock("../history", async () => {
   const actual = await vi.importActual<typeof import("../history")>("../history");
@@ -36,6 +49,8 @@ vi.mock("../history", async () => {
     PAGE_SIZE,
     listCompleted: (...a: unknown[]) => listCompleted(...a),
     billLines: (...a: unknown[]) => billLines(...a),
+    voidBill: (...a: unknown[]) => voidBill(...a),
+    listVoided: (...a: unknown[]) => listVoided(...a),
   };
 });
 
@@ -146,5 +161,54 @@ describe("the completed bills screen", () => {
     fireEvent.click(await screen.findByTestId("completed-row-b1"));
     const link = await screen.findByTestId("completed-receipt-b1");
     expect(link.getAttribute("href")).toBe("/receipt/b1");
+  });
+
+  it("offers Void only on a bill completed today", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1), bill(2)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    expect(await screen.findByTestId("completed-void-b1")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("completed-row-b2"));
+    await waitFor(() => expect(screen.queryByTestId("completed-void-b2")).toBeNull());
+  });
+
+  it("requires a reason, then voids and removes the row", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("completed-void-b1"));
+    const confirm = screen.getByTestId("void-confirm") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("void-reason"), { target: { value: "  wrong customer " } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(voidBill).toHaveBeenCalledWith("b1", "wrong customer"));
+    await waitFor(() => expect(screen.queryByTestId("completed-row-b1")).toBeNull());
+  });
+
+  it("explains a closed window and keeps the row", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    voidBill.mockResolvedValueOnce({ data: null, error: { code: "P0001", message: "void window closed" } });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("completed-void-b1"));
+    fireEvent.change(screen.getByTestId("void-reason"), { target: { value: "late" } });
+    fireEvent.click(screen.getByTestId("void-confirm"));
+    expect(await screen.findByTestId("completed-problem")).toBeTruthy();
+    expect(screen.getByTestId("completed-row-b1")).toBeTruthy();
+  });
+
+  it("shows the voided bills of the period on demand", async () => {
+    listVoided.mockResolvedValueOnce({ data: [{
+      id: "v1", token_no: 9, total: 250, completed_at: new Date().toISOString(),
+      voided_at: new Date().toISOString(), void_reason: "typed twice",
+      customers: { name: "Cust V", flat_no: "B-2" }, app_users: { name: "Biller A" },
+    }], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-voided-toggle"));
+    const row = await screen.findByTestId("voided-row-v1");
+    expect(row.textContent).toContain("typed twice");
+    expect(row.textContent).toContain("Biller A");
+    expect(row.textContent).toContain("₹250.00");
   });
 });
