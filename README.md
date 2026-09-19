@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 225 cases, 0 failures
+## ✅ Verified: 233 cases, 0 failures
 
-`npm test` runs **225 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all eighteen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **233 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all nineteen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -80,6 +80,13 @@ Covered:
   locked once the item has been sold. `top_items_between` ranks by sales value and returns
   the unit. Existing items default to kg with threshold 10, so nothing changes until an
   admin edits an item.
+
+- **Platform owner.** `platform_owners` is readable only by its own row's user and written
+  by nobody from a client. `is_platform_owner()` gates `owner_vendor_summary()`, which
+  refuses staff and lists every shop with staff, this-month bills and sales. Suspending a
+  shop makes `current_user_role()` return `suspended`, which every write policy and every
+  billing function refuses at once while the other shop is untouched; reinstating restores
+  them. A shop admin cannot change `suspended_at`.
 
 ### What the local suite does not cover
 
@@ -173,7 +180,7 @@ slice; whether to retire it is a judgement to make after the vendor has used bot
 
 - **Staff cannot be invited from the SPA.** A person signs up on their own, then an admin
   links their `app_users` row by hand in the SQL editor — see
-  [`docs/runbook-first-admin.md`](docs/runbook-first-admin.md). Self-service account
+  [`docs/runbook-platform-owner.md`](docs/runbook-platform-owner.md). Self-service account
   creation is slice 2's Edge Function, and it does not exist yet.
 - **Removing someone from the Staff screen deletes only their `app_users` row.** Their
   sign-in account is not touched; they simply stop resolving to a shop and land on the
@@ -328,7 +335,7 @@ The project is schema-complete but **empty**, and the first admin cannot be crea
 through the API: `app_users` writes require an existing admin of that vendor, and
 `current_vendor_id()` reads from `app_users`. The first vendor and admin are inserted by
 hand in the SQL editor after that person signs up — see
-[`docs/runbook-first-admin.md`](docs/runbook-first-admin.md).
+[`docs/runbook-platform-owner.md`](docs/runbook-platform-owner.md).
 
 Credentials live in the CLI's own login or a gitignored `.env` — never in the repo, and
 never in `supabase/config.toml`, which is committed. Project refs are not secret, but
