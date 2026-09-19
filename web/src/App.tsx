@@ -16,8 +16,10 @@ import Completed from "./screens/Completed";
 import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
 import Receipt from "./screens/Receipt";
+import OwnerConsole from "./screens/OwnerConsole";
 import { homeFor } from "./routes";
 import type { Role } from "./config";
+import { supabase } from "./supabase";
 
 /**
  * The screen a person sees when their sign-in has no linked staff record.
@@ -90,6 +92,30 @@ function SessionError({ detail }: { detail: string }) {
   );
 }
 
+// A shop the platform owner suspended. No nav, no routes reachable -- same reasoning as
+// mustChangePassword: a boolean check inside a screen is a route that stayed reachable.
+function Suspended({ vendorName, email }: { vendorName: string; email: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="bg-white border border-red-200 rounded-xl p-6 max-w-md space-y-3">
+        <h1 data-testid="session-suspended" className="font-semibold text-slate-800">
+          {t("session.suspendedTitle")}
+        </h1>
+        <p className="text-sm text-slate-600">
+          {t("session.suspended", { vendor: vendorName, email })}
+        </p>
+        <button
+          onClick={() => void supabase.auth.signOut()}
+          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+        >
+          {t("app.signOut")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Everything BUT the receipt, wrapped in the app chrome (header, nav, offline banner).
  *
@@ -127,6 +153,8 @@ function Inner() {
   if (s.kind === "unmapped") return <Unmapped userId={s.userId} email={s.email} />;
   if (s.kind === "error") return <SessionError detail={s.detail} />;
   if (s.kind === "mustChangePassword") return <ChangePassword email={s.email} />;
+  if (s.kind === "suspended") return <Suspended vendorName={s.vendorName} email={s.email} />;
+  if (s.kind === "owner") return <OwnerConsole />;
 
   return (
     <Guard role={s.role}>

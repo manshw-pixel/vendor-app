@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { supabase } from "../supabase";
-import { sessionFromRow, type AppUserRow, type SessionState } from "../session";
+import { sessionFromOwnerRow, sessionFromRow, type AppUserRow, type SessionState } from "../session";
 import { describeError } from "../errors";
 
 const Ctx = createContext<SessionState>({ kind: "loading" });
@@ -50,7 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const id = ++requestId;
       const { data, error } = await supabase
         .from("app_users")
-        .select("name, role, vendor_id, must_change_password, vendors(name)")
+        .select("name, role, vendor_id, must_change_password, vendors(name, suspended_at)")
         .eq("id", userId)
         .maybeSingle();
       if (cancelled || id !== requestId) return;
@@ -61,7 +61,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setState({ kind: "error", detail: described?.detail ?? error.message ?? "" });
         return;
       }
-      setState(sessionFromRow(userId, email, (data as AppUserRow | null) ?? null));
+      if (!data) {
+        // No staff record: could be an unlinked account, or the platform owner, who has
+        // no app_users row at all. platform_owners is the only way to tell them apart.
+        const { data: ownerRow, error: ownerError } = await supabase
+          .from("platform_owners")
+          .select("name")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (cancelled || id !== requestId) return;
+        if (ownerError) {
+          const described = describeError(ownerError);
+          setState({ kind: "error", detail: described?.detail ?? ownerError.message ?? "" });
+          return;
+        }
+        setState(sessionFromOwnerRow(userId, email, (ownerRow as { name: string } | null) ?? null));
+        return;
+      }
+      setState(sessionFromRow(userId, email, data as unknown as AppUserRow));
     }
 
     void supabase.auth.getSession().then(({ data }) => {

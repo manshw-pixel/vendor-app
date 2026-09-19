@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sessionFromRow } from "../session";
+import { sessionFromOwnerRow, sessionFromRow } from "../session";
 
 const row = {
   name: "Manish Wadhwani",
   role: "admin" as const,
   vendor_id: "7bf7f5c7-0a6a-4ab0-a2b9-f8341f42bcf3",
-  vendors: { name: "My Kirana" },
+  vendors: { name: "My Kirana", suspended_at: null },
   must_change_password: false,
 };
 
@@ -65,5 +65,30 @@ describe("a password the admin chose", () => {
     const s = sessionFromRow("u1", "a@shop.test",
       { ...row, role: "admin", must_change_password: true });
     expect(s.kind).toBe("mustChangePassword");
+  });
+});
+
+describe("a shop the platform owner suspended", () => {
+  it("becomes suspended with the vendor name, even when must_change_password is true", () => {
+    // Checked first: a suspended shop's staff must never reach a password prompt for a
+    // shop they can no longer use.
+    const s = sessionFromRow("u1", "rina@shop.test", {
+      ...row,
+      must_change_password: true,
+      vendors: { name: "My Kirana", suspended_at: "2026-09-19T00:00:00Z" },
+    });
+    expect(s).toEqual({ kind: "suspended", email: "rina@shop.test", vendorName: "My Kirana" });
+  });
+});
+
+describe("sessionFromOwnerRow", () => {
+  it("builds an owner session from a platform_owners row", () => {
+    const s = sessionFromOwnerRow("u1", "owner@app.test", { name: "Manish" });
+    expect(s).toEqual({ kind: "owner", userId: "u1", email: "owner@app.test", name: "Manish" });
+  });
+
+  it("falls back to unmapped when there is no owner row either", () => {
+    const s = sessionFromOwnerRow("u1", "new@b.test", null);
+    expect(s).toEqual({ kind: "unmapped", userId: "u1", email: "new@b.test" });
   });
 });
