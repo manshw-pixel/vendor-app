@@ -2,16 +2,21 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { SessionProvider, useSession } from "../components/SessionProvider";
 
-const { getSession, onAuthStateChange, maybeSingle } = vi.hoisted(() => ({
+const { getSession, onAuthStateChange, maybeSingle, ownerMaybeSingle } = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   maybeSingle: vi.fn(),
+  ownerMaybeSingle: vi.fn(),
 }));
 
 vi.mock("../supabase", () => ({
   supabase: {
     auth: { getSession, onAuthStateChange },
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: table === "platform_owners" ? ownerMaybeSingle : maybeSingle }),
+      }),
+    }),
   },
 }));
 
@@ -44,6 +49,7 @@ describe("SessionProvider", () => {
   it("resolves to unmapped on a clean null row", async () => {
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "new@b.test" } } } });
     maybeSingle.mockResolvedValue({ data: null, error: null });
+    ownerMaybeSingle.mockResolvedValue({ data: null, error: null });
 
     render(<SessionProvider><Probe /></SessionProvider>);
 
@@ -55,6 +61,36 @@ describe("SessionProvider", () => {
     // the exact regression this test pins.
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "a@b.test" } } } });
     maybeSingle.mockResolvedValue({ data: null, error: { message: "Failed to fetch", code: undefined } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("error"));
+  });
+
+  it("resolves to owner when app_users is null but platform_owners has a row", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "owner@app.test" } } } });
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    ownerMaybeSingle.mockResolvedValue({ data: { name: "Manish" }, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("owner"));
+  });
+
+  it("resolves to unmapped when neither app_users nor platform_owners has a row", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "new@b.test" } } } });
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    ownerMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("unmapped"));
+  });
+
+  it("resolves to error when the platform_owners lookup itself fails", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "new@b.test" } } } });
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    ownerMaybeSingle.mockResolvedValue({ data: null, error: { message: "Failed to fetch", code: undefined } });
 
     render(<SessionProvider><Probe /></SessionProvider>);
 

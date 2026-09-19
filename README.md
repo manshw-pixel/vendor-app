@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 225 cases, 0 failures
+## ✅ Verified: 233 cases, 0 failures
 
-`npm test` runs **225 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all eighteen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **233 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all nineteen migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -80,6 +80,13 @@ Covered:
   locked once the item has been sold. `top_items_between` ranks by sales value and returns
   the unit. Existing items default to kg with threshold 10, so nothing changes until an
   admin edits an item.
+
+- **Platform owner.** `platform_owners` is readable only by its own row's user and written
+  by nobody from a client. `is_platform_owner()` gates `owner_vendor_summary()`, which
+  refuses staff and lists every shop with staff, this-month bills and sales. Suspending a
+  shop makes `current_user_role()` return `suspended`, which every write policy and every
+  billing function refuses at once while the other shop is untouched; reinstating restores
+  them. A shop admin cannot change `suspended_at`.
 
 ### What the local suite does not cover
 
@@ -171,10 +178,10 @@ slice; whether to retire it is a judgement to make after the vendor has used bot
 
 **What stage 3 does not do, on purpose:**
 
-- **Staff cannot be invited from the SPA.** A person signs up on their own, then an admin
-  links their `app_users` row by hand in the SQL editor — see
-  [`docs/runbook-first-admin.md`](docs/runbook-first-admin.md). Self-service account
-  creation is slice 2's Edge Function, and it does not exist yet.
+- **Staff invitation was still manual at this point in the history.** That gap closed
+  later: the `admin-create-user` Edge Function (see
+  [`docs/runbook-platform-owner.md`](docs/runbook-platform-owner.md)) now lets a shop
+  admin create a staff account directly from Settings, with no SQL-editor step.
 - **Removing someone from the Staff screen deletes only their `app_users` row.** Their
   sign-in account is not touched; they simply stop resolving to a shop and land on the
   "not linked" screen. And because `bills.recorder_id` and `bills.biller_id` reference
@@ -191,9 +198,10 @@ slice; whether to retire it is a judgement to make after the vendor has used bot
 
 **What slice 4 does not do, on purpose:**
 
-- **Staff still cannot be invited from the SPA**, even now that Staff lives inside
-  `/settings` rather than its own screen — the form and its rules are unchanged, only its
-  location moved. Self-service account creation still waits on the Edge Function slice.
+- **Staff still could not be invited from the SPA at this point**, even now that Staff
+  lives inside `/settings` rather than its own screen — the form and its rules were
+  unchanged, only its location moved. That gap closed later with the `admin-create-user`
+  Edge Function.
 - **Item names still require all three languages typed by hand** at `/items`; nothing in
   this slice adds translation help.
 - **Dashboard money totals are computed by comparing instants against `bills`, not by
@@ -206,7 +214,7 @@ slice; whether to retire it is a judgement to make after the vendor has used bot
 
 ### What has and has not been proven
 
-The suite is **210 web tests plus the 65-case database suite**, both gating every push. But
+The suite is **526 web tests plus the 233-case database suite**, both gating every push. But
 `supabase-js` is mocked at the `data.ts` / `history.ts` boundary in every SPA test, so **no
 part of the SPA has run against real PostgREST or GoTrue.** Stage 1 shipped two Critical
 bugs that only a real sign-in would have caught; stage 2 merged before its walkthrough was
@@ -314,10 +322,11 @@ supabase link --project-ref <prod-ref>  # once per clone
 supabase db push                        # applies supabase/migrations/ in order
 ```
 
-**Deployed:** the first five migrations are live on the production project
-(`ap-northeast-1`, Postgres 17.6) and verified there — 10 tables, RLS on all 10,
-19 policies, 8 `security_invoker` views, 4 functions, and the
-`vendor-app-points-expiry` cron job at `0 1 * * *`.
+**Deployed:** migrations 0001 through 0018 are live on the production project
+(`ap-northeast-1`, Postgres 17.6) and verified there, alongside the `admin-create-user`,
+`admin-delete-user`, `owner-create-vendor`, and `owner-suspend-vendor` Edge Functions.
+`0019_platform_owner.sql` (this branch) is applied locally and covered by the test suite
+above but not yet pushed to Cloud.
 
 **Migration `0007` must be pushed** (`supabase db push`) for the dashboards screen to work
 at all — it adds the `top_items_between`, `bought_together_between` and `collected_between`
@@ -328,7 +337,7 @@ The project is schema-complete but **empty**, and the first admin cannot be crea
 through the API: `app_users` writes require an existing admin of that vendor, and
 `current_vendor_id()` reads from `app_users`. The first vendor and admin are inserted by
 hand in the SQL editor after that person signs up — see
-[`docs/runbook-first-admin.md`](docs/runbook-first-admin.md).
+[`docs/runbook-platform-owner.md`](docs/runbook-platform-owner.md).
 
 Credentials live in the CLI's own login or a gitignored `.env` — never in the repo, and
 never in `supabase/config.toml`, which is committed. Project refs are not secret, but

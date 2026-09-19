@@ -8,20 +8,25 @@ import { PASSWORD, sql, newClient, serviceClient } from "./fixtures.mjs";
 let admin = null;
 const getAdmin = async () => (admin ??= await serviceClient());
 
-async function makeUser(email, vendorId, role, name) {
-  // Stands in for GoTrue's admin API: creates the auth.users row the session will claim
-  // to be, then maps them to a vendor and role in app_users.
+// Stands in for GoTrue's admin API: creates the auth.users row the session will claim
+// to be, then signs in a fresh client as that user.
+export async function makeAuthUser(email, name) {
   const { data, error } = await (await getAdmin()).auth.admin.createUser({
     email, password: PASSWORD, email_confirm: true,
   });
   if (error) throw new Error(`createUser(${email}): ${error.message}`);
   const id = data.user.id;
-  await sql(`insert into app_users (id, vendor_id, role, name) values ($1,$2,$3,$4)`,
-    [id, vendorId, role, name]);
 
   const client = await newClient();
   const { error: signInError } = await client.auth.signInWithPassword({ email, password: PASSWORD });
   if (signInError) throw new Error(`signIn(${email}): ${signInError.message}`);
+  return { id, client };
+}
+
+async function makeUser(email, vendorId, role, name) {
+  const { id, client } = await makeAuthUser(email, name);
+  await sql(`insert into app_users (id, vendor_id, role, name) values ($1,$2,$3,$4)`,
+    [id, vendorId, role, name]);
   return { id, client };
 }
 

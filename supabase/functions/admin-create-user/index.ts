@@ -71,10 +71,16 @@ Deno.serve(async (req) => {
 
   const { data: me, error: meError } = await caller
     .from("app_users")
-    .select("vendor_id, role")
+    .select("vendor_id, role, vendors(suspended_at)")
     .eq("id", who.user.id)
     .maybeSingle();
   if (meError || !me || me.role !== "admin") return fail("not_admin", 403);
+  // A suspended shop's admin still passes the role check above -- suspension is a separate
+  // axis from role, so it needs its own gate. Without this, a suspended shop's admin could
+  // keep minting staff accounts even though the sentinel role and RLS treat the shop as
+  // shut down everywhere else.
+  const vendorRow = Array.isArray(me.vendors) ? me.vendors[0] : me.vendors;
+  if (vendorRow?.suspended_at) return fail("not_admin", 403);
 
   const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 

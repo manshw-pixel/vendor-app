@@ -67,8 +67,9 @@ Deno.serve(async (req) => {
   if (whoError || !who?.user) return fail("not_admin", 401);
 
   const { data: me, error: meError } = await caller
-    .from("app_users").select("vendor_id, role").eq("id", who.user.id).maybeSingle();
+    .from("app_users").select("vendor_id, role, vendors(suspended_at)").eq("id", who.user.id).maybeSingle();
   if (meError || !me) return fail("not_admin", 403);
+  const vendorRow = Array.isArray(me.vendors) ? me.vendors[0] : me.vendors;
 
   // Read under the CALLER's session too, so users_read scopes it to their tenant. A target
   // in another shop comes back null here, which authorizeDelete answers identically to a
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
     .from("app_users").select("id, vendor_id").eq("id", id).maybeSingle();
 
   const verdict = authorizeDelete(
-    { id: who.user.id, vendorId: me.vendor_id, role: me.role },
+    { id: who.user.id, vendorId: me.vendor_id, role: me.role, suspended: !!vendorRow?.suspended_at },
     target ? { id: target.id, vendorId: target.vendor_id } : null,
   );
   if (!verdict.ok) {

@@ -2,18 +2,24 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "../App";
 
-const { getSession, onAuthStateChange, appUserRow } = vi.hoisted(() => ({
+const { getSession, onAuthStateChange, appUserRow, ownerRow } = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   appUserRow: { value: null as unknown },
+  ownerRow: { value: null as unknown },
 }));
 
 vi.mock("../supabase", () => ({
   supabase: {
     auth: { getSession, onAuthStateChange, signOut: vi.fn() },
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: appUserRow.value, error: null }) }),
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: table === "platform_owners" ? ownerRow.value : appUserRow.value,
+            error: null,
+          }),
+        }),
       }),
     }),
   },
@@ -30,11 +36,17 @@ vi.mock("../screens/Staff", () => ({ default: () => <div data-testid="screen-sta
 vi.mock("../screens/Settings", () => ({ default: () => <div data-testid="screen-settings" /> }));
 vi.mock("../screens/Completed", () => ({ default: () => <div data-testid="screen-completed" /> }));
 vi.mock("../screens/Dashboards", () => ({ default: () => <div data-testid="screen-dashboards" /> }));
+vi.mock("../ownerApi", () => ({
+  listVendorSummary: async () => ({ data: [], error: null }),
+  createVendor: async () => ({ error: null }),
+  setVendorSuspended: async () => ({ error: null }),
+}));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   appUserRow.value = null;
+  ownerRow.value = null;
 });
 
 describe("App", () => {
@@ -131,6 +143,37 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByTestId("newpw")).toBeTruthy();
+    expect(screen.queryByTestId("screen-bill")).toBeNull();
+  });
+
+  it("renders the owner console for the platform owner", async () => {
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "u1", email: "owner@app.test" } } },
+    });
+    appUserRow.value = null;
+    ownerRow.value = { name: "Manish" };
+
+    render(<App />);
+
+    expect(await screen.findByTestId("owner-console")).toBeTruthy();
+  });
+
+  it("shows the suspended panel with no nav, even mid password-change", async () => {
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "u1", email: "rina@shop.test" } } },
+    });
+    appUserRow.value = {
+      name: "Rina", role: "recorder", vendor_id: "v1",
+      vendors: { name: "My Kirana", suspended_at: "2026-09-19T00:00:00Z" },
+      must_change_password: true,
+    };
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-suspended");
+    expect(panel.textContent).toBe("This shop is suspended");
+    expect(screen.getByText(/My Kirana/)).toBeTruthy();
+    expect(screen.queryByTestId("newpw")).toBeNull();
     expect(screen.queryByTestId("screen-bill")).toBeNull();
   });
 });
