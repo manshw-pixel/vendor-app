@@ -9,7 +9,9 @@ const rows: VendorSummary[] = [
     staff_count: "1", bills_month: "0", sales_month: "0", last_bill_at: null },
 ];
 
-const listVendorSummary = vi.fn(async (): Promise<{ data: VendorSummary[] | null; error: null }> =>
+const listVendorSummary = vi.fn(async (): Promise<{
+  data: VendorSummary[] | null; error: { message?: string } | null;
+}> =>
   ({ data: rows, error: null }));
 const createVendor = vi.fn(async (..._a: unknown[]): Promise<{
   error: { key: string; detail: string } | null;
@@ -109,6 +111,29 @@ describe("the owner console", () => {
     fireEvent.click(screen.getByTestId("owner-confirm"));
     await waitFor(() => expect(setVendorSuspended).toHaveBeenCalledWith("v2", "reinstate"));
     expect(screen.queryByTestId("owner-suspend-v2")).toBeNull();
+  });
+
+  it("clears a load failure once a later load succeeds", async () => {
+    listVendorSummary.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    render(<OwnerConsole />);
+    expect(await screen.findByTestId("owner-problem")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("owner-add"));
+    fireEvent.change(screen.getByTestId("owner-vendorName"), { target: { value: "New Shop" } });
+    fireEvent.change(screen.getByTestId("owner-adminName"), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByTestId("owner-email"), { target: { value: "asha@shop.test" } });
+    fireEvent.change(screen.getByTestId("owner-password"), { target: { value: "sunflower9" } });
+    fireEvent.click(screen.getByTestId("owner-save"));
+    await screen.findByTestId("owner-vendor-v1");
+    expect(screen.queryByTestId("owner-problem")).toBeNull();
+  });
+
+  it("keeps a suspend failure visible after the reload", async () => {
+    setVendorSuspended.mockResolvedValueOnce({ error: { key: "owner.vendorNotFound", detail: "x" } });
+    render(<OwnerConsole />);
+    fireEvent.click(await screen.findByTestId("owner-suspend-v1"));
+    fireEvent.click(screen.getByTestId("owner-confirm"));
+    await waitFor(() => expect(listVendorSummary).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("owner-problem").textContent).toContain("That shop no longer exists.");
   });
 
   it("signs out", async () => {

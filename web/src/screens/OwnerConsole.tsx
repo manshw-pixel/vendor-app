@@ -22,7 +22,7 @@ const FIELDS: { field: NewVendorField; type: string }[] = [
   { field: "phone", type: "tel" },
   { field: "adminName", type: "text" },
   { field: "email", type: "email" },
-  { field: "password", type: "text" },
+  { field: "password", type: "password" },
 ];
 
 type Pending = { id: string; name: string; action: "suspend" | "reinstate" };
@@ -38,6 +38,9 @@ export default function OwnerConsole() {
 
   const [rows, setRows] = useState<VendorSummary[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // Kept apart from `problem` so a successful reload clears only a load failure, never an
+  // action error that confirm() or save() set just before reloading.
+  const [loadProblem, setLoadProblem] = useState<string | null>(null);
   const [adding, setAdding] = useState<boolean>(false);
   const [form, setForm] = useState<NewVendorInput>(BLANK);
   const [errors, setErrors] = useState<Partial<Record<NewVendorField, string>>>({});
@@ -49,10 +52,11 @@ export default function OwnerConsole() {
   const load = useCallback(async (): Promise<void> => {
     const { data, error } = await listVendorSummary();
     if (error) {
-      setProblem("error.unknown");
+      setLoadProblem("error.unknown");
       setRows((prev) => prev ?? []);
       return;
     }
+    setLoadProblem(null);
     setRows(data ?? []);
   }, []);
 
@@ -126,10 +130,10 @@ export default function OwnerConsole() {
           )}
         </div>
 
-        {problem && (
+        {(problem ?? loadProblem) && (
           <div data-testid="owner-problem" role="alert"
             className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-            {t(problem)}
+            {t((problem ?? loadProblem) as string)}
           </div>
         )}
 
