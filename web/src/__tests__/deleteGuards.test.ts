@@ -71,6 +71,14 @@ describe("authorizeDelete", () => {
     if (!r.ok) expect(r.code).toBe("cannot_delete_self");
   });
 
+  it("refuses a suspended shop's admin even though role and vendor checks would pass", () => {
+    // vendors.suspended_at is a separate axis from app_users.role -- a suspended shop's
+    // admin still has role = 'admin' in the roster row, so this needs its own check.
+    const r = authorizeDelete({ ...admin, suspended: true }, { id: OTHER, vendorId: "v1" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("not_admin");
+  });
+
   it("refuses self-deletion even though the same row passes the vendor check", () => {
     // Order matters: the self check must come after the tenant check but must still fire.
     // An admin deleting themselves is always in their own vendor, so a guard that returned

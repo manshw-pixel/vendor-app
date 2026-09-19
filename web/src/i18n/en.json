@@ -278,6 +278,7 @@
     "confirmSuspend": "Suspend {{vendor}}? Its staff will be signed out and cannot record or bill until reinstated.",
     "confirmReinstate": "Reinstate {{vendor}}?",
     "confirm": "Yes, do it",
+    "bansIncomplete": "The shop is suspended, but some staff sign-ins could not be blocked. Try again.",
     "empty": "No shops yet.",
     "loading": "Loading…",
     "required": "This field is required.",

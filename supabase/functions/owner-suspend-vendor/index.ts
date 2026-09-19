@@ -97,7 +97,11 @@ Deno.serve(async (req) => {
       vendorId: vendor_id,
       usersError,
     });
-    return new Response(JSON.stringify({ banned: 0, failed: 0 }), {
+    // Reported honestly rather than as a clean {banned:0, failed:0}: that shape reads as
+    // "there was nobody to ban," which is false here -- the roster read itself failed, so
+    // whether any account still can sign back in is unknown. bans_skipped tells the caller
+    // that, distinctly from "this vendor genuinely has zero staff."
+    return new Response(JSON.stringify({ banned: 0, failed: 0, bans_skipped: true }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });

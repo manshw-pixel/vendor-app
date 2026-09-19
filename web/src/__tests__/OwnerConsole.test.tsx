@@ -18,7 +18,8 @@ const createVendor = vi.fn(async (..._a: unknown[]): Promise<{
 }> => ({ error: null }));
 const setVendorSuspended = vi.fn(async (..._a: unknown[]): Promise<{
   error: { key: string; detail: string } | null;
-}> => ({ error: null }));
+  outcome: { banned: number; failed: number; bans_skipped?: boolean } | null;
+}> => ({ error: null, outcome: { banned: 1, failed: 0 } }));
 const signOut = vi.fn(async () => ({ error: null }));
 
 vi.mock("../ownerApi", () => ({
@@ -128,12 +129,47 @@ describe("the owner console", () => {
   });
 
   it("keeps a suspend failure visible after the reload", async () => {
-    setVendorSuspended.mockResolvedValueOnce({ error: { key: "owner.vendorNotFound", detail: "x" } });
+    setVendorSuspended.mockResolvedValueOnce({ error: { key: "owner.vendorNotFound", detail: "x" }, outcome: null });
     render(<OwnerConsole />);
     fireEvent.click(await screen.findByTestId("owner-suspend-v1"));
     fireEvent.click(screen.getByTestId("owner-confirm"));
     await waitFor(() => expect(listVendorSummary).toHaveBeenCalledTimes(2));
     expect(screen.getByTestId("owner-problem").textContent).toContain("That shop no longer exists.");
+  });
+
+  it("warns when suspend bans some staff but not all", async () => {
+    setVendorSuspended.mockResolvedValueOnce({ error: null, outcome: { banned: 1, failed: 2 } });
+    render(<OwnerConsole />);
+    fireEvent.click(await screen.findByTestId("owner-suspend-v1"));
+    fireEvent.click(screen.getByTestId("owner-confirm"));
+    expect(await screen.findByTestId("owner-bans-incomplete")).toBeTruthy();
+  });
+
+  it("warns when suspend could not even list staff to ban", async () => {
+    setVendorSuspended.mockResolvedValueOnce({
+      error: null, outcome: { banned: 0, failed: 0, bans_skipped: true },
+    });
+    render(<OwnerConsole />);
+    fireEvent.click(await screen.findByTestId("owner-suspend-v1"));
+    fireEvent.click(screen.getByTestId("owner-confirm"));
+    expect(await screen.findByTestId("owner-bans-incomplete")).toBeTruthy();
+  });
+
+  it("does not warn on reinstate even if bans/unbans partly fail", async () => {
+    setVendorSuspended.mockResolvedValueOnce({ error: null, outcome: { banned: 0, failed: 1 } });
+    render(<OwnerConsole />);
+    fireEvent.click(await screen.findByTestId("owner-reinstate-v2"));
+    fireEvent.click(screen.getByTestId("owner-confirm"));
+    await waitFor(() => expect(listVendorSummary).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("owner-bans-incomplete")).toBeNull();
+  });
+
+  it("does not warn when suspend fully bans all staff", async () => {
+    render(<OwnerConsole />);
+    fireEvent.click(await screen.findByTestId("owner-suspend-v1"));
+    fireEvent.click(screen.getByTestId("owner-confirm"));
+    await waitFor(() => expect(listVendorSummary).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("owner-bans-incomplete")).toBeNull();
   });
 
   it("signs out", async () => {

@@ -48,6 +48,7 @@ export default function OwnerConsole() {
   const [created, setCreated] = useState<{ vendor: string; email: string } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [acting, setActing] = useState<boolean>(false);
+  const [bansIncomplete, setBansIncomplete] = useState<boolean>(false);
 
   const load = useCallback(async (): Promise<void> => {
     const { data, error } = await listVendorSummary();
@@ -89,11 +90,20 @@ export default function OwnerConsole() {
   async function confirm(): Promise<void> {
     if (!pending) return;
     setProblem(null);
+    setBansIncomplete(false);
     setActing(true);
-    const { error } = await setVendorSuspended(pending.id, pending.action);
+    const action = pending.action;
+    const { error, outcome } = await setVendorSuspended(pending.id, action);
     setActing(false);
     setPending(null);
-    if (error) setProblem(error.key);
+    if (error) {
+      setProblem(error.key);
+    } else if (action === "suspend" && outcome && (outcome.failed > 0 || outcome.bans_skipped)) {
+      // The DB flag (vendors.suspended_at) already flipped -- that is the authoritative
+      // gate -- but some staff accounts may still be able to sign back in until their
+      // session expires, so the owner needs to know this suspension is not fully done.
+      setBansIncomplete(true);
+    }
     await load();
   }
 
@@ -134,6 +144,13 @@ export default function OwnerConsole() {
           <div data-testid="owner-problem" role="alert"
             className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
             {t((problem ?? loadProblem) as string)}
+          </div>
+        )}
+
+        {bansIncomplete && (
+          <div data-testid="owner-bans-incomplete" role="alert"
+            className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            {t("owner.bansIncomplete")}
           </div>
         )}
 

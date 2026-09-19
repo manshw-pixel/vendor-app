@@ -5,7 +5,7 @@ exists yet), or day-to-day owner tasks — onboarding a new vendor, or suspendin
 
 ## Why the first owner row is placed by hand
 
-Same reasoning as ever admin bootstrap used to be, one level up. From
+Same reasoning as every admin bootstrap used to be, one level up. From
 `0019_platform_owner.sql`:
 
 ```sql
@@ -79,11 +79,16 @@ is a platform owner, then sets or clears `vendors.suspended_at` and bans or unba
 `app_users` account on that shop (`auth.admin.updateUserById`, a ~100-year ban to
 suspend, `ban_duration: "none"` to reinstate).
 
-**Two mechanisms, two speeds.** The ban stops *new* sign-ins immediately. But a staff
-member already signed in is holding a JWT that is still valid for up to its own lifetime
-— **up to about an hour** — and `current_vendor_id()` (which the ban does not touch)
-still resolves it to the same vendor, so read policies still return that vendor's rows
-until the token expires. What stops the damage immediately is
+**Two mechanisms, two speeds.** The ban stops *new* sign-ins immediately, and it also
+stops the silent renewal that would otherwise keep a session alive indefinitely: a banned
+account's refresh token is rejected, so once its current access token expires it cannot
+be swapped for a new one. That refresh-token block is what caps the read window at about
+an hour, not just the token's own lifetime — without it, a client that refreshes in the
+background could keep reading as that vendor well past an hour. A staff member already
+signed in is holding a JWT that is still valid for up to its own lifetime — **up to about
+an hour** — and `current_vendor_id()` (which the ban does not touch) still resolves it to
+the same vendor, so read policies still return that vendor's rows until the token
+expires. What stops the damage immediately is
 `current_user_role()`: as soon as `suspended_at` is set, it starts returning
 `'suspended'` for anyone on that vendor, session or no session, and **every** write
 policy and billing function (`issue_token`, `complete_bill`, `replace_bill_lines`,

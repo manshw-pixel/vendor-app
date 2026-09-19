@@ -51,10 +51,16 @@ export function validateDeleteUserRequest(body: unknown): GuardResult {
  *     admin is gone nobody can undo it without hand-written SQL against production.
  */
 export function authorizeDelete(
-  caller: { id: string; vendorId: string; role: string },
+  caller: { id: string; vendorId: string; role: string; suspended?: boolean },
   target: { id: string; vendorId: string } | null,
 ): { ok: true } | { ok: false; code: ErrorCode } {
   if (caller.role !== "admin") return { ok: false, code: "not_admin" };
+  // A suspended shop's admin still has role = 'admin' in app_users -- suspension is a
+  // separate axis (vendors.suspended_at), so it needs its own check here. Without it, a
+  // suspended shop's admin could keep removing staff even though the sentinel role and RLS
+  // treat the shop as shut down everywhere else. Reuses "not_admin": the caller was never
+  // entitled to use this function while their shop is suspended, same as not being an admin.
+  if (caller.suspended) return { ok: false, code: "not_admin" };
   // A target that is absent and a target in another shop are answered identically on
   // purpose: telling a stranger's admin "that id exists, just not here" would turn this
   // into a way to probe for account ids across tenants.

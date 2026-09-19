@@ -47,6 +47,19 @@ describe("ownerApi", () => {
     expect(invoke).toHaveBeenLastCalledWith("owner-suspend-vendor", { body: { vendor_id: "v1", action: "reinstate" } });
   });
 
+  it("returns the ban outcome so the caller can warn on partial failure", async () => {
+    invoke.mockResolvedValueOnce({ data: { banned: 1, failed: 2 }, error: null });
+    const { outcome, error } = await setVendorSuspended("v1", "suspend");
+    expect(error).toBeNull();
+    expect(outcome).toEqual({ banned: 1, failed: 2 });
+  });
+
+  it("passes through bans_skipped when the roster read itself failed", async () => {
+    invoke.mockResolvedValueOnce({ data: { banned: 0, failed: 0, bans_skipped: true }, error: null });
+    const { outcome } = await setVendorSuspended("v1", "suspend");
+    expect(outcome).toEqual({ banned: 0, failed: 0, bans_skipped: true });
+  });
+
   it("maps create failure codes", async () => {
     fails("not_owner", 403);
     expect((await createVendor(value)).error?.key).toBe("error.notAllowed");

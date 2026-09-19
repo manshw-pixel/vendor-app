@@ -56,13 +56,18 @@ const SUSPEND_KEYS: Record<SuspendErrorCode, string> = {
   update_failed: "error.unknown",
 };
 
+export type SuspendOutcome = { banned: number; failed: number; bans_skipped?: boolean };
+
 /** Suspends or reinstates a shop through owner-suspend-vendor. */
 export async function setVendorSuspended(
   vendorId: string,
   action: SuspendRequest["action"],
-): Promise<{ error: { key: string; detail: string } | null }> {
+): Promise<{ error: { key: string; detail: string } | null; outcome: SuspendOutcome | null }> {
   const body: SuspendRequest = { vendor_id: vendorId, action };
-  const { error } = await supabase.functions.invoke("owner-suspend-vendor", { body });
-  if (!error) return { error: null };
-  return { error: { key: await codeFrom(error, SUSPEND_KEYS), detail: error.message ?? "" } };
+  const { data, error } = await supabase.functions.invoke("owner-suspend-vendor", { body });
+  if (!error) return { error: null, outcome: (data as SuspendOutcome | null) ?? null };
+  return {
+    error: { key: await codeFrom(error, SUSPEND_KEYS), detail: error.message ?? "" },
+    outcome: null,
+  };
 }
