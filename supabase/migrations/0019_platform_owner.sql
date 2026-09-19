@@ -48,3 +48,27 @@ create or replace function current_user_role() returns text
     from app_users u join vendors v on v.id = u.vendor_id
    where u.id = auth.uid()
 $$;
+
+create function owner_vendor_summary()
+  returns table (
+    id uuid, name text, created_at timestamptz, suspended_at timestamptz,
+    staff_count bigint, bills_month bigint, sales_month numeric, last_bill_at timestamptz
+  )
+  language plpgsql stable security definer set search_path = public as $$
+declare
+  v_from timestamptz := (date_trunc('month', now() at time zone 'Asia/Kolkata')) at time zone 'Asia/Kolkata';
+begin
+  if not is_platform_owner() then
+    raise exception 'only the platform owner may list shops' using errcode = '42501';
+  end if;
+  return query
+    select v.id, v.name, v.created_at, v.suspended_at,
+           (select count(*) from app_users u where u.vendor_id = v.id),
+           (select count(*) from bills b where b.vendor_id = v.id and b.status = 'done' and b.completed_at >= v_from),
+           (select coalesce(sum(b.total), 0) from bills b where b.vendor_id = v.id and b.status = 'done' and b.completed_at >= v_from),
+           (select max(b.completed_at) from bills b where b.vendor_id = v.id and b.status = 'done')
+      from vendors v
+     order by v.name, v.id;
+end $$;
+revoke all on function owner_vendor_summary() from public, anon;
+grant execute on function owner_vendor_summary() to authenticated;

@@ -104,3 +104,30 @@ test("void_bill is refused for a suspended shop", async () => {
     assertDenied(error, "suspended admin voided a bill");
   } finally { await sql(`update vendors set suspended_at = null where id=$1`, [w.a.vendorId]); }
 });
+
+test("owner_vendor_summary refuses staff and outsiders", async () => {
+  const w = await getW();
+  assertDenied((await w.a.clients.admin.rpc("owner_vendor_summary")).error, "admin read the summary");
+  assertDenied((await w.outsider.client.rpc("owner_vendor_summary")).error, "outsider read the summary");
+});
+
+test("owner_vendor_summary lists every vendor with staff, this-month bills and sales", async () => {
+  const w = await getW();
+  // One done bill in vendor A this month: 2 x 40 = 80.
+  const { rows: [b] } = await sql(`insert into bills (vendor_id, customer_id, total, status) values ($1,$2,0,'recording') returning id`, [w.a.vendorId, w.a.customerId]);
+  await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total) values ($1,$2,$3,2,40,80)`, [b.id, w.a.vendorId, w.a.itemId]);
+  await sql(`select issue_token($1)`, [b.id]); await sql(`select complete_bill($1)`, [b.id]);
+  // An old bill last month must not count.
+  await sql(`insert into bills (vendor_id, customer_id, total, status, completed_at) values ($1,$2,999,'done', (date_trunc('month', now() at time zone 'Asia/Kolkata') - interval '1 day') at time zone 'Asia/Kolkata')`, [w.a.vendorId, w.a.customerId]);
+  const { data, error } = await w.owner.client.rpc("owner_vendor_summary");
+  assert(!error, error?.message);
+  const a = data.find((r) => r.id === w.a.vendorId);
+  const bRow = data.find((r) => r.id === w.b.vendorId);
+  assert(a && bRow, "both seeded vendors listed");
+  assertEqual(Number(a.staff_count), 3, "A has admin, recorder, biller");
+  assert(Number(a.bills_month) >= 1, "this month's bill counted");
+  assert(Number(a.sales_month) >= 80 && Number(a.sales_month) < 999, "sales exclude last month's 999");
+  assert(a.last_bill_at !== null, "last_bill_at");
+  assertEqual(a.suspended_at, null, "not suspended");
+  assertEqual(Number(bRow.staff_count), 3, "B has admin, recorder, biller");
+});
