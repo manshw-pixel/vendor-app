@@ -36,6 +36,11 @@ vi.mock("../screens/Staff", () => ({ default: () => <div data-testid="screen-sta
 vi.mock("../screens/Settings", () => ({ default: () => <div data-testid="screen-settings" /> }));
 vi.mock("../screens/Completed", () => ({ default: () => <div data-testid="screen-completed" /> }));
 vi.mock("../screens/Dashboards", () => ({ default: () => <div data-testid="screen-dashboards" /> }));
+vi.mock("../ownerApi", () => ({
+  listVendorSummary: async () => ({ data: [], error: null }),
+  createVendor: async () => ({ error: null }),
+  setVendorSuspended: async () => ({ error: null }),
+}));
 
 afterEach(() => {
   cleanup();
