@@ -34,6 +34,16 @@ enable_confirmations = false
 [functions.admin-create-user]
 verify_jwt = true
 
+# Same defence-in-depth story as admin-create-user: verify_jwt only proves a signed-in
+# user, and the function's own platform_owners read (under the caller's JWT) is the check.
+[functions.owner-create-vendor]
+verify_jwt = true
+
+# Same story as owner-create-vendor: verify_jwt is defence in depth, the platform_owners
+# read under the caller's JWT is the actual owner check.
+[functions.owner-suspend-vendor]
+verify_jwt = true
+
 # verify_jwt = false ON PURPOSE, and it is not a hole. The caller is pg_cron over pg_net
 # (kick_send_notification(), 0011), which holds no user JWT and never will -- with
 # verify_jwt on, every tick would be rejected at the edge and the queue would never
