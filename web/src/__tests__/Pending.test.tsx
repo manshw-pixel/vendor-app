@@ -28,7 +28,19 @@ vi.mock("../data", () => ({
   billToken: (...a: unknown[]) => billToken(...a),
 }));
 
+let sessionRole: "admin" | "recorder" | "biller" = "admin";
+vi.mock("../components/SessionProvider", () => ({
+  useSession: () => ({
+    kind: "ready", userId: "u1", vendorId: "v1", vendorName: "V", name: "R", role: sessionRole,
+  }),
+}));
+
 const { default: Pending } = await import("../screens/Pending");
+
+function renderPending({ role }: { role: "admin" | "recorder" | "biller" } = { role: "admin" }) {
+  sessionRole = role;
+  return render(<MemoryRouter><Pending /></MemoryRouter>);
+}
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -229,5 +241,23 @@ describe("reaching the receipt after completion", () => {
     // The moment the slip is wanted: the customer is still standing there.
     const link = await screen.findByTestId("pending-receipt-b1");
     expect(link.getAttribute("href")).toBe("/receipt/b1");
+  });
+});
+
+describe("editing a pending bill from the queue", () => {
+  it("offers Edit on a pending bill for an admin", async () => {
+    renderPending({ role: "admin" });
+    expect(await screen.findByTestId("bill-amend-b1")).toBeTruthy();
+  });
+
+  it("offers Edit for a recorder", async () => {
+    renderPending({ role: "recorder" });
+    expect(await screen.findByTestId("bill-amend-b1")).toBeTruthy();
+  });
+
+  it("does not offer Edit to a biller", async () => {
+    renderPending({ role: "biller" });
+    await screen.findByText(/token 7/i);
+    expect(screen.queryByTestId("bill-amend-b1")).toBeNull();
   });
 });
