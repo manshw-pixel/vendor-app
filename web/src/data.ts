@@ -166,4 +166,63 @@ export async function pointsForBill(billId: string) {
   return supabase.from("points_ledger").select("points").eq("bill_id", billId).gt("points", 0);
 }
 
+/**
+ * The same rewrite replaceBillLines performs, for a bill that already has a token.
+ *
+ * A separate function rather than a flag, because the SERVER functions are separate:
+ * replace_bill_lines refuses anything past 'recording' and cannot fix the two things
+ * that makes wrong (the quoted total, the queued message), while amend_pending_bill
+ * (0020) recomputes the total and supersedes the message. The bill keeps its token.
+ *
+ * No line_total, for the same reason as replaceBillLines: the function computes it, so a
+ * client-supplied one cannot forge a bill's total.
+ */
+export async function amendPendingBill(billId: string, lines: readonly Draft[]) {
+  return supabase.rpc("amend_pending_bill", {
+    p_bill_id: billId,
+    p_lines: lines.map((l) => ({
+      item_id: l.itemId,
+      qty_kg: l.qtyKg,
+      unit_price: l.unitPrice,
+    })),
+  });
+}
+
+/**
+ * A bill's stored lines in the shape the basket edits.
+ *
+ * unit_price comes from the STORED row, not from items.price: the price at the moment of
+ * recording is the bill's price, and re-reading the live one would silently reprice a
+ * basket during an amendment.
+ */
+/** The bill's STORED total, exactly as SQL's `round(numeric, 2)` computed it. AmendBill
+ *  shows this beside a client-recomputed new total; `runningTotal` (billing.ts) uses
+ *  `Math.round(x*100)/100` on binary floats, which can differ from the stored value by a
+ *  paisa (₹10.02 x 1.25 renders 12.52 but stores 12.53). The OLD total has an authoritative
+ *  stored value to defer to; the NEW one is a live preview of an unsaved basket and has
+ *  none, so it stays client-computed. */
+export async function billTotal(billId: string) {
+  return supabase.from("bills").select("total").eq("id", billId).single();
+}
+
+export async function billDraftLines(billId: string) {
+  const res = await supabase
+    .from("bill_items")
+    .select("id, item_id, qty_kg, unit_price, line_total, items(name_en, name_hi, name_mr, unit)")
+    .eq("bill_id", billId);
+  if (res.error || !res.data) return { data: null, error: res.error };
+  type Row = {
+    item_id: string; qty_kg: number; unit_price: number;
+    items: { name_en: string; name_hi: string; name_mr: string; unit: Unit } | null;
+  };
+  const data: Draft[] = (res.data as unknown as Row[]).map((r) => ({
+    itemId: r.item_id,
+    name: r.items?.name_en ?? "",
+    unitPrice: Number(r.unit_price),
+    qtyKg: Number(r.qty_kg),
+    unit: r.items?.unit ?? "kg",
+  }));
+  return { data, error: null };
+}
+
 export type { Customer, Draft };

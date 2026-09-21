@@ -16,6 +16,7 @@ import Completed from "./screens/Completed";
 import Dashboards from "./screens/Dashboards";
 import Settings from "./screens/Settings";
 import Receipt from "./screens/Receipt";
+import AmendBill from "./screens/AmendBill";
 import OwnerConsole from "./screens/OwnerConsole";
 import { homeFor } from "./routes";
 import type { Role } from "./config";
@@ -132,6 +133,7 @@ function ShellRoutes({ role, vendorName, name }:
       <Routes>
         <Route path="/bill" element={<Bill />} />
         <Route path="/pending" element={<Pending />} />
+        <Route path="/amend/:billId" element={<AmendBill />} />
         <Route path="/items" element={<Items />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/requests" element={<Requests />} />

@@ -46,6 +46,14 @@ export function describeError(
   // void_bill's guards (0017), plpgsql P0001 like the others: matched on message.
   if (/void window closed/i.test(detail)) return { key: "void.windowClosed", detail };
   if (/bill is not done/i.test(detail)) return { key: "void.notDone", detail };
+  // amend_pending_bill's status guard (0013/0015 family): "bill <id> is <status>, expected
+  // billed" -- raised when the bill Completed.tsx is trying to edit has already moved past
+  // `billed` (voided, completed, or amended again) since the screen loaded it. Matched on
+  // message for the same reason as isBillNoLongerRecording above: the P0001 code alone
+  // cannot distinguish this from every other guard in the function.
+  if (/\bbill\b.*\bis\b.*\bexpected billed\b/i.test(detail)) {
+    return { key: "amend.noLongerPending", detail };
+  }
   // Item unit guards (0018), plpgsql P0001 like the others: matched on message.
   if (/unit is locked once the item has been sold/i.test(detail)) {
     return { key: "unit.locked", detail };

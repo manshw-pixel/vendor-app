@@ -34,6 +34,13 @@ const TEMPLATES: Record<string, { field: string; kind: "int" | "money" }[]> = {
     { field: "token_no", kind: "int" },
     { field: "total", kind: "money" },
   ],
+  // amend_pending_bill() (0020) queues this in place of the still-pending token_issued
+  // row it deletes, with the same two fields -- the customer needs the corrected total
+  // under the same token, not a second unrelated message.
+  token_amended: [
+    { field: "token_no", kind: "int" },
+    { field: "total", kind: "money" },
+  ],
   points_awarded: [
     { field: "points", kind: "int" },
     // The NET collected, which is what complete_bill writes to bills.total once points

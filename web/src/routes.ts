@@ -42,9 +42,9 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
  * would grant /receiptxyz/b1 as well.
  */
 const UNLISTED: Record<Role, readonly string[]> = {
-  recorder: [],
+  recorder: ["/amend"],
   biller: ["/receipt"],
-  admin: ["/receipt"],
+  admin: ["/receipt", "/amend"],
 };
 
 const matchesUnlisted = (prefix: string, path: string): boolean => {

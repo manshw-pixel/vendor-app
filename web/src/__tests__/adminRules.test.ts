@@ -4,15 +4,15 @@ import {
 } from "../adminRules";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 
-const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5",
+const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", cost: "25", stock_kg: "12.5",
   unit: "kg" as const, low_stock_at: "10" };
 
 describe("validateItem", () => {
   it("accepts a complete item and returns numbers, not strings", () => {
-    const r = validateItem(item);
+    const r = validateItem(item, "create");
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toEqual({
-      name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5,
+      name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, cost: 25, stock_kg: 12.5,
       unit: "kg", low_stock_at: 10,
     });
   });
@@ -20,13 +20,13 @@ describe("validateItem", () => {
   it("requires all three names", () => {
     // §11b: a shopkeeper's own Marathi is the only native-quality Indian-language text
     // this app will ever hold, and a blank never gets filled in later.
-    const r = validateItem({ ...item, name_hi: "", name_mr: "  " });
+    const r = validateItem({ ...item, name_hi: "", name_mr: "  " }, "create");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["name_hi", "name_mr"]);
   });
 
   it("reports every problem at once", () => {
-    const r = validateItem({ ...item, name_en: "", name_hi: "", name_mr: "", price: "x", stock_kg: "-1" });
+    const r = validateItem({ ...item, name_en: "", name_hi: "", name_mr: "", price: "x", stock_kg: "-1" }, "create");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort())
       .toEqual(["name_en", "name_hi", "name_mr", "price", "stock_kg"]);
@@ -35,40 +35,40 @@ describe("validateItem", () => {
   it("accepts zero price and zero stock", () => {
     // 0001_schema.sql checks price >= 0 and stock_kg >= 0, not > 0. A free item and a
     // sold-out item are both legitimate.
-    expect(validateItem({ ...item, price: "0", stock_kg: "0" }).ok).toBe(true);
+    expect(validateItem({ ...item, price: "0", stock_kg: "0" }, "create").ok).toBe(true);
   });
 
   it("rejects a negative price or stock", () => {
-    expect(validateItem({ ...item, price: "-1" }).ok).toBe(false);
-    expect(validateItem({ ...item, stock_kg: "-0.5" }).ok).toBe(false);
+    expect(validateItem({ ...item, price: "-1" }, "create").ok).toBe(false);
+    expect(validateItem({ ...item, stock_kg: "-0.5" }, "create").ok).toBe(false);
   });
 
   it("trims the names it returns", () => {
-    const r = validateItem({ ...item, name_en: "  Onion  " });
+    const r = validateItem({ ...item, name_en: "  Onion  " }, "create");
     if (r.ok) expect(r.value.name_en).toBe("Onion");
   });
 
   it("rejects a 20-digit price", () => {
-    expect(validateItem({ ...item, price: "12345678901234567890" }).ok).toBe(false);
+    expect(validateItem({ ...item, price: "12345678901234567890" }, "create").ok).toBe(false);
   });
 
   it("accepts the maximum numeric(10,2) value for price", () => {
-    expect(validateItem({ ...item, price: "99999999.99" }).ok).toBe(true);
+    expect(validateItem({ ...item, price: "99999999.99" }, "create").ok).toBe(true);
   });
 
   it("rejects a price exceeding the maximum numeric(10,2) value", () => {
-    expect(validateItem({ ...item, price: "100000000" }).ok).toBe(false);
+    expect(validateItem({ ...item, price: "100000000" }, "create").ok).toBe(false);
   });
 
   it("refuses fractional stock for a whole unit", () => {
-    const r = validateItem({ ...item, unit: "piece", stock_kg: "2.5" });
+    const r = validateItem({ ...item, unit: "piece", stock_kg: "2.5" }, "create");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.stock_kg).toBe("items.badWholeStock");
   });
 
   it("accepts fractional stock for kg and whole stock for a piece", () => {
-    expect(validateItem({ ...item, stock_kg: "2.5" }).ok).toBe(true);
-    const r = validateItem({ ...item, unit: "piece", stock_kg: "12", low_stock_at: "5" });
+    expect(validateItem({ ...item, stock_kg: "2.5" }, "create").ok).toBe(true);
+    const r = validateItem({ ...item, unit: "piece", stock_kg: "12", low_stock_at: "5" }, "create");
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.unit).toBe("piece");
@@ -77,13 +77,45 @@ describe("validateItem", () => {
   });
 
   it.each(["-1", "", "x"])("refuses low_stock_at %j", (low_stock_at) => {
-    const r = validateItem({ ...item, low_stock_at });
+    const r = validateItem({ ...item, low_stock_at }, "create");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.low_stock_at).toBe("items.badLowAt");
   });
 
   it("accepts a zero threshold", () => {
-    expect(validateItem({ ...item, low_stock_at: "0" }).ok).toBe(true);
+    expect(validateItem({ ...item, low_stock_at: "0" }, "create").ok).toBe(true);
+  });
+
+  it("cost is required when creating an item", () => {
+    const r = validateItem({ ...item, cost: "" }, "create");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.cost).toBe("items.costRequired");
+  });
+
+  it("cost may be blank when editing, and means 'leave it alone'", () => {
+    const r = validateItem({ ...item, cost: "" }, "edit");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.cost).toBeNull();
+  });
+
+  it("a negative cost is rejected in both modes", () => {
+    for (const mode of ["create", "edit"] as const) {
+      const r = validateItem({ ...item, cost: "-1" }, mode);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.cost).toBe("items.badCost");
+    }
+  });
+
+  it("zero is a valid cost", () => {
+    const r = validateItem({ ...item, cost: "0" }, "create");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.cost).toBe(0);
+  });
+
+  it("a typed cost is carried through on edit", () => {
+    const r = validateItem({ ...item, cost: "31.5" }, "edit");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.cost).toBe(31.5);
   });
 });
 

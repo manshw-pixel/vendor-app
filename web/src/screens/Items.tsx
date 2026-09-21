@@ -10,7 +10,7 @@ import { itemName, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 
-const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", stock_kg: "",
+const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", cost: "", stock_kg: "",
   unit: "kg", low_stock_at: "10" };
 
 const NAME_FIELDS = [
@@ -22,7 +22,8 @@ const NAME_FIELDS = [
 function toInput(it: AdminItem): ItemInput {
   return {
     name_en: it.name_en, name_hi: it.name_hi, name_mr: it.name_mr,
-    price: String(it.price), stock_kg: String(it.stock_kg),
+    price: String(it.price), cost: it.last_cost === null ? "" : String(it.last_cost),
+    stock_kg: String(it.stock_kg),
     unit: it.unit, low_stock_at: String(it.low_stock_at),
   };
 }
@@ -51,7 +52,7 @@ export default function Items() {
 
   async function save() {
     if (!editing) return;
-    const result = validateItem(editing.input);
+    const result = validateItem(editing.input, editing.id === null ? "create" : "edit");
     if (!result.ok) { setErrors(result.errors); return; }
     setErrors({});
     setBusy(true);
@@ -161,6 +162,26 @@ export default function Items() {
               className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
             />
             {errors.price && <p className="text-xs text-red-700 mt-1">{t(errors.price)}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="item-cost">
+              {t("items.cost", { per: perUnit(editing.input.unit, t) })}
+            </label>
+            <input
+              id="item-cost"
+              data-testid="item-cost"
+              value={editing.input.cost}
+              inputMode="decimal"
+              onChange={(e) =>
+                setEditing({ ...editing, input: { ...editing.input, cost: e.target.value } })
+              }
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+            {errors.cost && <p className="text-xs text-red-700 mt-1">{t(errors.cost)}</p>}
+            <p className="text-xs text-slate-500 mt-1">
+              {editing.id === null ? t("items.costNewNote") : t("items.costEditNote")}
+            </p>
           </div>
 
           <div>

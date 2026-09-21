@@ -16,6 +16,7 @@ export type ItemInput = {
   name_hi: string;
   name_mr: string;
   price: string;
+  cost: string;
   stock_kg: string;
   unit: Unit;
   low_stock_at: string;
@@ -27,6 +28,7 @@ export type ItemValue = {
   name_hi: string;
   name_mr: string;
   price: number;
+  cost: number | null;
   stock_kg: number;
   unit: Unit;
   low_stock_at: number;
@@ -57,6 +59,7 @@ function nonNegative(raw: string): number | null {
 
 export function validateItem(
   input: ItemInput,
+  mode: "create" | "edit",
 ): { ok: true; value: ItemValue } | { ok: false; errors: Partial<Record<ItemField, string>> } {
   const errors: Partial<Record<ItemField, string>> = {};
 
@@ -76,6 +79,19 @@ export function validateItem(
   const lowAt = nonNegative(input.low_stock_at);
   if (lowAt === null) errors.low_stock_at = "items.badLowAt";
 
+  // Required on create so an item never starts life uncosted -- every sale of an uncosted
+  // item lands in top_items_between's uncosted_lines with no margin at all. Blank is
+  // allowed on EDIT and means "leave last_cost alone", so the thousands of items created
+  // before 0020 do not each have to be costed before any other field can be fixed.
+  let cost: number | null = null;
+  const costRaw = input.cost.trim();
+  if (costRaw === "") {
+    if (mode === "create") errors.cost = "items.costRequired";
+  } else {
+    cost = nonNegative(input.cost);
+    if (cost === null) errors.cost = "items.badCost";
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -84,6 +100,7 @@ export function validateItem(
       name_hi: input.name_hi.trim(),
       name_mr: input.name_mr.trim(),
       price: price as number,
+      cost,
       stock_kg: stock as number,
       unit: input.unit,
       low_stock_at: lowAt as number,

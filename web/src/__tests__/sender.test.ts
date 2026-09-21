@@ -63,6 +63,17 @@ describe("buildMessage", () => {
     });
   });
 
+  it("maps token_amended to its own template id with token and total, same shape as token_issued", () => {
+    // amend_pending_bill() (0020) queues this key with exactly issue_token's payload
+    // shape, so a corrected total reaches the customer instead of nothing at all.
+    const idsWithAmend = { ...ids, token_amended: "tpl-amend" };
+    const r = buildMessage("token_amended", { token_no: 7, total: 660.5 }, idsWithAmend);
+    expect(r).toEqual({
+      ok: true,
+      value: { templateId: "tpl-amend", params: ["7", "660.50"] },
+    });
+  });
+
   it("maps points_awarded with points, net total and days to expiry", () => {
     // Payload shape is fixed by complete_bill() at 0010_points_redemption.sql:143.
     const r = buildMessage(

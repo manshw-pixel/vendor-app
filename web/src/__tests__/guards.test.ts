@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateCreateUserRequest, MIN_PASSWORD_LENGTH,
 } from "../../../supabase/functions/admin-create-user/guards";
+import { canAccess } from "../routes";
 
 const good = { email: "rina@shop.test", password: "sunflower9", name: "Rina", role: "recorder" };
 
@@ -68,5 +69,27 @@ describe("validateCreateUserRequest", () => {
       expect(r.value.name).toBe("Rina");
       expect(r.value.password).toBe(" pass word ");
     }
+  });
+});
+
+describe("routing to the amend screen", () => {
+  it("admin and recorder reach /amend/<id>; a biller does not", () => {
+    expect(canAccess("admin", "/amend/b1")).toBe(true);
+    expect(canAccess("recorder", "/amend/b1")).toBe(true);
+    expect(canAccess("biller", "/amend/b1")).toBe(false);
+  });
+
+  it("/amend is not granted by prefix alone", () => {
+    expect(canAccess("admin", "/amendxyz/b1")).toBe(false);
+    expect(canAccess("admin", "/amend")).toBe(false);
+  });
+});
+
+describe("routing to the bill screen", () => {
+  it("a biller cannot reach /bill", () => {
+    // Completed.tsx's Edit hands off to /bill after voiding the original. A biller who
+    // reached this route would be granted the ability to create bills -- a role change
+    // nobody asked for -- so this coupling is pinned here rather than left implicit.
+    expect(canAccess("biller", "/bill")).toBe(false);
   });
 });

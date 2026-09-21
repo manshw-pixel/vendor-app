@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 // screen is rendered directly (by tests, and by the router) without going through
 // main.tsx.
 import "../i18n";
+import { useSession } from "../components/SessionProvider";
 import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
 import { rupees } from "../money";
@@ -18,6 +19,7 @@ import { rupees } from "../money";
  */
 export default function Pending() {
   const { t } = useTranslation();
+  const session = useSession();
 
   const [bills, setBills] = useState<PendingBill[] | null>(null);
   const [failure, setFailure] = useState<{ key: string; detail: string } | null>(null);
@@ -53,6 +55,8 @@ export default function Pending() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  if (session.kind !== "ready") return null;
 
   // Opens the confirm for one bill and, if it has a customer, reads their balance so the
   // redeem input can be offered. A walk-in bill (no customer_id) skips the read entirely
@@ -183,14 +187,25 @@ export default function Pending() {
               </p>
               <p className="text-sm text-slate-700">{rupees(bill.total)}</p>
             </div>
-            <button
-              data-testid={`pending-complete-${bill.id}`}
-              onClick={() => void openConfirm(bill)}
-              disabled={completingId === bill.id}
-              className="rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
-            >
-              {t("pending.complete")}
-            </button>
+            <div className="flex gap-2">
+              {(session.role === "admin" || session.role === "recorder") && (
+                <Link
+                  data-testid={`bill-amend-${bill.id}`}
+                  to={`/amend/${bill.id}`}
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                >
+                  {t("pending.edit")}
+                </Link>
+              )}
+              <button
+                data-testid={`pending-complete-${bill.id}`}
+                onClick={() => void openConfirm(bill)}
+                disabled={completingId === bill.id}
+                className="rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
+              >
+                {t("pending.complete")}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
