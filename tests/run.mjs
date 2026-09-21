@@ -28,6 +28,7 @@ import "./item_units.test.mjs";
 import "./item_units_functions.test.mjs";
 import "./platform_owner.test.mjs";
 import "./amend_pending_bill.test.mjs";
+import "./create_item_with_cost.test.mjs";
 
 try {
   await bootstrap();

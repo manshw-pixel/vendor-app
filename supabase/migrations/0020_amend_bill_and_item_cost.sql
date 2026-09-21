@@ -181,3 +181,76 @@ end $$;
 
 revoke all on function amend_pending_bill(uuid, jsonb) from public, anon;
 grant execute on function amend_pending_bill(uuid, jsonb) to authenticated;
+
+-- --------------------------------------------------------------------------
+-- Part 2: creating an item with its cost.
+--
+-- items.last_cost has had exactly one writer: log_stock_movement with kind='purchase',
+-- reached from the Stock screen. So an item created on the Items form started life
+-- uncosted, and every sale of it until the first purchase entry landed in
+-- top_items_between's uncosted_lines with no margin at all.
+--
+-- The insert and the movement are one transaction because an item created without its
+-- costing movement is a silent gap in the analytics -- the kind of gap nobody notices
+-- until a margin figure is already wrong.
+--
+-- The item is inserted at stock 0 and log_stock_movement raises it. Inserting the opening
+-- stock AND logging a purchase for it would count the same produce twice.
+-- --------------------------------------------------------------------------
+create function create_item_with_cost(
+  p_names        jsonb,
+  p_price        numeric,
+  p_stock        numeric,
+  p_unit         text,
+  p_low_stock_at numeric,
+  p_cost         numeric
+) returns items
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_item  items%rowtype;
+  v_stock numeric := round(p_stock, 2);
+  v_cost  numeric := round(p_cost, 2);
+begin
+  -- Item creation is admin-only, as items_admin_write in 0002_rls.sql already says. A
+  -- null vendor is refused here rather than allowed through: unlike issue_token, nothing
+  -- creates items on a service-role connection.
+  if current_vendor_id() is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may create an item' using errcode = '42501';
+  end if;
+
+  if v_cost is null or v_cost < 0 then
+    raise exception 'an item needs a cost' using errcode = '22023';
+  end if;
+  if v_stock is null or v_stock < 0 then
+    raise exception 'opening stock cannot be negative' using errcode = '22023';
+  end if;
+  if p_unit is null or p_unit not in ('kg', 'piece', 'bunch', 'dozen') then
+    raise exception 'unknown unit %', p_unit using errcode = '22023';
+  end if;
+
+  -- stock_kg 0 on purpose; the movement below raises it. last_cost is set here as well
+  -- as by the movement, so a zero-stock item still carries its cost.
+  insert into items (vendor_id, name_en, name_hi, name_mr,
+                     price, stock_kg, unit, low_stock_at, last_cost)
+  values (current_vendor_id(),
+          coalesce(p_names->>'name_en', ''),
+          coalesce(p_names->>'name_hi', ''),
+          coalesce(p_names->>'name_mr', ''),
+          p_price, 0, p_unit, p_low_stock_at, v_cost)
+  returning * into v_item;
+
+  if v_stock > 0 then
+    -- Raises stock_kg by v_stock and sets last_cost, and runs its own assert_whole_qty,
+    -- so a fractional opening stock for a piece item raises here and the insert above
+    -- rolls back with it.
+    perform log_stock_movement(v_item.id, 'purchase', v_stock, v_cost, 'opening stock');
+    select * into v_item from items where id = v_item.id;
+  end if;
+
+  return v_item;
+end $$;
+
+revoke all on function create_item_with_cost(jsonb, numeric, numeric, text, numeric, numeric)
+  from public, anon;
+grant execute on function create_item_with_cost(jsonb, numeric, numeric, text, numeric, numeric)
+  to authenticated;
