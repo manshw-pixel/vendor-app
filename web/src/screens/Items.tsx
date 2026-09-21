@@ -52,7 +52,7 @@ export default function Items() {
 
   async function save() {
     if (!editing) return;
-    const result = validateItem(editing.input);
+    const result = validateItem(editing.input, editing.id === null ? "create" : "edit");
     if (!result.ok) { setErrors(result.errors); return; }
     setErrors({});
     setBusy(true);
@@ -162,6 +162,26 @@ export default function Items() {
               className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
             />
             {errors.price && <p className="text-xs text-red-700 mt-1">{t(errors.price)}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="item-cost">
+              {t("items.cost", { per: perUnit(editing.input.unit, t) })}
+            </label>
+            <input
+              id="item-cost"
+              data-testid="item-cost"
+              value={editing.input.cost}
+              inputMode="decimal"
+              onChange={(e) =>
+                setEditing({ ...editing, input: { ...editing.input, cost: e.target.value } })
+              }
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+            {errors.cost && <p className="text-xs text-red-700 mt-1">{t(errors.cost)}</p>}
+            <p className="text-xs text-slate-500 mt-1">
+              {editing.id === null ? t("items.costNewNote") : t("items.costEditNote")}
+            </p>
           </div>
 
           <div>

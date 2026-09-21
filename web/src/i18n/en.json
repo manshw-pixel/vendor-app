@@ -17,6 +17,7 @@
     "nameHi": "Name (Hindi)",
     "nameMr": "Name (Marathi)",
     "price": "Price {{per}}",
+    "cost": "Cost {{per}}",
     "stock": "Stock ({{unit}})",
     "save": "Save",
     "cancel": "Cancel",
@@ -33,6 +34,10 @@
     "badStock": "Enter a stock figure between 0 and 99,999,999.99.",
     "badWholeStock": "Stock must be a whole number for this unit.",
     "badLowAt": "Enter a threshold of 0 or more.",
+    "badCost": "Enter a cost of zero or more",
+    "costRequired": "A new item needs its cost",
+    "costNewNote": "Opening stock is recorded as a purchase at this cost.",
+    "costEditNote": "Leave blank to keep the current cost. This does not add stock.",
     "lowBadge": "{{n}} items low on stock"
   },
   "customersScreen": {

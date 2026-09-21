@@ -71,10 +71,11 @@ describe("the items screen", () => {
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "गाजर" } });
     fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "गाजर" } });
     fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "50" } });
+    fireEvent.change(screen.getByTestId("item-cost"), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "5" } });
     fireEvent.click(screen.getByTestId("item-save"));
     await waitFor(() => expect(createItem).toHaveBeenCalledWith("v1", expect.objectContaining({
-      name_en: "Carrot", price: 50, stock_kg: 5,
+      name_en: "Carrot", price: 50, cost: 30, stock_kg: 5,
     })));
   });
 
@@ -164,6 +165,7 @@ describe("the items screen", () => {
     fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "नारळ" } });
     fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "piece" } });
     fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByTestId("item-cost"), { target: { value: "6" } });
     fireEvent.change(screen.getByLabelText(/pieces/i), { target: { value: "3" } });
     fireEvent.change(screen.getByTestId("item-low_stock_at"), { target: { value: "5" } });
     fireEvent.click(screen.getByTestId("item-save"));
@@ -197,5 +199,33 @@ describe("the items screen", () => {
     expect(dozenText.className).toContain("amber");
     const kgRow = screen.getByTestId(/^item-cost-i5$/).closest("li")!;
     expect(kgRow.textContent).not.toMatch(/Low stock/);
+  });
+
+  it("refuses to save a new item with no cost", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Beet" } });
+    fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "चुकंदर" } });
+    fireEvent.change(screen.getByLabelText(/marathi|मराठी/i), { target: { value: "बीट" } });
+    fireEvent.change(screen.getByLabelText(/price|भाव/i), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "10" } });
+    fireEvent.click(screen.getByTestId("item-save"));
+    await waitFor(() => expect(screen.getByText("A new item needs its cost")).toBeTruthy());
+    expect(createItem).not.toHaveBeenCalled();
+  });
+
+  it("the cost label follows the unit selector", async () => {
+    render(<Items />);
+    fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
+    fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "dozen" } });
+    expect(screen.getByText("Cost per dozen")).toBeTruthy();
+  });
+
+  it("an existing item may be saved with the cost left blank", async () => {
+    render(<Items />);
+    fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
+    fireEvent.change(screen.getByTestId("item-cost"), { target: { value: "" } });
+    fireEvent.click(screen.getByTestId("item-save"));
+    await waitFor(() => expect(updateItem).toHaveBeenCalledWith("i1", expect.objectContaining({ cost: null })));
   });
 });
