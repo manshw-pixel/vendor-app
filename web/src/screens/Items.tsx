@@ -10,7 +10,7 @@ import { itemName, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 
-const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", stock_kg: "",
+const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", cost: "", stock_kg: "",
   unit: "kg", low_stock_at: "10" };
 
 const NAME_FIELDS = [
@@ -22,7 +22,8 @@ const NAME_FIELDS = [
 function toInput(it: AdminItem): ItemInput {
   return {
     name_en: it.name_en, name_hi: it.name_hi, name_mr: it.name_mr,
-    price: String(it.price), stock_kg: String(it.stock_kg),
+    price: String(it.price), cost: it.last_cost === null ? "" : String(it.last_cost),
+    stock_kg: String(it.stock_kg),
     unit: it.unit, low_stock_at: String(it.low_stock_at),
   };
 }

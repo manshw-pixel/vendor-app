@@ -4,7 +4,7 @@ import {
 } from "../adminRules";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 
-const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", stock_kg: "12.5",
+const item = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: "40", cost: "25", stock_kg: "12.5",
   unit: "kg" as const, low_stock_at: "10" };
 
 describe("validateItem", () => {
