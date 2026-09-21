@@ -27,6 +27,7 @@ import "./void_analytics.test.mjs";
 import "./item_units.test.mjs";
 import "./item_units_functions.test.mjs";
 import "./platform_owner.test.mjs";
+import "./amend_pending_bill.test.mjs";
 
 try {
   await bootstrap();
