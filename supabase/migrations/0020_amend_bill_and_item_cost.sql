@@ -91,3 +91,93 @@ begin
 
   return v_token;
 end $$;
+
+-- --------------------------------------------------------------------------
+-- Part 1c: amending a pending bill.
+--
+-- replace_bill_lines (0015, re-created in 0018) refuses anything past 'recording', and
+-- the refusal is right for what that function does: past 'recording' the customer holds a
+-- token, has been told a total, and a message quoting that total is queued. Rewriting the
+-- lines there makes both of those a lie, and replace_bill_lines has no way to fix either.
+--
+-- This function is the same rewrite with those two consequences handled: the total is
+-- recomputed the way issue_token computes it, and the queued message is superseded. The
+-- token is deliberately KEPT -- the slip in the customer's hand stays valid, and the
+-- counter is not advanced for a correction.
+--
+-- A done bill is not accepted here. Its effects have already landed (stock, points,
+-- receipt, the day's figures) and void_bill (0017) already reverses all of them; "editing"
+-- a completed bill is void-then-rebuild, which needs no function of its own.
+-- --------------------------------------------------------------------------
+create function amend_pending_bill(p_bill_id uuid, p_lines jsonb)
+  returns void
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_bill  bills%rowtype;
+  v_total numeric;
+begin
+  select * into v_bill from bills where id = p_bill_id for update;
+  if not found then
+    raise exception 'bill % not found', p_bill_id;
+  end if;
+
+  -- The same trust decision and the same role pair as replace_bill_lines: a null
+  -- current_vendor_id() is a caller with no end-user session (service role, or the
+  -- superuser connection the suite uses); a non-null one must own this bill. A biller
+  -- does not rewrite baskets.
+  if current_vendor_id() is not null and current_vendor_id() <> v_bill.vendor_id then
+    raise exception 'bill % does not belong to your vendor', p_bill_id
+      using errcode = '42501';
+  end if;
+  if current_vendor_id() is not null and current_user_role() not in ('admin', 'recorder') then
+    raise exception 'role % may not amend a bill', current_user_role()
+      using errcode = '42501';
+  end if;
+
+  if v_bill.status <> 'billed' then
+    raise exception 'bill % is %, expected billed', p_bill_id, v_bill.status
+      using errcode = 'P0001';
+  end if;
+
+  -- Refused, never treated as "clear the bill" -- same reasoning as replace_bill_lines.
+  if jsonb_typeof(p_lines) <> 'array' or jsonb_array_length(p_lines) = 0 then
+    raise exception 'refusing to leave bill % with no lines', p_bill_id
+      using errcode = '22023';
+  end if;
+
+  -- Checked BEFORE the delete, so a refused basket leaves the existing lines untouched.
+  perform assert_whole_qty(l.item_id, l.qty_kg)
+    from jsonb_to_recordset(p_lines) as l(item_id uuid, qty_kg numeric);
+
+  delete from bill_items where bill_id = p_bill_id;
+
+  -- line_total computed, unit_price the caller's: identical to replace_bill_lines, and
+  -- for the identical reasons (a client-supplied line_total would forge the total; a
+  -- live items.price read would change a basket already on screen).
+  insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
+  select p_bill_id, v_bill.vendor_id, l.item_id, l.qty_kg, l.unit_price,
+         round(l.qty_kg * l.unit_price, 2)
+    from jsonb_to_recordset(p_lines)
+      as l(item_id uuid, qty_kg numeric, unit_price numeric);
+
+  -- The total issue_token would have computed, from the rows just written.
+  select coalesce(sum(line_total), 0) into v_total from bill_items where bill_id = p_bill_id;
+
+  update bills
+     set total = v_total, amended_at = now(), amended_by = auth.uid()
+   where id = p_bill_id;
+
+  -- Supersede, by DELETING the still-pending rows rather than adding a 'cancelled'
+  -- status: the row was never sent, so there is no history in it to keep, and a delete
+  -- needs no change to the status check constraint or to the sender's pending scan.
+  -- A row already 'sent' or 'failed' is history and is left exactly where it is.
+  delete from outbound_messages
+   where bill_id = p_bill_id and status = 'pending';
+
+  insert into outbound_messages (vendor_id, customer_id, bill_id, template_key, payload)
+  values (v_bill.vendor_id, v_bill.customer_id, p_bill_id, 'token_amended',
+          jsonb_build_object('token_no', v_bill.token_no, 'total', v_total));
+end $$;
+
+revoke all on function amend_pending_bill(uuid, jsonb) from public, anon;
+grant execute on function amend_pending_bill(uuid, jsonb) to authenticated;
