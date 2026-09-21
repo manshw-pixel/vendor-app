@@ -84,3 +84,12 @@ describe("routing to the amend screen", () => {
     expect(canAccess("admin", "/amend")).toBe(false);
   });
 });
+
+describe("routing to the bill screen", () => {
+  it("a biller cannot reach /bill", () => {
+    // Completed.tsx's Edit hands off to /bill after voiding the original. A biller who
+    // reached this route would be granted the ability to create bills -- a role change
+    // nobody asked for -- so this coupling is pinned here rather than left implicit.
+    expect(canAccess("biller", "/bill")).toBe(false);
+  });
+});

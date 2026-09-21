@@ -12,6 +12,7 @@ import { itemName, type Lang } from "../i18n/locales";
 import { qtyText } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
+import { useSession } from "../components/SessionProvider";
 import "../i18n";
 
 /** Void and Edit are offered under the same window: void_bill (0017) only reverses stock
@@ -25,6 +26,7 @@ function inVoidWindow(completedAt: string): boolean {
 export default function Completed() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const session = useSession();
   const [range, setRange] = useState<Range>(() => presetRange("today", new Date()));
   const [rows, setRows] = useState<CompletedBill[]>([]);
   const [more, setMore] = useState(false);
@@ -102,6 +104,8 @@ export default function Completed() {
     if (voidedOpen) void loadVoided(range);
   }, [range, voidedOpen, loadVoided]);
 
+  if (session.kind !== "ready") return null;
+
   async function openBill(id: string) {
     if (open === id) { setOpen(null); return; }
     setOpen(id);
@@ -143,8 +147,12 @@ export default function Completed() {
     // The lines are read BEFORE navigating rather than after: bill_items survive the void
     // (0017 sets a status, it does not delete), but reading them here keeps the failure on
     // this screen, where the operator can retry, instead of on a half-opened new bill.
-    const { data } = await billDraftLines(bill.id);
+    const { data, error: readError } = await billDraftLines(bill.id);
     setEditing(false);
+    // A failed read here must not navigate: the original is already voided, so sending
+    // the operator to /bill with an empty prefill (data ?? []) would silently swap a
+    // real basket for nothing right after an irreversible action.
+    if (readError) { setProblem(describeError(readError)); return; }
     setProblem(null);
     setRows((prev) => prev.filter((b) => b.id !== bill.id));
     setOpen(null);
@@ -268,7 +276,13 @@ export default function Completed() {
                         {t("void.action")}
                       </button>
                     )}
-                    {inVoidWindow(b.completed_at) && (
+                    {/* Void is open to biller and admin (void_bill, 0017), but /bill --
+                        where Edit hands off to -- is not a biller route (routes.ts): a
+                        biller who voided would be stranded on Pending with no
+                        replacement and no way back to the sale they just erased. Gating
+                        Edit to admin keeps Void available to whoever can already use it
+                        while never opening a void the same operator cannot finish. */}
+                    {inVoidWindow(b.completed_at) && session.role === "admin" && (
                       <button
                         data-testid={`bill-edit-${b.id}`}
                         onClick={() => startEdit(b.id)}

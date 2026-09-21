@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 // i18next initialises as a side effect of this import, exactly as Bill.tsx does.
 import "../i18n";
 import { runningTotal, type Draft } from "../billing";
-import { amendPendingBill, billDraftLines, listItems, type Item } from "../data";
+import { amendPendingBill, billDraftLines, billTotal, listItems, type Item } from "../data";
 import { describeError } from "../errors";
 import { LANGS, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
@@ -43,13 +43,18 @@ export default function AmendBill() {
 
   useEffect(() => {
     void (async () => {
-      const [drafts, catalogue] = await Promise.all([billDraftLines(billId), listItems()]);
-      setProblem(describeError(drafts.error) ?? describeError(catalogue.error));
+      const [drafts, catalogue, stored] =
+        await Promise.all([billDraftLines(billId), listItems(), billTotal(billId)]);
+      setProblem(
+        describeError(drafts.error) ?? describeError(catalogue.error) ?? describeError(stored.error),
+      );
       const loaded = drafts.data ?? [];
       setLines(loaded);
-      // Captured ONCE, from the lines as they were stored. Recomputing it later would
-      // make it track the edit and the comparison would always read "no change".
-      setOldTotal(runningTotal(loaded));
+      // Read from the STORED bill, not recomputed from the loaded lines: SQL's exact
+      // round(numeric, 2) can differ from runningTotal's Math.round-on-floats by a paisa
+      // (see billTotal's comment in data.ts), and this screen puts the number in a
+      // biller's mouth to read to the customer, so it must match what was actually billed.
+      setOldTotal(stored.data?.total ?? runningTotal(loaded));
       setItems((catalogue.data ?? []) as unknown as Item[]);
     })();
   }, [billId]);

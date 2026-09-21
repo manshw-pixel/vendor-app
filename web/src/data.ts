@@ -195,6 +195,16 @@ export async function amendPendingBill(billId: string, lines: readonly Draft[]) 
  * recording is the bill's price, and re-reading the live one would silently reprice a
  * basket during an amendment.
  */
+/** The bill's STORED total, exactly as SQL's `round(numeric, 2)` computed it. AmendBill
+ *  shows this beside a client-recomputed new total; `runningTotal` (billing.ts) uses
+ *  `Math.round(x*100)/100` on binary floats, which can differ from the stored value by a
+ *  paisa (₹10.02 x 1.25 renders 12.52 but stores 12.53). The OLD total has an authoritative
+ *  stored value to defer to; the NEW one is a live preview of an unsaved basket and has
+ *  none, so it stays client-computed. */
+export async function billTotal(billId: string) {
+  return supabase.from("bills").select("total").eq("id", billId).single();
+}
+
 export async function billDraftLines(billId: string) {
   const res = await supabase
     .from("bill_items")

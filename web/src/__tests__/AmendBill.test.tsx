@@ -15,6 +15,9 @@ vi.mock("../data", () => ({
     data: [{ itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2, unit: "kg" }],
     error: null,
   })),
+  // Deliberately NOT 80 (what runningTotal(loaded) would compute): this pins the old
+  // total to the STORED value, not a client recompute -- see billTotal's comment.
+  billTotal: vi.fn(async () => ({ data: { total: 80.01 }, error: null })),
   amendPendingBill: (...args: unknown[]) => amendSpy(...args),
 }));
 
@@ -40,14 +43,14 @@ describe("correcting a pending bill", () => {
   it("loads the bill's stored lines into the basket", async () => {
     renderAmend("b1");
     expect(await screen.findByText("Onion")).toBeTruthy();
-    expect(screen.getByTestId("amend-old-total").textContent ?? "").toMatch(/80/);
+    expect(screen.getByTestId("amend-old-total").textContent ?? "").toMatch(/80.01/);
   });
 
   it("shows the old total beside the new one as the basket changes", async () => {
     renderAmend("b1");
     await screen.findByText("Onion");
     fireEvent.click(screen.getByLabelText(/remove onion/i));
-    expect(screen.getByTestId("amend-old-total").textContent ?? "").toMatch(/80/);
+    expect(screen.getByTestId("amend-old-total").textContent ?? "").toMatch(/80.01/);
     expect(screen.getByTestId("amend-new-total").textContent ?? "").toMatch(/0\.00/);
   });
 
