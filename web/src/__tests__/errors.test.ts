@@ -109,6 +109,13 @@ describe("describeError", () => {
     expect(r?.key).toBe("unit.locked");
   });
 
+  it("names a bill that moved on before amend_pending_bill could apply", () => {
+    // amend_pending_bill refuses a bill that is no longer `billed` -- e.g. it was voided
+    // or completed between the screen loading it and the save landing.
+    const d = describeError({ code: "P0001", message: "bill b1 is done, expected billed" });
+    expect(d?.key).toBe("amend.noLongerPending");
+  });
+
   it("maps the whole-number refusals for both stock and quantity", () => {
     expect(
       describeError({ code: "P0001", message: "stock must be a whole number for this unit" })?.key,

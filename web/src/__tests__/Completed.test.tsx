@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { CompletedBill, BillLine } from "../history";
 
 const PAGE_SIZE = 50;
@@ -41,6 +41,9 @@ const voidBill = vi.fn(async (..._a: unknown[]): Promise<{
 const listVoided = vi.fn(async (..._a: unknown[]): Promise<{
   data: unknown[] | null; error: { code?: string; message?: string } | null;
 }> => ({ data: [], error: null }));
+const billDraftLines = vi.fn(async (..._a: unknown[]): Promise<{
+  data: unknown[] | null; error: { code?: string; message?: string } | null;
+}> => ({ data: [{ itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2, unit: "kg" }], error: null }));
 
 vi.mock("../history", async () => {
   const actual = await vi.importActual<typeof import("../history")>("../history");
@@ -54,9 +57,27 @@ vi.mock("../history", async () => {
   };
 });
 
+vi.mock("../data", () => ({
+  billDraftLines: (...a: unknown[]) => billDraftLines(...a),
+}));
+
 const { default: Completed } = await import("../screens/Completed");
 
 beforeEach(() => vi.clearAllMocks());
+
+/** Edit navigates to /bill on success; a route there lets the test see the hand-off land,
+ *  the same idiom AmendBill.test.tsx uses for its own navigate-away assertions. */
+function renderCompleted(options?: { rows?: CompletedBill[] }) {
+  if (options?.rows) listCompleted.mockResolvedValueOnce({ data: options.rows, error: null });
+  return render(
+    <MemoryRouter initialEntries={["/completed"]}>
+      <Routes>
+        <Route path="/completed" element={<Completed />} />
+        <Route path="/bill" element={<div>bill screen</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 describe("the completed bills screen", () => {
   it("lists completed bills with token, customer and total", async () => {
@@ -254,5 +275,57 @@ describe("the completed bills screen", () => {
     }], error: null });
     await waitFor(() => expect(screen.queryByTestId("voided-row-v1")).toBeNull());
     expect(screen.getByTestId("voided-row-v2")).toBeTruthy();
+  });
+
+  it("offers Edit wherever Void is offered", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    await screen.findByTestId("completed-void-b1");
+    expect(screen.getByTestId("bill-edit-b1")).toBeTruthy();
+  });
+
+  it("does not offer Edit on a bill outside the void window", async () => {
+    // Same window as Void: inVoidWindow is the one guard shared by both.
+    listCompleted.mockResolvedValueOnce({ data: [bill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    expect(screen.queryByTestId("completed-void-b1")).toBeNull();
+    expect(screen.queryByTestId("bill-edit-b1")).toBeNull();
+  });
+
+  it("Edit requires a reason, exactly as Void does", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    render(<MemoryRouter><Completed /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("bill-edit-b1"));
+    expect((screen.getByTestId("edit-confirm") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("edit-reason"), { target: { value: "wrong quantity" } });
+    expect((screen.getByTestId("edit-confirm") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("voids the original before opening the replacement", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    renderCompleted();
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("bill-edit-b1"));
+    fireEvent.change(screen.getByTestId("edit-reason"), { target: { value: "wrong quantity" } });
+    fireEvent.click(screen.getByTestId("edit-confirm"));
+    await waitFor(() => expect(voidBill).toHaveBeenCalledWith("b1", "wrong quantity"));
+    expect(await screen.findByText("bill screen")).toBeTruthy();
+  });
+
+  it("a failed void does not open the replacement", async () => {
+    listCompleted.mockResolvedValueOnce({ data: [todayBill(1)], error: null });
+    voidBill.mockResolvedValueOnce({ data: null, error: { code: "P0001", message: "void window closed" } });
+    renderCompleted();
+    fireEvent.click(await screen.findByTestId("completed-row-b1"));
+    fireEvent.click(await screen.findByTestId("bill-edit-b1"));
+    fireEvent.change(screen.getByTestId("edit-reason"), { target: { value: "wrong quantity" } });
+    fireEvent.click(screen.getByTestId("edit-confirm"));
+    expect(await screen.findByTestId("completed-problem")).toBeTruthy();
+    expect(screen.queryByText("bill screen")).toBeNull();
+    // The row is still here to retry -- the operator was not sent off to a half-open bill.
+    expect(screen.getByTestId("completed-row-b1")).toBeTruthy();
   });
 });

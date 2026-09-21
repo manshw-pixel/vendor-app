@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../data", () => ({
   listItems: vi.fn(async () => ({ data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true, unit: "kg", low_stock_at: 10 }], error: null })),
@@ -21,11 +22,21 @@ const data = await import("../data");
 
 beforeEach(() => vi.clearAllMocks());
 
+/** Bill.tsx reads router state (for a prefilled basket handed over by Completed.tsx), so
+ *  every render needs a Router even when a test has no state of its own to pass. */
+function renderBill(options?: { state?: unknown }) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: "/bill", state: options?.state }]}>
+      <Bill />
+    </MemoryRouter>,
+  );
+}
+
 describe("the bill screen", () => {
   it("offers the items in one dropdown, not a row or tile per item", async () => {
     // The vendor asked for a dropdown. The rows are the thing being replaced, so this
     // asserts their absence as well as the select's presence.
-    const { container } = render(<Bill />);
+    const { container } = renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     const select = await screen.findByTestId("item-select");
     expect(select.tagName).toBe("SELECT");
@@ -36,7 +47,7 @@ describe("the bill screen", () => {
   it("names the price and stock on the option itself", async () => {
     // An <option> cannot be styled, so the figures a recorder chooses on have to be in
     // its text or they are not on screen until after the pick.
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     const option = (await screen.findByTestId("item-select"))
       .querySelector("option[value='i1']") as HTMLOptionElement;
@@ -48,7 +59,7 @@ describe("the bill screen", () => {
   it("starts with nothing chosen, so no weight field is waiting", async () => {
     // A select defaulting to the first item would let a mis-tap bill onions the recorder
     // never picked -- the row layout had no such default.
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     await screen.findByTestId("item-select");
     expect(screen.queryByTestId("weight-input")).toBeNull();
@@ -59,7 +70,7 @@ describe("the bill screen", () => {
       data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     const detail = await screen.findByTestId("item-detail");
@@ -68,7 +79,7 @@ describe("the bill screen", () => {
 
   it("still takes a decimal weight after tapping a row", async () => {
     // Scales report 1.35. The layout changed; the keypad must not.
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     const input = screen.getByTestId("weight-input") as HTMLInputElement;
@@ -82,7 +93,7 @@ describe("the bill screen", () => {
       data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
     expect(screen.queryByTestId("weight-input")).toBeNull();
@@ -110,7 +121,7 @@ describe("the bill screen", () => {
       data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
     fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "1.5" } });
@@ -124,7 +135,7 @@ describe("the bill screen", () => {
       data: [{ id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
     fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "3" } });
@@ -139,7 +150,7 @@ describe("the bill screen", () => {
       data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     const option = (await screen.findByTestId("item-select"))
       .querySelector("option[value='i1']") as HTMLOptionElement;
@@ -155,7 +166,7 @@ describe("the bill screen", () => {
       data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12, is_active: true, unit: "kg", low_stock_at: 15 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     const detail = await screen.findByTestId("item-detail");
@@ -167,7 +178,7 @@ describe("the bill screen", () => {
       data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     const detail = await screen.findByTestId("item-detail");
@@ -175,7 +186,7 @@ describe("the bill screen", () => {
   });
 
   it("issues a token through the full flow", async () => {
-    render(<Bill />);
+    renderBill();
 
     // 1. pick the customer
     fireEvent.click(await screen.findByText("Asha"));
@@ -202,14 +213,14 @@ describe("the bill screen", () => {
   });
 
   it("will not issue a token for an empty basket", async () => {
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     expect(screen.getByRole("button", { name: /done/i })).toHaveProperty("disabled", true);
     expect(data.issueToken).not.toHaveBeenCalled();
   });
 
   it("rejects a weight with more precision than the column stores", async () => {
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1.234" } });
@@ -221,7 +232,7 @@ describe("the bill screen", () => {
   // fails on the regression it names, not merely on a rewrite.
 
   it("creates no bill until the confirm is accepted -- an abandoned basket leaves no row", async () => {
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -241,7 +252,7 @@ describe("the bill screen", () => {
       data: [{ id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 0, is_active: true, unit: "kg", low_stock_at: 10 }],
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
 
     const option = (await screen.findByTestId("item-select"))
@@ -259,7 +270,7 @@ describe("the bill screen", () => {
   it("will not issue a token while offline -- a token cannot be promised without the server", async () => {
     Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
     try {
-      render(<Bill />);
+      renderBill();
       fireEvent.click(await screen.findByText("Asha"));
       fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
       fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -277,7 +288,7 @@ describe("the bill screen", () => {
       data: null,
       error: { code: "XX000", message: "boom" },
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -320,7 +331,7 @@ describe("the bill screen", () => {
       error: null,
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -346,7 +357,7 @@ describe("the bill screen", () => {
       error: { code: "XX000", message: "read failed" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -371,7 +382,7 @@ describe("the bill screen", () => {
       data: null, error: { code: "XX000", message: "boom" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -401,7 +412,7 @@ describe("the bill screen", () => {
       data: null, error: { code: "XX000", message: "boom" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -448,7 +459,7 @@ describe("the bill screen", () => {
       data: null, error: { code: "XX000", message: "read failed" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -490,7 +501,7 @@ describe("the bill screen", () => {
       error: { code: "P0001", message: "bill b1 does not belong to your vendor" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -507,7 +518,7 @@ describe("the bill screen", () => {
     // bills_recorder_update and bill_items_write both stop applying. A basket left
     // mounted behind the token screen would accept edits the database then refuses,
     // silently, so assert it is genuinely gone rather than merely covered.
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByText("Asha"));
     fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
@@ -532,7 +543,7 @@ describe("the bill screen", () => {
 
     // Branch A: the customer IS in the already-fetched list.
     (data.createCustomer as Mock).mockResolvedValueOnce({ data: null, error: dupe });
-    const a = render(<Bill />);
+    const a = renderBill();
     fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Asha" } });
     fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "A-1" } });
@@ -557,7 +568,7 @@ describe("the bill screen", () => {
       data: { id: "c9", name: "Ravi", flat_no: "B-9", mobile: "+9199" },
       error: null,
     });
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Ravi" } });
     fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "B-9" } });
@@ -583,7 +594,7 @@ describe("the bill screen", () => {
       error: { code: "XX000", message: "boom" },
     });
 
-    render(<Bill />);
+    renderBill();
     fireEvent.click(await screen.findByRole("button", { name: /new customer/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Ravi" } });
     fireEvent.change(screen.getByLabelText(/^flat no$/i), { target: { value: "B-9" } });
@@ -593,5 +604,27 @@ describe("the bill screen", () => {
     expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
     expect(screen.queryByText(/cannot be shown here|यहां नहीं दिखाया|इथे दाखवता येत नाही/i)).toBeNull();
     expect(screen.queryByTestId("duplicate-offer")).toBeNull();
+  });
+
+  // Completed.tsx hands over a voided bill's basket when the operator chooses Edit.
+  // These two guard the hand-off contract: the lines land in the basket, and the
+  // CUSTOMER step still runs, because the replacement is a new sale with a new token.
+  it("starts with the lines handed to it in router state", async () => {
+    renderBill({ state: { prefill: [
+      { itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2, unit: "kg" },
+    ] } });
+    fireEvent.click(await screen.findByText("Asha"));
+    // The line's own amount, not the option list's -- both mention Onion, but only the
+    // basket line carries the total for the prefilled quantity.
+    expect(await screen.findByTestId("running-total")).toHaveProperty("textContent", "₹80.00");
+  });
+
+  it("a prefilled bill still starts at the customer step", async () => {
+    renderBill({ state: { prefill: [
+      { itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2, unit: "kg" },
+    ] } });
+    // The customer step, not the basket, is on screen first -- pre-selecting a customer
+    // would hide from the recorder that this is a fresh sale with its own token.
+    expect(await screen.findByText(/choose a customer/i)).toBeTruthy();
   });
 });

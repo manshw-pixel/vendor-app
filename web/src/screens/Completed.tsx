@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   listCompleted, billLines, voidBill, listVoided, PAGE_SIZE,
   type CompletedBill, type BillLine, type Cursor, type VoidedBill,
 } from "../history";
+import { billDraftLines } from "../data";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
 import { itemName, type Lang } from "../i18n/locales";
@@ -13,8 +14,17 @@ import { rupees } from "../money";
 import { describeError } from "../errors";
 import "../i18n";
 
+/** Void and Edit are offered under the same window: void_bill (0017) only reverses stock
+ *  and points for a bill completed on the browser's local "today", so an Edit that skipped
+ *  this check could open a replacement while the original stayed live, uncorrectable. One
+ *  helper, called from both, so the two never drift apart. */
+function inVoidWindow(completedAt: string): boolean {
+  return new Date(completedAt).toDateString() === new Date().toDateString();
+}
+
 export default function Completed() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [range, setRange] = useState<Range>(() => presetRange("today", new Date()));
   const [rows, setRows] = useState<CompletedBill[]>([]);
   const [more, setMore] = useState(false);
@@ -25,6 +35,11 @@ export default function Completed() {
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [voiding, setVoiding] = useState(false);
+  // Edit shares `reason` with Void rather than a state of its own -- the two are never
+  // open at once (opening one below clears the other), and a reason typed for one is
+  // meaningless for the other, so nothing is lost by sharing the field.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [voidedOpen, setVoidedOpen] = useState(false);
   const [voidedRows, setVoidedRows] = useState<VoidedBill[]>([]);
   const [doneToken, setDoneToken] = useState<number | null>(null);
@@ -92,6 +107,7 @@ export default function Completed() {
     setOpen(id);
     setLines([]);
     setVoidingId(null);
+    setEditingId(null);
     setReason("");
     setDoneToken(null);
     const { data, error } = await billLines(id);
@@ -109,7 +125,33 @@ export default function Completed() {
 
   function startVoid(id: string) {
     setVoidingId(id);
+    setEditingId(null);
     setReason("");
+  }
+
+  function startEdit(id: string) {
+    setEditingId(id);
+    setVoidingId(null);
+    setReason("");
+  }
+
+  async function editBill(bill: CompletedBill) {
+    setEditing(true);
+    const { error } = await voidBill(bill.id, reason.trim());
+    const described = describeError(error);
+    if (described) { setEditing(false); setProblem(described); return; }
+    // The lines are read BEFORE navigating rather than after: bill_items survive the void
+    // (0017 sets a status, it does not delete), but reading them here keeps the failure on
+    // this screen, where the operator can retry, instead of on a half-opened new bill.
+    const { data } = await billDraftLines(bill.id);
+    setEditing(false);
+    setProblem(null);
+    setRows((prev) => prev.filter((b) => b.id !== bill.id));
+    setOpen(null);
+    setEditingId(null);
+    setReason("");
+    if (voidedOpen) void loadVoided(range);
+    navigate("/bill", { state: { prefill: data ?? [] } });
   }
 
   async function confirmVoid(id: string, tokenNo: number) {
@@ -217,13 +259,22 @@ export default function Completed() {
                     >
                       {t("completed.receipt")}
                     </Link>
-                    {new Date(b.completed_at).toDateString() === new Date().toDateString() && (
+                    {inVoidWindow(b.completed_at) && (
                       <button
                         data-testid={`completed-void-${b.id}`}
                         onClick={() => startVoid(b.id)}
                         className="inline-block border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
                       >
                         {t("void.action")}
+                      </button>
+                    )}
+                    {inVoidWindow(b.completed_at) && (
+                      <button
+                        data-testid={`bill-edit-${b.id}`}
+                        onClick={() => startEdit(b.id)}
+                        className="inline-block border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                      >
+                        {t("completed.edit")}
                       </button>
                     )}
                   </div>
@@ -256,6 +307,43 @@ export default function Completed() {
                         <button
                           data-testid="void-cancel"
                           onClick={() => { setVoidingId(null); setReason(""); }}
+                          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                        >
+                          {t("void.cancel")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {editingId === b.id && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+                      <p className="text-sm text-slate-700">{t("completed.editConfirm")}</p>
+                      <label
+                        htmlFor={`edit-reason-${b.id}`}
+                        className="block text-sm text-slate-700"
+                      >
+                        {t("completed.editReason")}
+                      </label>
+                      <input
+                        id={`edit-reason-${b.id}`}
+                        data-testid="edit-reason"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder={t("void.reasonPlaceholder")}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          data-testid="edit-confirm"
+                          disabled={reason.trim() === "" || editing}
+                          onClick={() => void editBill(b)}
+                          className="border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+                        >
+                          {t("completed.edit")}
+                        </button>
+                        <button
+                          data-testid="edit-cancel"
+                          onClick={() => { setEditingId(null); setReason(""); }}
                           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
                         >
                           {t("void.cancel")}

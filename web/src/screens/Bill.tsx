@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 // i18next initialises as a side effect of this import, exactly as Shell does. The screen
 // is rendered directly (by tests, and by the router) without going through main.tsx.
 import "../i18n";
@@ -60,11 +61,18 @@ export default function Bill() {
   const session = useSession();
   const online = useOnline();
 
+  // Handed over by Completed.tsx after it voids a bill being corrected: the replacement
+  // starts from the voided bill's basket so the recorder retypes only what was wrong.
+  // The CUSTOMER step still runs -- the replacement is a new bill with a new token, and
+  // pre-selecting a customer would hide from the recorder that this is a fresh sale.
+  const location = useLocation();
+  const prefill = (location.state as { prefill?: Draft[] } | null)?.prefill;
+
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [phase, setPhase] = useState<Phase>("customer");
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [lines, setLines] = useState<Draft[]>([]);
+  const [lines, setLines] = useState<Draft[]>(() => prefill ?? []);
   const [token, setToken] = useState<number | null>(null);
   const [confirming, setConfirming] = useState(false);
   // What of the write has already landed. A retry RESUMES from here: re-running
