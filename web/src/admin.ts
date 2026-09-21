@@ -53,12 +53,39 @@ export async function listAllItems() {
   return { data, error: null };
 }
 
-export async function createItem(vendorId: string, value: ItemValue) {
-  return supabase.from("items").insert({ vendor_id: vendorId, ...value }).select("id").single();
+/**
+ * An RPC, not an insert, since 0020: creating an item also logs its opening stock as a
+ * purchase movement so that stock is costed in the margin figures. The two writes have to
+ * be one transaction, which a PostgREST insert cannot give.
+ *
+ * vendorId is no longer sent -- create_item_with_cost reads it off the session, which is
+ * strictly safer than trusting the client -- but stays in the signature so no call site
+ * has to change.
+ */
+export async function createItem(_vendorId: string, value: ItemValue) {
+  return supabase.rpc("create_item_with_cost", {
+    p_names: { name_en: value.name_en, name_hi: value.name_hi, name_mr: value.name_mr },
+    p_price: value.price,
+    p_stock: value.stock_kg,
+    p_unit: value.unit,
+    p_low_stock_at: value.low_stock_at,
+    p_cost: value.cost,
+  });
 }
 
+/**
+ * Still a plain update, and deliberately NOT a movement: changing a cost here corrects
+ * what the item costs, it does not record a delivery. Logging a purchase would invent
+ * stock that never arrived and inflate the purchase figures every time an admin fixed a
+ * typo. Adding stock to an existing item stays the Stock screen's job.
+ *
+ * A null cost means the field was left blank, which means "leave last_cost alone" -- so
+ * the key is omitted rather than sent as null, which would erase a known cost.
+ */
 export async function updateItem(id: string, value: ItemValue) {
-  return supabase.from("items").update({ ...value }).eq("id", id);
+  const { cost, ...rest } = value;
+  const patch = cost === null ? rest : { ...rest, last_cost: cost };
+  return supabase.from("items").update(patch).eq("id", id);
 }
 
 /** Items are hidden, never deleted: bill_items.item_id references them, so a delete

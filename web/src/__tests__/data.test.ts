@@ -10,16 +10,29 @@ const select = vi.fn((..._a: unknown[]) => ({
     gt: (...c: unknown[]) => gt(...c),
   }),
 }));
-const from = vi.fn((..._a: unknown[]) => ({
-  insert,
-  select: (...a: unknown[]) => select(...a),
-}));
+// bill_items has its own tiny chain -- separate from the shared `select` above, since
+// billDraftLines awaits `.select(...).eq(...)` directly instead of chaining further.
+type BillItemRow = {
+  id: string; qty_kg: number; unit_price: number; line_total: number; item_id: string;
+  items: { name_en: string; name_hi: string; name_mr: string; unit: string } | null;
+};
+const billItemsEq = vi.fn(async (..._a: unknown[]): Promise<{ data: BillItemRow[]; error: null }> =>
+  ({ data: [], error: null }));
+const billItemsSelect = vi.fn((..._a: unknown[]) => ({ eq: (...b: unknown[]) => billItemsEq(...b) }));
+
+const from = vi.fn((...a: unknown[]) => {
+  if (a[0] === "bill_items") return { select: (...b: unknown[]) => billItemsSelect(...b) };
+  return { insert, select: (...b: unknown[]) => select(...b) };
+});
 
 vi.mock("../supabase", () => ({ supabase: { from: (...a: unknown[]) => from(...a), rpc: (...a: unknown[]) => rpc(...a) } }));
 
-const { listItems, createBill, replaceBillLines, issueToken, completeBill, listPending, pointsForBill } = await import("../data");
+const { listItems, createBill, replaceBillLines, issueToken, completeBill, listPending, pointsForBill, amendPendingBill, billDraftLines } = await import("../data");
 
-beforeEach(() => { insert.mockClear(); rpc.mockClear(); from.mockClear(); select.mockClear(); gt.mockClear(); });
+beforeEach(() => {
+  insert.mockClear(); rpc.mockClear(); from.mockClear(); select.mockClear(); gt.mockClear();
+  billItemsEq.mockClear(); billItemsSelect.mockClear();
+});
 
 describe("createBill", () => {
   it("sends vendor_id and status=recording", async () => {
@@ -122,5 +135,33 @@ describe("listItems", () => {
     const cols = select.mock.calls[0]?.[0] as string;
     expect(cols).toContain("unit");
     expect(cols).toContain("low_stock_at");
+  });
+});
+
+describe("amendPendingBill", () => {
+  it("sends item_id/qty_kg/unit_price and never a line_total", async () => {
+    await amendPendingBill("b1", [
+      { itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2.5, unit: "kg" },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("amend_pending_bill", {
+      p_bill_id: "b1",
+      p_lines: [{ item_id: "i1", qty_kg: 2.5, unit_price: 40 }],
+    });
+  });
+});
+
+describe("billDraftLines", () => {
+  it("maps stored rows onto the Draft shape the basket edits", async () => {
+    billItemsEq.mockResolvedValueOnce({
+      data: [{
+        id: "l1", qty_kg: 2, unit_price: 40, line_total: 80, item_id: "i1",
+        items: { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", unit: "kg" },
+      }],
+      error: null,
+    });
+    const { data } = await billDraftLines("b1");
+    expect(data).toEqual([
+      { itemId: "i1", name: "Onion", unitPrice: 40, qtyKg: 2, unit: "kg" },
+    ]);
   });
 });

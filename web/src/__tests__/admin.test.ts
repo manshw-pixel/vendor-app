@@ -30,7 +30,7 @@ const {
   loadShopDetails, updateShopDetails,
 } = await import("../admin");
 
-const value = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5,
+const value = { name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, cost: null, stock_kg: 12.5,
   unit: "piece" as const, low_stock_at: 5 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -70,21 +70,30 @@ describe("listAllItems", () => {
 });
 
 describe("createItem and updateItem send unit and low_stock_at", () => {
-  it("includes both on insert and update", async () => {
+  it("includes both in the RPC call and the update", async () => {
     await createItem("v1", value);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ unit: "piece", low_stock_at: 5 }));
+    expect(rpc).toHaveBeenCalledWith("create_item_with_cost", expect.objectContaining({ p_unit: "piece", p_low_stock_at: 5 }));
     await updateItem("i1", value);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ unit: "piece", low_stock_at: 5 }));
   });
 });
 
 describe("createItem", () => {
-  it("stamps vendor_id", async () => {
-    // NOT NULL with no default. Forgetting it has shipped as a bug once already.
-    await createItem("v1", value);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
-      vendor_id: "v1", name_en: "Onion",
-    }));
+  it("calls the RPC with the cost, not a plain insert", async () => {
+    await createItem("v1", {
+      name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट",
+      price: 40, stock_kg: 10, unit: "kg", low_stock_at: 5, cost: 25,
+    });
+    expect(rpc).toHaveBeenCalledWith("create_item_with_cost", {
+      p_names: { name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट" },
+      p_price: 40,
+      p_stock: 10,
+      p_unit: "kg",
+      p_low_stock_at: 5,
+      p_cost: 25,
+    });
+    // vendorId is no longer sent: create_item_with_cost reads it off the session.
+    expect(insert).not.toHaveBeenCalled();
   });
 });
 
@@ -96,6 +105,22 @@ describe("updateItem", () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ price: 40 }));
     expect(update.mock.calls[0]?.[0]).not.toHaveProperty("vendor_id");
     expect(eqUpdate).toHaveBeenCalledWith("id", "i1");
+  });
+
+  it("omits a null cost so a blank field leaves last_cost alone", async () => {
+    await updateItem("i1", {
+      name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट",
+      price: 40, stock_kg: 10, unit: "kg", low_stock_at: 5, cost: null,
+    });
+    expect(update.mock.calls[0]?.[0]).not.toHaveProperty("last_cost");
+  });
+
+  it("sends last_cost when a cost was typed", async () => {
+    await updateItem("i1", {
+      name_en: "Beet", name_hi: "चुकंदर", name_mr: "बीट",
+      price: 40, stock_kg: 10, unit: "kg", low_stock_at: 5, cost: 31,
+    });
+    expect((update.mock.calls[0]?.[0] as { last_cost: number }).last_cost).toBe(31);
   });
 });
 

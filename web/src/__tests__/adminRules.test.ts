@@ -12,7 +12,7 @@ describe("validateItem", () => {
     const r = validateItem(item);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toEqual({
-      name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 12.5,
+      name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, cost: null, stock_kg: 12.5,
       unit: "kg", low_stock_at: 10,
     });
   });

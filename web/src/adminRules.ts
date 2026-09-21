@@ -16,6 +16,7 @@ export type ItemInput = {
   name_hi: string;
   name_mr: string;
   price: string;
+  cost: string;
   stock_kg: string;
   unit: Unit;
   low_stock_at: string;
@@ -27,6 +28,7 @@ export type ItemValue = {
   name_hi: string;
   name_mr: string;
   price: number;
+  cost: number | null;
   stock_kg: number;
   unit: Unit;
   low_stock_at: number;
@@ -84,6 +86,9 @@ export function validateItem(
       name_hi: input.name_hi.trim(),
       name_mr: input.name_mr.trim(),
       price: price as number,
+      // Task 5 replaces this with the parsed cost field; validateItem does not read
+      // input.cost yet, so every caller sees "no cost typed" until then.
+      cost: null,
       stock_kg: stock as number,
       unit: input.unit,
       low_stock_at: lowAt as number,
