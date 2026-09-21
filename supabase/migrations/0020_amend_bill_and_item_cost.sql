@@ -53,6 +53,11 @@ begin
     raise exception 'bill % not found', p_bill_id;
   end if;
 
+  -- SECURITY DEFINER bypasses RLS, so the tenant and role checks that would normally
+  -- live in policy have to be written here instead. current_vendor_id() is null for a
+  -- caller with no end-user session (service role, or the superuser connection the test
+  -- suite and the Edge Function use) — that's not an end user impersonating a vendor, so
+  -- it's allowed through. A non-null vendor must match this bill's tenant.
   if current_vendor_id() is not null and current_vendor_id() <> v_bill.vendor_id then
     raise exception 'bill % does not belong to your vendor', p_bill_id;
   end if;
@@ -64,7 +69,8 @@ begin
     raise exception 'bill % is %, expected recording', p_bill_id, v_bill.status;
   end if;
 
-  -- #3 (forgeable total): trust the line items, not the client-supplied total.
+  -- #3 (forgeable total): a recorder can set bills.total to anything while the bill is
+  -- still 'recording' — trust the line items, not the client-supplied total.
   select coalesce(sum(line_total), 0) into v_total from bill_items where bill_id = p_bill_id;
 
   update vendor_counters
@@ -76,7 +82,8 @@ begin
      set token_no = v_token, status = 'billed', total = v_total
    where id = p_bill_id;
 
-  -- #13: the customer is told their token and what to pay. Queued, never sent inline.
+  -- #13: the customer is told their token and what to pay. Queued, never sent inline —
+  -- a WhatsApp outage must not roll back a finished basket.
   -- bill_id added in 0020 so amend_pending_bill can find and supersede this row.
   insert into outbound_messages (vendor_id, customer_id, bill_id, template_key, payload)
   values (v_bill.vendor_id, v_bill.customer_id, p_bill_id, 'token_issued',
