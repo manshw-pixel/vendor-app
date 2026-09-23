@@ -127,7 +127,7 @@ test("a recording bill is refused: that path is replace_bill_lines", async () =>
 test("a done bill is refused: that path is void and rebuild", async () => {
   const w = await getWorld();
   const x = await billedBill(w.a);
-  await sql(`select complete_bill($1, null, 0)`, [x.billId]);
+  await sql(`select complete_bill($1, null, 0, 'cash')`, [x.billId]);
   const { error } = await amendAs(w.a.clients.admin, x.billId,
     [{ item_id: x.itemId, qty_kg: 9, unit_price: 40 }]);
   assert(error, "a done bill should be refused");

@@ -64,7 +64,7 @@ test("top_items_between ranks by revenue and returns the unit", async () => {
     await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total) values ($1,$2,$3,$4,$5,$6)`,
       [b, w.a.vendorId, itemId, qty, price, qty * price]);
     await sql(`select issue_token($1)`, [b]);
-    await sql(`select complete_bill($1)`, [b]);
+    await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [b]);
   };
   // Discriminates revenue-ranking from quantity-ranking: by quantity onion (9) beats
   // coconut (4), but by revenue coconut (400) beats onion (360), so this only passes if

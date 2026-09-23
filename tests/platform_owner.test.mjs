@@ -78,7 +78,7 @@ test("suspension flips current_user_role to the sentinel and blocks every write 
     const tok = await w.a.clients.recorder.rpc("issue_token", { p_bill_id: b.id });
     assertDenied(tok.error, "suspended recorder issued a token");
     await sql(`select issue_token($1)`, [b.id]);
-    const done = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: b.id });
+    const done = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: b.id, p_payment_mode: "cash" });
     assertDenied(done.error, "suspended biller completed a bill");
     const mv = await w.a.clients.recorder.rpc("log_stock_movement", { p_item_id: w.a.itemId, p_kind: "purchase", p_qty_kg: 1, p_unit_cost: 1 });
     assertDenied(mv.error, "suspended recorder logged stock");
@@ -97,7 +97,7 @@ test("void_bill is refused for a suspended shop", async () => {
   const w = await getW();
   const { rows: [b] } = await sql(`insert into bills (vendor_id, customer_id, total, status) values ($1,$2,0,'recording') returning id`, [w.a.vendorId, w.a.customerId]);
   await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total) values ($1,$2,$3,1,40,40)`, [b.id, w.a.vendorId, w.a.itemId]);
-  await sql(`select issue_token($1)`, [b.id]); await sql(`select complete_bill($1)`, [b.id]);
+  await sql(`select issue_token($1)`, [b.id]); await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [b.id]);
   await sql(`update vendors set suspended_at = now() where id=$1`, [w.a.vendorId]);
   try {
     const { error } = await w.a.clients.admin.rpc("void_bill", { p_bill_id: b.id, p_reason: "x" });
@@ -116,7 +116,7 @@ test("owner_vendor_summary lists every vendor with staff, this-month bills and s
   // One done bill in vendor A this month: 2 x 40 = 80.
   const { rows: [b] } = await sql(`insert into bills (vendor_id, customer_id, total, status) values ($1,$2,0,'recording') returning id`, [w.a.vendorId, w.a.customerId]);
   await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total) values ($1,$2,$3,2,40,80)`, [b.id, w.a.vendorId, w.a.itemId]);
-  await sql(`select issue_token($1)`, [b.id]); await sql(`select complete_bill($1)`, [b.id]);
+  await sql(`select issue_token($1)`, [b.id]); await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [b.id]);
   // An old bill last month must not count.
   await sql(`insert into bills (vendor_id, customer_id, total, status, completed_at) values ($1,$2,999,'done', (date_trunc('month', now() at time zone 'Asia/Kolkata') - interval '1 day') at time zone 'Asia/Kolkata')`, [w.a.vendorId, w.a.customerId]);
   const { data, error } = await w.owner.client.rpc("owner_vendor_summary");

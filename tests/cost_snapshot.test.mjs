@@ -24,21 +24,21 @@ const lineCost = async (billId) =>
 test("complete_bill stamps each line with the item's last_cost", async () => {
   const w = await getWorld();
   const x = await billedLine(w, { lastCost: 31.25 });
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   assertEqual(Number(await lineCost(x.billId)), 31.25, "unit_cost was not stamped");
 });
 
 test("a never-purchased item leaves unit_cost null, not zero", async () => {
   const w = await getWorld();
   const x = await billedLine(w, { lastCost: null });
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   assertEqual(await lineCost(x.billId), null, "an unknown cost must stay null");
 });
 
 test("a purchase logged after completion does not change the stamped cost", async () => {
   const w = await getWorld();
   const x = await billedLine(w, { lastCost: 20 });
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   const { error } = await w.a.clients.recorder.rpc("log_stock_movement", {
     p_item_id: x.itemId, p_kind: "purchase", p_qty_kg: 5, p_unit_cost: 45,
   });
@@ -49,16 +49,16 @@ test("a purchase logged after completion does not change the stamped cost", asyn
 test("a retried complete_bill does not restamp", async () => {
   const w = await getWorld();
   const x = await billedLine(w, { lastCost: 20 });
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   await sql(`update items set last_cost = 99 where id = $1`, [x.itemId]);
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   assertEqual(Number(await lineCost(x.billId)), 20, "the retry restamped a done bill");
 });
 
 test("stamping cost does not disturb stock or the stored total", async () => {
   const w = await getWorld();
   const x = await billedLine(w, { lastCost: 10, qty: 3 });
-  await sql(`select complete_bill($1)`, [x.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [x.billId]);
   const { rows: [i] } = await sql(`select stock_kg from items where id = $1`, [x.itemId]);
   const { rows: [b] } = await sql(`select total from bills where id = $1`, [x.billId]);
   assertEqual(Number(i.stock_kg), 97, "stock decrement changed");
