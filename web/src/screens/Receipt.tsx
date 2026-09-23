@@ -147,6 +147,13 @@ export default function Receipt() {
           <span>{t("receipt.paid")}</span>
           <span>{amt(data.net)}</span>
         </div>
+        {data.payment_mode && (
+          <div data-testid="receipt-mode" className="text-center">
+            {data.payment_mode === "credit"
+              ? t("receipt.onCredit")
+              : t("receipt.paidBy", { mode: t(`pay.${data.payment_mode}`) })}
+          </div>
+        )}
 
         {data.balance && (
           <>

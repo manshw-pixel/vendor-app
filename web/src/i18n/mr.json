@@ -215,6 +215,8 @@
     "redeemed": "वापरलेले गुण",
     "total": "एकूण",
     "paid": "दिलेले",
+    "paidBy": "{{mode}} ने भरले",
+    "onCredit": "उधारी",
     "pointsEarned": "मिळालेले गुण",
     "balance": "शिल्लक गुण",
     "expires": "{{date}} पर्यंत ({{days}} दिवस)",

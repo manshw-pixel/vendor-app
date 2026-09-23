@@ -160,6 +160,15 @@ describe("loadReceipt", () => {
     expect(data!.voided).toBeNull();
   });
 
+  it("reads the payment mode, whether PostgREST embeds it as an object or an array", async () => {
+    responses.bills = { ...responses.bills, bill_payments: { mode: "card" } };
+    expect((await loadReceipt("b1")).data?.payment_mode).toBe("card");
+    responses.bills = { ...responses.bills, bill_payments: [{ mode: "cash" }] };
+    expect((await loadReceipt("b1")).data?.payment_mode).toBe("cash");
+    responses.bills = { ...responses.bills, bill_payments: null };
+    expect((await loadReceipt("b1")).data?.payment_mode).toBeNull();
+  });
+
   it("returns the error and no data when the bill cannot be read", async () => {
     const boom = { message: "nope" };
     billsError.value = boom;

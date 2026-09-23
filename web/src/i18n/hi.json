@@ -215,6 +215,8 @@
     "redeemed": "अंक इस्तेमाल हुए",
     "total": "कुल",
     "paid": "भुगतान",
+    "paidBy": "{{mode}} से भुगतान",
+    "onCredit": "उधार",
     "pointsEarned": "अंक मिले",
     "balance": "शेष अंक",
     "expires": "{{date}} तक ({{days}} दिन)",

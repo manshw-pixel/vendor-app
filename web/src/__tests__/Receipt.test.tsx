@@ -27,6 +27,7 @@ const FULL: ReceiptData = {
   points_earned: 0,
   balance: { balance: 260, days_left: 15 },
   voided: null,
+  payment_mode: null,
 };
 
 const renderAt = () =>
@@ -149,6 +150,24 @@ describe("Receipt", () => {
     renderAt();
     await screen.findByTestId("receipt-token");
     expect(screen.queryByTestId("receipt-voided")).toBeNull();
+  });
+
+  it("prints how the bill was paid", async () => {
+    loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: "upi" }, error: null });
+    renderAt();
+    expect((await screen.findByTestId("receipt-mode")).textContent).toMatch(/UPI/);
+  });
+
+  it("prints 'On credit' for a credit bill", async () => {
+    loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: "credit" }, error: null });
+    renderAt();
+    expect((await screen.findByTestId("receipt-mode")).textContent).toMatch(/credit|उधार/i);
+  });
+
+  it("prints no mode line for a bill completed before modes existed", async () => {
+    renderAt();
+    await screen.findByTestId("receipt-total");
+    expect(screen.queryByTestId("receipt-mode")).toBeNull();
   });
 
   it("says so when the bill cannot be loaded", async () => {

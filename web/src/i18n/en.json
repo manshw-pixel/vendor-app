@@ -215,6 +215,8 @@
     "redeemed": "Points redeemed",
     "total": "Total",
     "paid": "Paid",
+    "paidBy": "Paid by {{mode}}",
+    "onCredit": "On credit",
     "pointsEarned": "Points earned",
     "balance": "Balance",
     "expires": "Expires {{date}} ({{days}} days)",
