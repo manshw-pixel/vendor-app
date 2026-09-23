@@ -192,3 +192,98 @@ test("a completion waiting on a close in progress is refused once the close comm
     await completer.end();
   }
 });
+
+// node-pg parses a date column into a local-midnight Date. Format with LOCAL getters so
+// the calendar date survives whatever zone this machine is in. (PostgREST sends a string.)
+const ymdOf = (v) => {
+  if (typeof v === "string") return v.slice(0, 10);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+};
+const setCloseFrom = (w, offset) => sql(
+  `update vendors set day_close_from = (now() at time zone 'Asia/Kolkata')::date + $2::int where id = $1`,
+  [w.a.vendorId, offset]);
+
+test("day_summary reports each mode, unrecorded bills and pending tokens, for this shop only", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "cash", { qty: 5 });     // 200
+  await doneBill(w.a, "upi", { qty: 2 });      // 80
+  await doneBill(w.a, "credit", { qty: 1 });   // 40
+  const old = await doneBill(w.a, "card", { qty: 1 });
+  await sql(`delete from bill_payments where bill_id = $1`, [old]);   // unrecorded, 40
+  const voided = await doneBill(w.a, "cash", { qty: 3 });
+  await w.a.clients.biller.rpc("void_bill", { p_bill_id: voided, p_reason: "test" });
+  await billedBill(w.a);                       // pending
+
+  const { data, error } = await w.a.clients.biller.rpc("day_summary", {});
+  assert(!error, error?.message);
+  const r = data[0];
+  assertEqual(ymdOf(r.business_date), await kolkataDay(), "defaults to today");
+  assertEqual(
+    [r.cash, r.cash_count, r.upi, r.upi_count, r.card, r.card_count, r.credit, r.credit_count,
+     r.unrecorded, r.unrecorded_count, r.expected_cash, r.pending_tokens].map(Number),
+    [200, 1, 80, 1, 0, 0, 40, 1, 40, 1, 200, 1],
+    "summary",
+  );
+  const { data: b } = await w.b.clients.admin.rpc("day_summary", {});
+  assertEqual(Number(b[0].cash) + Number(b[0].pending_tokens), 0, "B sees none of A");
+});
+
+test("day_summary for a past date", async () => {
+  const w = await seedTwoVendors();
+  const id = await doneBill(w.a, "cash");
+  await backdate(id, 1);
+  const { data } = await w.a.clients.admin.rpc("day_summary", { p_date: await kolkataDay(-1) });
+  assertEqual(Number(data[0].cash), 200, "yesterday's cash");
+  const { data: today } = await w.a.clients.admin.rpc("day_summary", {});
+  assertEqual(Number(today[0].cash), 0, "not today's");
+});
+
+test("unclosed_days lists a past day with sales until it is closed", async () => {
+  const w = await seedTwoVendors();
+  await setCloseFrom(w, -10);
+  const id = await doneBill(w.a, "cash");
+  await backdate(id, 2);
+  await doneBill(w.a, "cash");                 // today: never listed
+  const twoAgo = await kolkataDay(-2);
+
+  const { data } = await w.a.clients.biller.rpc("unclosed_days");
+  assertEqual(data.map((r) => ymdOf(r.business_date)), [twoAgo], "listed");
+  const { data: other } = await w.b.clients.admin.rpc("unclosed_days");
+  assertEqual(other, [], "B sees none of A's days");
+
+  const { error } = await closeAs(w.a.clients.biller, twoAgo, 200);
+  assert(!error, error?.message);
+  const { data: after } = await w.a.clients.biller.rpc("unclosed_days");
+  assertEqual(after, [], "closed day no longer listed");
+});
+
+test("unclosed_days ignores days before day_close_from and days with only voided bills", async () => {
+  const w = await seedTwoVendors();
+  // A fresh shop's day_close_from is today, exactly as every shop's is on deploy day.
+  const before = await doneBill(w.a, "cash");
+  await backdate(before, 3);
+  const { data } = await w.a.clients.admin.rpc("unclosed_days");
+  assertEqual(data, [], "a day before day_close_from must not be listed");
+
+  await setCloseFrom(w, -10);
+  await sql(`update bills set status = 'voided', voided_at = completed_at, void_reason = 'x' where id = $1`, [before]);
+  const { data: voidedOnly } = await w.a.clients.admin.rpc("unclosed_days");
+  assertEqual(voidedOnly, [], "a day with only voided bills needs no close");
+});
+
+test("clearing the shop's data removes its payments and closes", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "cash");
+  await closeAs(w.a.clients.biller, await kolkataDay(), 200);
+  const { error } = await w.a.clients.admin.rpc("clear_vendor_data");
+  assert(!error, error?.message);
+  const { rows } = await sql(
+    `select (select count(*) from bill_payments where vendor_id = $1)::int p,
+            (select count(*) from day_closes where vendor_id = $1)::int c`, [w.a.vendorId]);
+  assertEqual(rows[0], { p: 0, c: 0 }, "left behind");
+  // Today is open again: a new sale completes. Walk-in (no customer): clearing deleted them.
+  const id = await billedBill({ ...w.a, customerId: null });
+  const { error: comp } = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: id, p_payment_mode: "cash" });
+  assert(!comp, `today stayed locked after clearing: ${comp?.message}`);
+});

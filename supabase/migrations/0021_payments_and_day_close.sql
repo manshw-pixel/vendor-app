@@ -429,3 +429,117 @@ begin
      set status = 'voided', voided_at = now(), voided_by = auth.uid(), void_reason = btrim(p_reason)
    where id = p_bill_id;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- What the close screen and the banner read
+-- ---------------------------------------------------------------------------
+
+-- The first day a shop is asked to close. now() is stable, so ADD COLUMN evaluates it once:
+-- every existing shop gets the migration date, and a new shop gets its creation date.
+-- Without it, the day this ships every shop would be told thirty past days are unclosed.
+alter table vendors
+  add column day_close_from date not null default ((now() at time zone 'Asia/Kolkata')::date);
+
+-- One row for one day: per-mode totals and counts of done bills, the cash the drawer should
+-- hold, and the tokens still pending (which carry over). Invoker rights: RLS scopes it.
+create function day_summary(p_date date default null)
+  returns table (
+    business_date    date,
+    cash             numeric, cash_count       bigint,
+    upi              numeric, upi_count        bigint,
+    card             numeric, card_count       bigint,
+    credit           numeric, credit_count     bigint,
+    unrecorded       numeric, unrecorded_count bigint,
+    expected_cash    numeric,
+    pending_tokens   bigint
+  )
+  language sql stable as $$
+  with d as (
+    select coalesce(p_date, (now() at time zone 'Asia/Kolkata')::date) as day
+  ), done as (
+    select b.total, p.mode, p.amount
+      from bills b
+      left join bill_payments p on p.bill_id = b.id
+     where b.status = 'done'
+       and (b.completed_at at time zone 'Asia/Kolkata')::date = (select day from d)
+  )
+  select (select day from d),
+         coalesce(sum(amount) filter (where mode = 'cash'), 0),   count(*) filter (where mode = 'cash'),
+         coalesce(sum(amount) filter (where mode = 'upi'), 0),    count(*) filter (where mode = 'upi'),
+         coalesce(sum(amount) filter (where mode = 'card'), 0),   count(*) filter (where mode = 'card'),
+         coalesce(sum(amount) filter (where mode = 'credit'), 0), count(*) filter (where mode = 'credit'),
+         coalesce(sum(total) filter (where mode is null), 0),     count(*) filter (where mode is null),
+         coalesce(sum(amount) filter (where mode = 'cash'), 0),
+         (select count(*) from bills where status = 'billed')
+    from done;
+$$;
+
+revoke all on function day_summary(date) from public, anon;
+grant execute on function day_summary(date) to authenticated, service_role;
+
+-- Past days with at least one done bill and no active close, newest first, over the last
+-- 30 days and never before the shop's day_close_from. Today is never listed: it is still
+-- trading. Invoker rights: RLS on bills, vendors and day_closes scopes it.
+create function unclosed_days() returns table (business_date date)
+  language sql stable as $$
+  select distinct (b.completed_at at time zone 'Asia/Kolkata')::date as business_date
+    from bills b
+    join vendors v on v.id = b.vendor_id
+   where b.status = 'done'
+     and b.completed_at >= now() - interval '31 days'
+     and (b.completed_at at time zone 'Asia/Kolkata')::date <  (now() at time zone 'Asia/Kolkata')::date
+     and (b.completed_at at time zone 'Asia/Kolkata')::date >= (now() at time zone 'Asia/Kolkata')::date - 30
+     and (b.completed_at at time zone 'Asia/Kolkata')::date >= v.day_close_from
+     and not exists (
+       select 1 from day_closes c
+        where c.vendor_id = b.vendor_id
+          and c.business_date = (b.completed_at at time zone 'Asia/Kolkata')::date
+          and c.reopened_at is null)
+   order by business_date desc;
+$$;
+
+revoke all on function unclosed_days() from public, anon;
+grant execute on function unclosed_days() to authenticated, service_role;
+
+-- clear_vendor_data(): byte-for-byte 0016 plus bill_payments and day_closes. A close left
+-- behind would keep today locked on a shop with no bills.
+create or replace function clear_vendor_data()
+  returns table (bills integer, customers integer, points_rows integer)
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_vendor uuid := current_vendor_id();
+  v_bills  integer;
+  v_custs  integer;
+  v_points integer;
+begin
+  -- Unlike issue_token()/complete_bill(), a null current_vendor_id() is NOT waved through.
+  -- This one derives its entire scope FROM the caller, so a null vendor has nothing to mean.
+  if v_vendor is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may clear their shop''s data'
+      using errcode = '42501';
+  end if;
+
+  -- Order is forced by the foreign keys: points_ledger.bill_id -> bills and
+  -- bills.customer_id -> customers have NO cascade.
+  delete from points_ledger where vendor_id = v_vendor;
+  get diagnostics v_points = row_count;
+
+  delete from bill_payments where vendor_id = v_vendor;
+  delete from bill_items where vendor_id = v_vendor;
+  delete from bills where vendor_id = v_vendor;
+  get diagnostics v_bills = row_count;
+
+  -- Records ABOUT the bills and points just deleted.
+  delete from day_closes where vendor_id = v_vendor;
+  delete from stock_requests where vendor_id = v_vendor;
+  delete from stock_movements where vendor_id = v_vendor;
+  delete from outbound_messages where vendor_id = v_vendor;
+
+  delete from customers where vendor_id = v_vendor;
+  get diagnostics v_custs = row_count;
+
+  -- Tokens restart at 1. Safe only because the bills are gone.
+  update vendor_counters set last_token = 0 where vendor_id = v_vendor;
+
+  return query select v_bills, v_custs, v_points;
+end $$;
