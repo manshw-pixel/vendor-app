@@ -123,6 +123,36 @@ describe("Close day", () => {
     await waitFor(() => expect(loadDaySummary).toHaveBeenLastCalledWith("2026-09-22"));
   });
 
+  it("disables day-switching while a close is in flight, and reloads whatever is selected when it finishes", async () => {
+    loadUnclosedDays.mockResolvedValue({ data: ["2026-09-22"], error: null });
+    let resolveClose!: (v: { data: unknown; error: null }) => void;
+    closeDay.mockReturnValue(new Promise((resolve) => { resolveClose = resolve; }));
+    renderAs("biller");
+
+    fireEvent.change(await screen.findByTestId("close-counted"), { target: { value: "1200" } });
+    fireEvent.click(screen.getByTestId("close-submit"));
+    fireEvent.click(screen.getByTestId("close-confirm"));
+
+    // The close RPC is still pending: the day-switching controls must not let the user
+    // move to another day while it resolves, or its trailing reload would repaint the
+    // wrong day.
+    await waitFor(() => expect(screen.getByTestId("close-pick-2026-09-22")).toHaveProperty("disabled", true));
+
+    loadDaySummary.mockClear();
+    resolveClose({ data: {}, error: null });
+    await waitFor(() => expect(notifyDayClosesChanged).toHaveBeenCalled());
+    // The trailing reload after a close must ask for the date actually selected when the
+    // RPC resolved (today, since switching was disabled throughout), not a stale closure.
+    await waitFor(() => expect(loadDaySummary).toHaveBeenCalledWith(undefined));
+  });
+
+  it("shows a loading state rather than a blank screen when the load has no summary yet", async () => {
+    loadDaySummary.mockResolvedValue({ data: null, error: null });
+    renderAs("biller");
+    expect(await screen.findByTestId("close-loading")).toBeTruthy();
+    expect(screen.queryByTestId("close-expected")).toBeNull();
+  });
+
   it("explains an already-closed refusal", async () => {
     closeDay.mockResolvedValue({ data: null, error: { message: "day already closed", code: "P0001" } });
     renderAs("biller");

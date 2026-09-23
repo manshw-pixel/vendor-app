@@ -34,10 +34,18 @@ export default function CloseDay() {
   const [busy, setBusy] = useState(false);
   const [reopening, setReopening] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   // Which date the newest load was for; a slow load for a date the user has moved off must
   // not paint over the one they are looking at.
   const wanted = useRef<string | null>(null);
+  // The date currently selected, mirrored outside state so submit()/reopen() -- whose
+  // closures are fixed when the click that started them fired -- can reload whatever the
+  // user is looking at when the RPC resolves, not whatever they were looking at when they
+  // clicked. The pick buttons are also disabled while busy so this can only move if the
+  // in-flight close/reopen has already finished.
+  const currentDate = useRef<string | null>(null);
+  currentDate.current = date;
 
   const load = useCallback(async (d: string | null) => {
     wanted.current = d;
@@ -47,6 +55,7 @@ export default function CloseDay() {
     setSummary(s.data);
     setCloses(c.data ?? []);
     setUnclosed(u.data ?? []);
+    setLoaded(true);
   }, []);
 
   useEffect(() => { void load(date); }, [date, load]);
@@ -68,6 +77,7 @@ export default function CloseDay() {
     setNote("");
     setConfirming(false);
     setProblem(null);
+    setLoaded(false);
   }
 
   async function submit() {
@@ -80,7 +90,10 @@ export default function CloseDay() {
     notifyDayClosesChanged();
     setCounted("");
     setNote("");
-    await load(date);
+    // Reload whichever date is now selected, not the one captured when this handler
+    // started -- the pick buttons are disabled while busy, but the RPC can still finish
+    // after a rapid back-to-today click queued just before the disable took effect.
+    await load(currentDate.current);
   }
 
   async function reopen(d: string) {
@@ -91,7 +104,7 @@ export default function CloseDay() {
     notifyDayClosesChanged();
     setReopening(null);
     setReason("");
-    await load(date);
+    await load(currentDate.current);
   }
 
   const time = (iso: string) => new Date(iso).toLocaleTimeString(lang, { hour: "numeric", minute: "2-digit" });
@@ -192,12 +205,16 @@ export default function CloseDay() {
           )}
 
           {date !== null && (
-            <button data-testid="close-today" onClick={() => pick(null)}
-                    className="text-sm text-emerald-700 underline">
+            <button data-testid="close-today" disabled={busy} onClick={() => pick(null)}
+                    className="text-sm text-emerald-700 underline disabled:opacity-50">
               {t("close.backToToday")}
             </button>
           )}
         </section>
+      )}
+
+      {(!loaded || !summary) && !problem && (
+        <p data-testid="close-loading" className="text-sm text-slate-400">{t("dash.loading")}</p>
       )}
 
       {pastUnclosed.length > 0 && (
@@ -207,8 +224,8 @@ export default function CloseDay() {
             {pastUnclosed.map((d) => (
               <li key={d} className="flex items-center justify-between text-sm">
                 <span className="text-slate-700">{formatBusinessDate(d, lang)}</span>
-                <button data-testid={`close-pick-${d}`} onClick={() => pick(d)}
-                        className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]">
+                <button data-testid={`close-pick-${d}`} disabled={busy} onClick={() => pick(d)}
+                        className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50">
                   {t("close.closeThis")}
                 </button>
               </li>
@@ -232,9 +249,9 @@ export default function CloseDay() {
                     {c.reopened_at ? t("close.reopened") : (c.closer ?? "—")}
                   </span>
                   {isAdmin && c.reopened_at === null && (
-                    <button data-testid={`close-reopen-${c.business_date}`}
+                    <button data-testid={`close-reopen-${c.business_date}`} disabled={busy}
                             onClick={() => { setReopening(c.business_date); setReason(""); }}
-                            className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]">
+                            className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50">
                       {t("close.reopen")}
                     </button>
                   )}
