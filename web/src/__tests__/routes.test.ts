@@ -9,7 +9,7 @@ describe("routesForRole", () => {
   it("gives the biller the queue and the history", () => {
     // A biller completes bills and sees each total as they do it, so the record of what
     // they completed is theirs too. bills_read would permit more; this is nav, not policy.
-    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending", "/completed"]);
+    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending", "/completed", "/close"]);
   });
 
   it("gives admin the full set, with staff folded into settings", () => {
@@ -23,6 +23,7 @@ describe("routesForRole", () => {
       "/stock",
       "/settings",
       "/dashboards",
+      "/close",
     ]);
   });
 
@@ -74,6 +75,12 @@ describe("canAccess", () => {
     expect(canAccess("biller", "/stock")).toBe(false);
     expect(canAccess("recorder", "/stock")).toBe(true);
     expect(canAccess("admin", "/stock")).toBe(true);
+  });
+
+  it("gives the close screen to admin and biller, never the recorder", () => {
+    expect(canAccess("admin", "/close")).toBe(true);
+    expect(canAccess("biller", "/close")).toBe(true);
+    expect(canAccess("recorder", "/close")).toBe(false);
   });
 });
 
