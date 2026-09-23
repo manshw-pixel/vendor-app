@@ -88,7 +88,19 @@ begin
     raise exception 'bill % is %, expected billed', p_bill_id, v_bill.status;
   end if;
 
-  select * into v_vendor from vendors where id = v_bill.vendor_id;
+  -- FOR SHARE: close_day() takes this row FOR UPDATE before it counts the cash, so a
+  -- completion either commits before the count or waits for the close and is refused
+  -- below. Share locks do not block each other, so two tills still complete in parallel.
+  select * into v_vendor from vendors where id = v_bill.vendor_id for share;
+
+  -- After the idempotency guard: a retry of a sale that already committed must still
+  -- succeed after the day is closed, or the biller is told a completed sale failed.
+  if exists (select 1 from day_closes
+              where vendor_id = v_bill.vendor_id
+                and business_date = (now() at time zone 'Asia/Kolkata')::date
+                and reopened_at is null) then
+    raise exception 'day is closed' using errcode = 'P0001';
+  end if;
 
   -- #3 (forgeable total): recompute the authoritative total from the line items rather
   -- than trusting bills.total, which a recorder could set to anything while the bill was
@@ -215,3 +227,205 @@ $$;
 
 revoke all on function payment_split_between(timestamptz, timestamptz) from public, anon;
 grant execute on function payment_split_between(timestamptz, timestamptz) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Day close
+-- ---------------------------------------------------------------------------
+
+create table day_closes (
+  id            uuid primary key default gen_random_uuid(),
+  vendor_id     uuid not null references vendors(id) on delete cascade,
+  -- The Asia/Kolkata calendar date, the same day boundary void_bill uses.
+  business_date date not null,
+  expected_cash numeric(10,2) not null,
+  counted_cash  numeric(10,2) not null check (counted_cash >= 0),
+  difference    numeric(10,2) not null,
+  note          text,
+  closed_by     uuid not null references app_users(id),
+  closed_at     timestamptz not null default now(),
+  reopened_by   uuid references app_users(id),
+  reopened_at   timestamptz,
+  reopen_reason text,
+  constraint day_closes_reopen_stamps check (
+    (reopened_at is null and reopened_by is null and reopen_reason is null)
+    or (reopened_at is not null and reopened_by is not null
+        and length(btrim(coalesce(reopen_reason, ''))) > 0)
+  )
+);
+
+-- At most one ACTIVE close per shop per day. A reopen stamps the row instead of deleting it,
+-- so every close and reopen stays on record.
+create unique index day_closes_one_active on day_closes(vendor_id, business_date)
+  where reopened_at is null;
+
+alter table day_closes enable row level security;
+
+-- Read for every role in the shop. No write policy: close_day/reopen_day are the only writers.
+create policy day_closes_read on day_closes for select to authenticated
+  using (vendor_id = current_vendor_id());
+
+-- Cash the drawer should hold for one shop's day. Internal: called only from close_day,
+-- which runs as the owner, so no client needs execute.
+create function expected_cash_for(p_vendor uuid, p_date date) returns numeric
+  language sql stable as $$
+  select coalesce(sum(p.amount), 0)
+    from bill_payments p
+    join bills b on b.id = p.bill_id
+   where b.vendor_id = p_vendor
+     and b.status = 'done'
+     and p.mode = 'cash'
+     and (b.completed_at at time zone 'Asia/Kolkata')::date = p_date;
+$$;
+
+revoke all on function expected_cash_for(uuid, date) from public, anon, authenticated;
+
+create function close_day(p_date date, p_counted_cash numeric, p_note text default null)
+  returns day_closes
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_vendor   uuid := current_vendor_id();
+  v_expected numeric;
+  v_row      day_closes%rowtype;
+begin
+  -- A signed-in admin or biller only: closed_by must be a real staff member.
+  if v_vendor is null or current_user_role() not in ('admin', 'biller') then
+    raise exception 'only an admin or biller may close the day' using errcode = '42501';
+  end if;
+  if p_date is null or p_date > (now() at time zone 'Asia/Kolkata')::date then
+    raise exception 'cannot close a future day' using errcode = '22023';
+  end if;
+  if p_counted_cash is null or p_counted_cash < 0 or p_counted_cash <> round(p_counted_cash, 2) then
+    raise exception 'counted cash must be zero or more, to the paisa' using errcode = '22023';
+  end if;
+
+  -- Serialises against complete_bill/void_bill (FOR SHARE on the same row) and against a
+  -- second close of the same day, so the cash is counted over a settled set of bills.
+  perform 1 from vendors where id = v_vendor for update;
+
+  if exists (select 1 from day_closes
+              where vendor_id = v_vendor and business_date = p_date and reopened_at is null) then
+    raise exception 'day already closed' using errcode = 'P0001';
+  end if;
+
+  -- Computed here, never taken from the client.
+  v_expected := expected_cash_for(v_vendor, p_date);
+
+  if p_counted_cash <> v_expected and length(btrim(coalesce(p_note, ''))) = 0 then
+    raise exception 'a note is required when the cash does not match' using errcode = '22023';
+  end if;
+
+  insert into day_closes (vendor_id, business_date, expected_cash, counted_cash, difference,
+                          note, closed_by)
+  values (v_vendor, p_date, v_expected, p_counted_cash, p_counted_cash - v_expected,
+          nullif(btrim(coalesce(p_note, '')), ''), auth.uid())
+  returning * into v_row;
+  return v_row;
+end $$;
+
+revoke all on function close_day(date, numeric, text) from public, anon;
+grant execute on function close_day(date, numeric, text) to authenticated;
+
+create function reopen_day(p_date date, p_reason text) returns day_closes
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_row day_closes%rowtype;
+begin
+  if current_vendor_id() is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may reopen a day' using errcode = '42501';
+  end if;
+  if p_reason is null or length(btrim(p_reason)) = 0 then
+    raise exception 'a reason is required' using errcode = '22023';
+  end if;
+
+  update day_closes
+     set reopened_at = now(), reopened_by = auth.uid(), reopen_reason = btrim(p_reason)
+   where vendor_id = current_vendor_id() and business_date = p_date and reopened_at is null
+  returning * into v_row;
+  if not found then
+    raise exception 'day is not closed' using errcode = 'P0001';
+  end if;
+  return v_row;
+end $$;
+
+revoke all on function reopen_day(date, text) from public, anon;
+grant execute on function reopen_day(date, text) to authenticated;
+
+-- void_bill: byte-for-byte 0017 except the vendor lock and the day check. Same signature,
+-- so create or replace is correct and creates no overload.
+create or replace function void_bill(p_bill_id uuid, p_reason text) returns void
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_bill      bills%rowtype;
+  v_reversed  integer := 0;
+  v_refunded  integer := 0;
+begin
+  -- Only a signed-in admin or biller of the bill's own shop. A null vendor (service role)
+  -- is refused: voided_by must be a real staff member.
+  if current_vendor_id() is null or current_user_role() not in ('admin', 'biller') then
+    raise exception 'only an admin or biller may void a bill' using errcode = '42501';
+  end if;
+
+  select * into v_bill from bills where id = p_bill_id and vendor_id = current_vendor_id() for update;
+  if not found then
+    raise exception 'bill % is not in your shop', p_bill_id using errcode = '42501';
+  end if;
+
+  -- Idempotent: a double tap or a retried request must not restore stock twice.
+  if v_bill.status = 'voided' then
+    return;
+  end if;
+  if v_bill.status <> 'done' then
+    raise exception 'bill is not done' using errcode = 'P0001';
+  end if;
+
+  -- Same calendar day as completion, in the shops' timezone.
+  if (v_bill.completed_at at time zone 'Asia/Kolkata')::date
+     <> (now() at time zone 'Asia/Kolkata')::date then
+    raise exception 'void window closed' using errcode = 'P0001';
+  end if;
+
+  -- The same lock complete_bill takes, for the same reason: a void either lands before
+  -- close_day counts the cash or is refused.
+  perform 1 from vendors where id = v_bill.vendor_id for share;
+  if exists (select 1 from day_closes
+              where vendor_id = v_bill.vendor_id
+                and business_date = (v_bill.completed_at at time zone 'Asia/Kolkata')::date
+                and reopened_at is null) then
+    raise exception 'day is closed' using errcode = 'P0001';
+  end if;
+
+  if p_reason is null or length(btrim(p_reason)) = 0 then
+    raise exception 'a reason is required' using errcode = '22023';
+  end if;
+
+  -- Stock back. Not capped: stock has no upper bound.
+  update items i
+     set stock_kg = i.stock_kg + agg.qty
+    from (select item_id, sum(qty_kg) as qty from bill_items where bill_id = p_bill_id group by item_id) agg
+   where i.id = agg.item_id;
+
+  -- Points: mirror every ledger row of this bill with the opposite sign and the SAME
+  -- expires_at, so each reversal lapses with the batch it cancels.
+  select coalesce(sum(points) filter (where points > 0), 0),
+         coalesce(-sum(points) filter (where points < 0), 0)
+    into v_reversed, v_refunded
+    from points_ledger where bill_id = p_bill_id;
+
+  insert into points_ledger (vendor_id, customer_id, bill_id, points, expires_at)
+  select vendor_id, customer_id, bill_id, -points, expires_at
+    from points_ledger
+   where bill_id = p_bill_id;
+
+  if v_bill.customer_id is not null then
+    insert into outbound_messages (vendor_id, customer_id, template_key, payload)
+    values (v_bill.vendor_id, v_bill.customer_id, 'bill_voided',
+            jsonb_build_object('bill_id', p_bill_id, 'token_no', v_bill.token_no,
+                               'total', v_bill.total,
+                               'points_reversed', coalesce(v_reversed, 0),
+                               'points_refunded', coalesce(v_refunded, 0)));
+  end if;
+
+  update bills
+     set status = 'voided', voided_at = now(), voided_by = auth.uid(), void_reason = btrim(p_reason)
+   where id = p_bill_id;
+end $$;

@@ -30,6 +30,7 @@ import "./platform_owner.test.mjs";
 import "./amend_pending_bill.test.mjs";
 import "./create_item_with_cost.test.mjs";
 import "./payments.test.mjs";
+import "./day_close.test.mjs";
 
 try {
   await bootstrap();
