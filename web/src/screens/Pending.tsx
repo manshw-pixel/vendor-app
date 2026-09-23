@@ -9,6 +9,7 @@ import { useSession } from "../components/SessionProvider";
 import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
 import { describeError } from "../errors";
 import { rupees } from "../money";
+import { PAYMENT_MODES, type PaymentMode } from "../payments";
 
 /**
  * The biller's queue: bills already `billed`, waiting for a customer to pay at the
@@ -43,6 +44,8 @@ export default function Pending() {
   // balance) -- null is also the signal that hides the redeem input entirely.
   const [balance, setBalance] = useState<number | null>(null);
   const [redeemInput, setRedeemInput] = useState("");
+  // Never preselected: a forgotten tap must not quietly become cash in the day's count.
+  const [mode, setMode] = useState<PaymentMode | null>(null);
 
   async function refresh() {
     const { data, error } = await listPending();
@@ -64,6 +67,7 @@ export default function Pending() {
   async function openConfirm(bill: PendingBill) {
     setConfirmingId(bill.id);
     setRedeemInput("");
+    setMode(null);
     setBalance(null);
     if (!bill.customer_id) return;
     const { data } = await customerBalance(bill.customer_id);
@@ -84,6 +88,8 @@ export default function Pending() {
   }
 
   async function confirm(bill: PendingBill) {
+    if (!mode) return;
+    const chosen = mode;
     const id = bill.id;
     const points = clampedPoints(bill);
     setConfirmingId(null);
@@ -93,7 +99,7 @@ export default function Pending() {
     setPointsAwarded(null);
     setPointsReadFailed(false);
     setCompletionUnknown(false);
-    const { error } = await completeBill(id, points);
+    const { error } = await completeBill(id, chosen, points);
     if (error) {
       // complete_bill may have committed and had its reply lost. Read back what the
       // server actually recorded rather than trusting the lost reply -- reporting a
@@ -256,12 +262,34 @@ export default function Pending() {
                 </div>
               )}
 
+              <fieldset className="space-y-2">
+                <legend className="text-sm text-slate-700">{t("pending.modeLabel")}</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {PAYMENT_MODES.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      data-testid={`pay-mode-${m}`}
+                      aria-pressed={mode === m}
+                      onClick={() => setMode(m)}
+                      className={`rounded-lg px-3 py-3 min-h-[44px] border font-semibold ${
+                        mode === m
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-slate-700 border-slate-300"}`}
+                    >
+                      {t(`pay.${m}`)}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
               <button
                 data-testid={`pending-confirm-${bill.id}`}
                 onClick={() => void confirm(bill)}
-                className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold"
+                disabled={mode === null}
+                className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
               >
-                {t("pending.confirmAccept")}
+                {mode === "credit" ? t("pending.confirmCredit") : t("pending.confirmAccept")}
               </button>
               <button
                 onClick={() => setConfirmingId(null)}

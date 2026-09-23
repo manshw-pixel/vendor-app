@@ -46,6 +46,9 @@ export function describeError(
   // void_bill's guards (0017), plpgsql P0001 like the others: matched on message.
   if (/void window closed/i.test(detail)) return { key: "void.windowClosed", detail };
   if (/bill is not done/i.test(detail)) return { key: "void.notDone", detail };
+  // Day close (0021), plpgsql P0001 like the others: matched on message.
+  if (/day is closed/i.test(detail)) return { key: "close.dayClosed", detail };
+  if (/day already closed/i.test(detail)) return { key: "close.alreadyClosed", detail };
   // amend_pending_bill's status guard (0013/0015 family): "bill <id> is <status>, expected
   // billed" -- raised when the bill Completed.tsx is trying to edit has already moved past
   // `billed` (voided, completed, or amended again) since the screen loaded it. Matched on

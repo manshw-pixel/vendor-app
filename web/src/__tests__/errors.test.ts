@@ -116,6 +116,11 @@ describe("describeError", () => {
     expect(d?.key).toBe("amend.noLongerPending");
   });
 
+  it("names a closed day", () => {
+    expect(describeError({ message: "day is closed", code: "P0001" })?.key).toBe("close.dayClosed");
+    expect(describeError({ message: "day already closed", code: "P0001" })?.key).toBe("close.alreadyClosed");
+  });
+
   it("maps the whole-number refusals for both stock and quantity", () => {
     expect(
       describeError({ code: "P0001", message: "stock must be a whole number for this unit" })?.key,

@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import type { Draft } from "./billing";
 import type { Unit } from "./units";
 import type { Customer } from "./customers";
+import type { PaymentMode } from "./payments";
 
 export type PostgrestErrorLike = { message?: string; code?: string } | null;
 
@@ -135,15 +136,16 @@ export async function listPending() {
 }
 
 /**
- * Completes a sale, optionally spending some of the customer's points on it.
+ * Completes a sale with how it was paid, optionally spending some of the customer's points.
  *
- * p_redeem_points is omitted rather than sent as 0 when nothing is redeemed: the function
- * defaults it, and the parameter names must match 0010_points_redemption.sql exactly --
- * PostgREST resolves the overload by argument name and a mismatch reads as
- * "function not found".
+ * p_payment_mode is required by the database (0021): a call without it is refused, so a
+ * stale tab cannot complete a sale with no payment recorded. p_redeem_points is omitted
+ * rather than sent as 0 when nothing is redeemed. Parameter names must match
+ * 0021_payments_and_day_close.sql exactly -- PostgREST resolves the function by argument
+ * name and a mismatch reads as "function not found".
  */
-export async function completeBill(billId: string, redeemPoints?: number) {
-  const args: Record<string, unknown> = { p_bill_id: billId };
+export async function completeBill(billId: string, mode: PaymentMode, redeemPoints?: number) {
+  const args: Record<string, unknown> = { p_bill_id: billId, p_payment_mode: mode };
   if (redeemPoints && redeemPoints > 0) args.p_redeem_points = redeemPoints;
   return supabase.rpc("complete_bill", args);
 }

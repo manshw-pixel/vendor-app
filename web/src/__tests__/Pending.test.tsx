@@ -54,11 +54,12 @@ describe("the pending queue", () => {
   it("completes a bill after confirming", async () => {
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     // completeBill now always takes a second argument -- 0 when there is nothing to
     // redeem -- rather than omitting it. Same claim ("completing sends this bill"),
     // against the new signature.
-    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 0));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "cash", 0));
   });
 
   it("disables the button while the call is in flight", async () => {
@@ -68,6 +69,7 @@ describe("the pending queue", () => {
     completeBill.mockImplementationOnce(() => new Promise((r) => { release = r; }));
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     await waitFor(() => {
       const b = screen.getByRole("button", { name: /complete/i });
@@ -96,6 +98,7 @@ describe("the pending queue", () => {
     pointsForBill.mockResolvedValueOnce({ data: [{ points: 5 }], error: null });
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/5/)).toBeTruthy();
   });
@@ -104,6 +107,7 @@ describe("the pending queue", () => {
     pointsForBill.mockResolvedValueOnce({ data: [], error: null });
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/completed/i)).toBeTruthy();
     expect(screen.queryByText(/checked/i)).toBeNull();
@@ -117,12 +121,41 @@ describe("the pending queue", () => {
     pointsForBill.mockResolvedValueOnce({ data: null, error: { message: "network down" } });
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /complete/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByRole("button", { name: /complete this bill|yes/i }));
     expect(await screen.findByText(/checked/i)).toBeTruthy();
     // Still tells the biller the bill completed -- the write already happened.
     expect(screen.getByText(/completed/i)).toBeTruthy();
     // Must not read like the legitimate zero-points case: no points-awarded count shown.
     expect(screen.queryByText(/points awarded/i)).toBeNull();
+  });
+
+  it("keeps Complete disabled until a payment mode is picked, then sends it", async () => {
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /^complete$/i }));
+    const accept = screen.getByTestId("pending-confirm-b1");
+    expect(accept).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByTestId("pay-mode-upi"));
+    expect(screen.getByTestId("pay-mode-upi").getAttribute("aria-pressed")).toBe("true");
+    expect(accept).toHaveProperty("disabled", false);
+    fireEvent.click(accept);
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "upi", 0));
+  });
+
+  it("says 'Complete on credit' when credit is picked", async () => {
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /^complete$/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-credit"));
+    expect(screen.getByTestId("pending-confirm-b1").textContent).toMatch(/credit/i);
+  });
+
+  it("forgets the mode when the dialog is reopened", async () => {
+    render(<MemoryRouter><Pending /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /^complete$/i }));
+    fireEvent.click(screen.getByTestId("pay-mode-card"));
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^complete$/i }));
+    expect(screen.getByTestId("pending-confirm-b1")).toHaveProperty("disabled", true);
   });
 });
 
@@ -150,16 +183,18 @@ describe("redeeming points at the counter", () => {
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
-    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 40));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "cash", 40));
   });
 
   it("completes with no points when the field is left empty", async () => {
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     await screen.findByTestId("redeem-input");
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
-    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", 0));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "cash", 0));
   });
 
   it("shows the biller what to actually collect", async () => {
@@ -181,9 +216,10 @@ describe("redeeming points at the counter", () => {
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
     fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "999" } });
     expect((screen.getByTestId("redeem-summary").textContent ?? "")).toMatch(/400/);
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
     await waitFor(() => expect(completeBill).toHaveBeenCalled());
-    const sent = completeBill.mock.calls[0]?.[1] as number;
+    const sent = completeBill.mock.calls[0]?.[2] as number;
     expect(sent).toBeLessThanOrEqual(100);
   });
 });
@@ -199,6 +235,7 @@ describe("the completion read-back after a lost reply", () => {
 
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
 
     expect(await screen.findByText(/completed/i)).toBeTruthy();
@@ -211,6 +248,7 @@ describe("the completion read-back after a lost reply", () => {
 
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
 
     expect(await screen.findByText(/no connection|network/i)).toBeTruthy();
@@ -225,6 +263,7 @@ describe("the completion read-back after a lost reply", () => {
 
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
 
     await screen.findByTestId("pending-completion-unknown");
@@ -237,6 +276,7 @@ describe("reaching the receipt after completion", () => {
   it("offers the receipt once the bill is completed", async () => {
     render(<MemoryRouter><Pending /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
     fireEvent.click(screen.getByTestId("pending-confirm-b1"));
     // The moment the slip is wanted: the customer is still standing there.
     const link = await screen.findByTestId("pending-receipt-b1");
