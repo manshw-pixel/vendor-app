@@ -30,7 +30,10 @@ the day.
 `id uuid pk, vendor_id uuid not null, bill_id uuid not null references bills,
 mode text not null check (mode in ('cash','upi','card','credit')),
 amount numeric(10,2) not null check (amount >= 0), created_at timestamptz default now(),
-created_by uuid not null`
+created_by uuid`
+
+- `created_by` is nullable: `complete_bill` still accepts a service-role caller, which has
+  no `auth.uid()`.
 
 - `unique (bill_id)`: exactly one row per bill for now. Allowing splits later means
   dropping this constraint and nothing else.
@@ -96,6 +99,9 @@ Unchanged. A token issued after close carries over and is completed on a later d
 - `p_counted_cash >= 0`, at most two decimals.
 - A past unclosed date can be closed later (anyone with the role), so a missed close can be
   done afterwards.
+- Takes the vendor row `for update` first. `complete_bill` and `void_bill` take it `for
+  share` before their lock check, so a completion racing a close either lands before the
+  close computes expected cash or is refused with `day_closed`, never slips in between.
 
 ### `reopen_day(p_date date, p_reason text)`
 
@@ -113,7 +119,17 @@ Security invoker, scoped by RLS.
 ### `unclosed_days()`
 
 Past dates (before today, Asia/Kolkata) with at least one completed non-voided bill and
-no active close, newest first, limited to the last 30 days. Drives the banner.
+no active close, newest first, limited to the last 30 days, and never before
+`vendors.day_close_from`. Drives the banner.
+
+`vendors.day_close_from date not null default (now() at time zone 'Asia/Kolkata')::date`
+is set to the migration date for existing shops and to the creation date for new ones.
+Without it, the day 0021 ships every shop would be told thirty past days are not closed.
+
+### `payment_split_between(p_from, p_to)`
+
+Per-mode total and bill count for completed, non-voided bills in the window, with
+`unrecorded` for bills that have no payment row. Security invoker. Feeds the dashboard.
 
 ## Screens
 
@@ -132,8 +148,10 @@ no active close, newest first, limited to the last 30 days. Drives the banner.
   at zero, amber otherwise. When non-zero, a note is required.
 - "Carried over: N pending tokens" when N > 0.
 - **Close day** asks for confirmation: "No more sales or voids today after this".
-- Below: the last 14 days with status, difference and who closed them. Admin sees
-  **Reopen** (with reason) on closed days and **Close** on past unclosed days.
+- Below: the last 14 closed days with difference and who closed them, and any past
+  unclosed days. Admin sees **Reopen** (with reason) on closed days. Admin and biller see
+  **Close** on a past unclosed day, which loads that day into the panel above; the banner
+  sends both roles here, so both must be able to act on it.
 
 ### Banner
 
@@ -175,7 +193,11 @@ gets its own message. Both in en, hi and mr.
   with recomputed expected cash.
 - Lock: on a closed date `complete_bill` and `void_bill` raise `day_closed`;
   `issue_token` succeeds.
-- `day_summary` and `unclosed_days`: correct figures; no cross-vendor leakage.
+- `day_summary` and `unclosed_days`: correct figures; no cross-vendor leakage;
+  `unclosed_days` ignores dates before `day_close_from`.
+- A completion blocked on a close in progress is refused once the close commits.
+- `clear_vendor_data` removes the shop's payments and closes, so a cleared shop is not left
+  with today locked.
 
 **Web tests**
 - Complete disabled until a mode is picked; Credit relabels the button; the mode is passed
