@@ -36,6 +36,14 @@ const voidedBetween = vi.fn(async (..._a: unknown[]): Promise<{
   data: Voided[] | null;
   error: { code?: string; message?: string } | null;
 }> => ({ data: [{ void_count: "0", voided_total: "0" }], error: null }));
+const paymentSplitBetween = vi.fn(async (..._a: unknown[]): Promise<{
+  data: { mode: string; total: string; bill_count: string }[] | null;
+  error: { code?: string; message?: string } | null;
+}> => ({ data: [
+  { mode: "cash", total: "200.00", bill_count: "1" },
+  { mode: "credit", total: "40.00", bill_count: "1" },
+  { mode: "upi", total: "110.50", bill_count: "1" },
+], error: null }));
 
 vi.mock("../history", async () => {
   const actual = await vi.importActual<typeof import("../history")>("../history");
@@ -46,6 +54,7 @@ vi.mock("../history", async () => {
     pairsBetween: (...a: unknown[]) => pairsBetween(...a),
     requestsBetween: (...a: unknown[]) => requestsBetween(...a),
     voidedBetween: (...a: unknown[]) => voidedBetween(...a),
+    paymentSplitBetween: (...a: unknown[]) => paymentSplitBetween(...a),
   };
 });
 
@@ -267,5 +276,22 @@ describe("the dashboard", () => {
     render(<Dashboards />);
     expect(await screen.findByTestId("dash-problem-detail")).toBeTruthy();
     expect(screen.getByTestId("dash-problem-detail").textContent).toContain("voided_between");
+  });
+
+  it("splits the money collected by payment mode", async () => {
+    render(<Dashboards />);
+    expect((await screen.findByTestId("dash-split-cash")).textContent).toMatch(/200\.00/);
+    expect(screen.getByTestId("dash-split-upi").textContent).toMatch(/110\.50/);
+    expect(screen.getByTestId("dash-split-card").textContent).toMatch(/0\.00/);
+    expect(screen.getByTestId("dash-split-credit").textContent).toMatch(/40\.00/);
+    expect(screen.queryByTestId("dash-split-unrecorded")).toBeNull();
+  });
+
+  it("shows Not recorded only when there are such bills", async () => {
+    paymentSplitBetween.mockResolvedValueOnce({
+      data: [{ mode: "unrecorded", total: "90.00", bill_count: "2" }], error: null,
+    });
+    render(<Dashboards />);
+    expect((await screen.findByTestId("dash-split-unrecorded")).textContent).toMatch(/90\.00/);
   });
 });

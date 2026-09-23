@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   collectedBetween, topItemsBetween, pairsBetween, requestsBetween, voidedBetween,
-  type TopItem, type Pair, type Collected, type RequestCount, type Voided,
+  paymentSplitBetween,
+  type TopItem, type Pair, type Collected, type RequestCount, type Voided, type PaymentSplit,
 } from "../history";
+import { PAYMENT_MODES, type SplitMode } from "../payments";
 import { presetRange, type Range } from "../dateRange";
 import { DateFilter } from "../components/DateFilter";
 import { itemName, type Lang } from "../i18n/locales";
@@ -37,6 +39,7 @@ export default function Dashboards() {
   const [requests, setRequests] = useState<RequestCount[]>([]);
   const [voidCount, setVoidCount] = useState(0);
   const [voidedTotal, setVoidedTotal] = useState(0);
+  const [split, setSplit] = useState<Record<string, number>>({});
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(true);
 
@@ -51,8 +54,9 @@ export default function Dashboards() {
     const key = `${r.from}..${r.to}`;
     wanted.current = key;
     setBusy(true);
-    const [money, items, together, asked, voided] = await Promise.all([
+    const [money, items, together, asked, voided, byMode] = await Promise.all([
       collectedBetween(r), topItemsBetween(r), pairsBetween(r), requestsBetween(r), voidedBetween(r),
+      paymentSplitBetween(r),
     ]);
     if (wanted.current !== key) return;   // superseded; a later range owns the screen now
     setBusy(false);
@@ -60,7 +64,7 @@ export default function Dashboards() {
     setProblem(
       describeError(money.error) ?? describeError(items.error)
         ?? describeError(together.error) ?? describeError(asked.error)
-        ?? describeError(voided.error),
+        ?? describeError(voided.error) ?? describeError(byMode.error),
     );
     // collected_between returns exactly one row. `total` is a Postgres numeric, which
     // PostgREST serialises as a STRING -- Number() it or rupees() renders a concatenation.
@@ -76,6 +80,10 @@ export default function Dashboards() {
     const voidedRow = (voided.data as Voided[] | null)?.[0];
     setVoidCount(Number(voidedRow?.void_count ?? 0));
     setVoidedTotal(Number(voidedRow?.voided_total ?? 0));
+    // numeric arrives as a string from PostgREST; Number() before it reaches rupees().
+    setSplit(Object.fromEntries(
+      ((byMode.data ?? []) as PaymentSplit[]).map((s) => [s.mode, Number(s.total)]),
+    ));
   }, []);
 
   useEffect(() => { void load(range); }, [range, load]);
@@ -119,6 +127,18 @@ export default function Dashboards() {
               {t("dash.uncosted", { n: uncosted })}
             </p>
           )}
+          <p className="mt-3 text-xs text-slate-500">{t("dash.split")}</p>
+          <dl className="mt-1 text-sm grid grid-cols-2 gap-y-1">
+            {([...PAYMENT_MODES, ...((split.unrecorded ?? 0) > 0 ? ["unrecorded"] : [])] as SplitMode[]).map((m) => (
+              <div key={m} data-testid={`dash-split-${m}`} className="contents">
+                <dt className="text-slate-500">
+                  {t(`pay.${m}`)}
+                  {m === "credit" && <span className="text-xs text-slate-400"> ({t("close.creditNote")})</span>}
+                </dt>
+                <dd className="text-right text-slate-700">{rupees(split[m] ?? 0)}</dd>
+              </div>
+            ))}
+          </dl>
         </Card>
         <Card title={t("dash.billCount")}>
           <p data-testid="dash-bill-count" className="text-2xl font-semibold text-slate-800">

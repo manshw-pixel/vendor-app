@@ -22,7 +22,7 @@ vi.mock("../supabase", () => ({
 }));
 
 const { listCompleted, billLines, collectedBetween, topItemsBetween, pairsBetween, PAGE_SIZE,
-  voidBill, voidedBetween, listVoided } =
+  voidBill, voidedBetween, listVoided, paymentSplitBetween } =
   await import("../history");
 const { presetRange } = await import("../dateRange");
 
@@ -89,6 +89,15 @@ describe("collectedBetween", () => {
     });
     expect(from).not.toHaveBeenCalledWith("v_payments_daily");
     expect(from).not.toHaveBeenCalledWith("bills");
+  });
+});
+
+describe("paymentSplitBetween", () => {
+  it("asks payment_split_between for the same bounds as the other cards", async () => {
+    await paymentSplitBetween({ from: "2026-09-01", to: "2026-09-30" });
+    expect(rpc).toHaveBeenCalledWith("payment_split_between", {
+      p_from: expect.any(String), p_to: expect.any(String),
+    });
   });
 });
 

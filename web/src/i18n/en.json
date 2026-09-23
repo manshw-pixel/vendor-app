@@ -168,6 +168,7 @@
     "loading": "Loading…",
     "title": "Dashboards",
     "collected": "Money collected",
+    "split": "By payment mode",
     "billCount": "Completed bills",
     "topItems": "Top items",
     "topItemsSub": "By sales value. Shows quantity · sales · margin.",
