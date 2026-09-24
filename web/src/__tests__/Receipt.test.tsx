@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Link } from "react-router-dom";
 import type { Receipt as ReceiptData } from "../receipt";
+import i18n from "../i18n";
 
 const loadReceipt = vi.fn();
 vi.mock("../receipt", () => ({ loadReceipt: (...a: unknown[]) => loadReceipt(...a) }));
@@ -158,10 +159,27 @@ describe("Receipt", () => {
     expect((await screen.findByTestId("receipt-mode")).textContent).toMatch(/UPI/);
   });
 
-  it("prints 'On credit' for a credit bill", async () => {
+  it("prints 'On credit' with the amount due, and no Paid row, for a credit bill", async () => {
+    // A credit bill was not paid: the slip must not say "Paid 166.00". The due row
+    // carries the amount after points instead, and the mode is not printed twice.
     loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: "credit" }, error: null });
     renderAt();
-    expect((await screen.findByTestId("receipt-mode")).textContent).toMatch(/credit|उधार/i);
+    const due = await screen.findByTestId("receipt-credit-due");
+    expect(due.textContent).toContain(i18n.t("receipt.onCredit"));
+    expect(due.textContent).toMatch(/166.00/);
+    expect(screen.queryByTestId("receipt-paid")).toBeNull();
+    expect(screen.queryByTestId("receipt-mode")).toBeNull();
+    const slip = document.querySelector(".receipt-slip")!.textContent ?? "";
+    expect(slip).not.toContain(i18n.t("receipt.paid"));
+  });
+
+  it.each(["cash", "upi", "card"] as const)("still prints the Paid row for a %s bill", async (mode) => {
+    loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: mode }, error: null });
+    renderAt();
+    const paid = await screen.findByTestId("receipt-paid");
+    expect(paid.textContent).toContain(i18n.t("receipt.paid"));
+    expect(paid.textContent).toMatch(/166.00/);
+    expect(screen.queryByTestId("receipt-credit-due")).toBeNull();
   });
 
   it("prints no mode line for a bill completed before modes existed", async () => {

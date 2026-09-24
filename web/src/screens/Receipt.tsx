@@ -143,16 +143,25 @@ export default function Receipt() {
             {t("receipt.voided")} — {t("receipt.voidedReason", { reason: data.voided.reason })}
           </div>
         )}
-        <div className="flex justify-between">
-          <span>{t("receipt.paid")}</span>
-          <span>{amt(data.net)}</span>
-        </div>
-        {data.payment_mode && (
-          <div data-testid="receipt-mode" className="text-center">
-            {data.payment_mode === "credit"
-              ? t("receipt.onCredit")
-              : t("receipt.paidBy", { mode: t(`pay.${data.payment_mode}`) })}
+        {/* A credit bill was not paid, so it gets a due row in place of "Paid" -- and
+            that row already names the mode, so no separate mode line follows it. */}
+        {data.payment_mode === "credit" ? (
+          <div data-testid="receipt-credit-due" className="flex justify-between">
+            <span>{t("receipt.onCredit")}</span>
+            <span>{amt(data.net)}</span>
           </div>
+        ) : (
+          <>
+            <div data-testid="receipt-paid" className="flex justify-between">
+              <span>{t("receipt.paid")}</span>
+              <span>{amt(data.net)}</span>
+            </div>
+            {data.payment_mode && (
+              <div data-testid="receipt-mode" className="text-center">
+                {t("receipt.paidBy", { mode: t(`pay.${data.payment_mode}`) })}
+              </div>
+            )}
+          </>
         )}
 
         {data.balance && (
