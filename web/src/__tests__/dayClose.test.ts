@@ -29,6 +29,15 @@ describe("loadDaySummary", () => {
     await loadDaySummary("2026-09-20");
     expect(rpc).toHaveBeenCalledWith("day_summary", { p_date: "2026-09-20" });
   });
+  it("coerces the dues columns", async () => {
+    rpc.mockResolvedValue({ data: [{ business_date: "2026-09-24", cash: "10", cash_count: "1",
+      upi: "0", upi_count: "0", card: "0", card_count: "0", credit: "0", credit_count: "0",
+      unrecorded: "0", unrecorded_count: "0", expected_cash: "310", pending_tokens: "0",
+      dues_cash: "300.00", dues_cash_count: "2", dues_upi: "5.50", dues_upi_count: "1",
+      dues_card: "0", dues_card_count: "0" }], error: null });
+    const { data } = await loadDaySummary();
+    expect(data?.dues).toEqual({ cash: { total: 300, count: 2 }, upi: { total: 5.5, count: 1 }, card: { total: 0, count: 0 } });
+  });
 });
 
 describe("writes", () => {

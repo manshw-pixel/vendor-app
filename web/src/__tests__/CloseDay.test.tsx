@@ -13,6 +13,7 @@ const SUMMARY: DaySummary = {
   },
   expected_cash: 1200,
   pending_tokens: 2,
+  dues: { cash: { total: 0, count: 0 }, upi: { total: 0, count: 0 }, card: { total: 0, count: 0 } },
 };
 
 const loadDaySummary = vi.fn();
@@ -196,5 +197,25 @@ describe("Close day", () => {
     await waitFor(() => expect(loadDaySummary).toHaveBeenCalledWith(undefined));
     expect(screen.getByTestId("close-note")).toHaveProperty("value", "change given");
     expect(screen.getByTestId("close-counted")).toHaveProperty("value", "1190");
+  });
+
+  it("breaks expected cash into cash sales and cash dues, and lists dues by mode", async () => {
+    loadDaySummary.mockResolvedValue({ data: {
+      ...SUMMARY, expected_cash: 1500,
+      dues: { cash: { total: 300, count: 2 }, upi: { total: 100, count: 1 }, card: { total: 0, count: 0 } },
+    }, error: null });
+    renderAs("biller");
+    expect((await screen.findByTestId("close-expected")).textContent).toMatch(/1,500\.00/);
+    const breakdown = screen.getByTestId("close-expected-breakdown").textContent ?? "";
+    expect(breakdown).toMatch(/Cash sales.*1,200\.00/);
+    expect(breakdown).toMatch(/Dues received in cash.*300\.00/);
+    expect(screen.getByTestId("close-dues-upi").textContent).toMatch(/100\.00/);
+    expect(screen.queryByTestId("close-dues-card")).toBeNull();
+  });
+
+  it("shows no breakdown on a day with no dues received", async () => {
+    renderAs("biller");
+    await screen.findByTestId("close-expected");
+    expect(screen.queryByTestId("close-expected-breakdown")).toBeNull();
   });
 });
