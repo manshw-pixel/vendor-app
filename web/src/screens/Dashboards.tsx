@@ -140,15 +140,26 @@ export default function Dashboards() {
           )}
           <p className="mt-3 text-xs text-slate-500">{t("dash.split")}</p>
           <dl className="mt-1 text-sm grid grid-cols-2 gap-y-1">
-            {([...PAYMENT_MODES, ...((split.unrecorded ?? 0) > 0 ? ["unrecorded"] : [])] as SplitMode[]).map((m) => (
-              <div key={m} data-testid={`dash-split-${m}`} className="contents">
-                <dt className="text-slate-500">
-                  {t(`pay.${m}`)}
-                  {m === "credit" && <span className="text-xs text-slate-400"> ({t("close.creditNote")})</span>}
-                </dt>
-                <dd className="text-right text-slate-700">{rupees(split[m] ?? 0)}</dd>
-              </div>
-            ))}
+            {([...PAYMENT_MODES, ...((split.unrecorded ?? 0) > 0 ? ["unrecorded"] : [])] as SplitMode[]).map((m) => {
+              // Dues received in the range count under their mode; Credit is what of the
+              // range's credit is still uncollected (0023). The server returns them apart.
+              const dues = split[`dues_${m}`] ?? 0;
+              const total = m === "credit" ? (split.credit_open ?? 0) : (split[m] ?? 0) + dues;
+              return (
+                <div key={m} data-testid={`dash-split-${m}`} className="contents">
+                  <dt className="text-slate-500">
+                    {t(`pay.${m}`)}
+                    {m === "credit" && <span className="text-xs text-slate-400"> ({t("close.creditNote")})</span>}
+                    {m !== "credit" && dues > 0 && (
+                      <span data-testid={`dash-incl-${m}`} className="block text-xs text-slate-400">
+                        {t("close.inclDues", { amount: rupees(dues) })}
+                      </span>
+                    )}
+                  </dt>
+                  <dd className="text-right text-slate-700">{rupees(total)}</dd>
+                </div>
+              );
+            })}
           </dl>
         </Card>
         <Card title={t("dash.billCount")}>
