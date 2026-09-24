@@ -114,6 +114,21 @@ describe("the billing data layer, with redemption", () => {
     expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1", p_payment_mode: "cash" });
   });
 
+  it("sends a collected due (0023) alongside the mode", async () => {
+    await completeBill("b1", "cash", 0, 240);
+    expect(rpc).toHaveBeenCalledWith("complete_bill", {
+      p_bill_id: "b1", p_payment_mode: "cash", p_collect_due: 240,
+    });
+  });
+
+  it("omits the collected due when zero or undefined", async () => {
+    await completeBill("b1", "cash", 0, 0);
+    expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1", p_payment_mode: "cash" });
+    rpc.mockClear();
+    await completeBill("b1", "cash", 0, undefined);
+    expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1", p_payment_mode: "cash" });
+  });
+
   it("asks for the customer id in the pending queue", async () => {
     // The screen needs it to read a balance; PendingBill did not carry one before.
     await listPending();

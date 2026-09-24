@@ -141,6 +141,11 @@ describe("describeError", () => {
     expect(describeError({ message: "bill cannot be assigned", code: "P0001" })?.key).toBe("dues.cannotAssign");
   });
 
+  it("maps a due collected on the wrong mode", () => {
+    expect(describeError({ message: "a due can only be collected in cash, upi or card", code: "22023" })?.key)
+      .toBe("dues.collectModeOnly");
+  });
+
   it("tells the biller what is actually possible when credit has no customer", async () => {
     // No one can add a customer to an issued bill, so the message must not say "add one".
     await i18n.changeLanguage("en");

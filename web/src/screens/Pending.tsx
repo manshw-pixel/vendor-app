@@ -8,6 +8,7 @@ import "../i18n";
 import { useSession } from "../components/SessionProvider";
 import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
 import { loadCustomerDue } from "../dues";
+import { parseAmount } from "../duesRules";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 import { PAYMENT_MODES, type PaymentMode } from "../payments";
@@ -48,6 +49,9 @@ export default function Pending() {
   // null hides the line: no customer, nothing owed, or a failed read -- this line is
   // advice, and a failed read must not block the sale.
   const [owes, setOwes] = useState<number | null>(null);
+  // "Also collect previous due" (0023): unticked by default, pre-filled with what they owe.
+  const [collect, setCollect] = useState(false);
+  const [collectInput, setCollectInput] = useState("");
   const [redeemInput, setRedeemInput] = useState("");
   // Never preselected: a forgotten tap must not quietly become cash in the day's count.
   const [mode, setMode] = useState<PaymentMode | null>(null);
@@ -75,6 +79,8 @@ export default function Pending() {
     setMode(null);
     setBalance(null);
     setOwes(null);
+    setCollect(false);
+    setCollectInput("");
     if (!bill.customer_id) return;
     const [points, due] = await Promise.all([customerBalance(bill.customer_id), loadCustomerDue(bill.customer_id)]);
     // customerBalance resolves to an array of one row, as PostgREST renders a
@@ -82,6 +88,7 @@ export default function Pending() {
     const row = points.data?.[0];
     setBalance(row && row.balance > 0 ? row.balance : null);
     setOwes(due.data !== null && due.data > 0 ? due.data : null);
+    if (due.data !== null && due.data > 0) setCollectInput(String(due.data));
   }
 
   function clampedPoints(bill: PendingBill): number {
@@ -94,7 +101,7 @@ export default function Pending() {
     return Math.min(requested, balance, Math.floor(bill.total));
   }
 
-  async function confirm(bill: PendingBill) {
+  async function confirm(bill: PendingBill, collectDue = 0) {
     if (!mode) return;
     const chosen = mode;
     const id = bill.id;
@@ -106,7 +113,9 @@ export default function Pending() {
     setPointsAwarded(null);
     setPointsReadFailed(false);
     setCompletionUnknown(false);
-    const { error } = await completeBill(id, chosen, points);
+    const { error } = collectDue > 0
+      ? await completeBill(id, chosen, points, collectDue)
+      : await completeBill(id, chosen, points);
     if (error) {
       // complete_bill may have committed and had its reply lost. Read back what the
       // server actually recorded rather than trusting the lost reply -- reporting a
@@ -228,6 +237,11 @@ export default function Pending() {
         if (!bill) return null;
         const points = clampedPoints(bill);
         const net = bill.total - points;
+        const collectParsed = parseAmount(collectInput);
+        const collecting = collect && owes !== null && mode !== null && mode !== "credit";
+        const collectOver = collecting && collectParsed.ok && collectParsed.value > (owes ?? 0);
+        const collectValid = collecting && collectParsed.ok && !collectOver;
+        const collectAmount = collectValid && collectParsed.ok ? collectParsed.value : 0;
         return (
           <div
             role="dialog"
@@ -300,13 +314,41 @@ export default function Pending() {
                 )}
               </fieldset>
 
+              {owes !== null && mode !== null && mode !== "credit" && (
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 min-h-[44px]">
+                    <input type="checkbox" data-testid="pending-collect" checked={collect}
+                           onChange={(e) => setCollect(e.target.checked)} />
+                    {t("pending.collectDue")}
+                  </label>
+                  {collect && (
+                    <>
+                      <label className="block text-sm text-slate-700">
+                        {t("pending.collectAmount")}
+                        <input data-testid="pending-collect-amount" inputMode="decimal" value={collectInput}
+                               onChange={(e) => setCollectInput(e.target.value)}
+                               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
+                      </label>
+                      {collectInput.trim() !== "" && !collectParsed.ok && (
+                        <p className="text-xs text-red-700">{t("dues.badAmount")}</p>
+                      )}
+                      {collectOver && <p className="text-xs text-red-700">{t("dues.overBalanceHint")}</p>}
+                    </>
+                  )}
+                </div>
+              )}
+
               <button
                 data-testid={`pending-confirm-${bill.id}`}
-                onClick={() => void confirm(bill)}
-                disabled={mode === null}
+                onClick={() => void confirm(bill, collectAmount)}
+                disabled={mode === null || (collecting && !collectValid)}
                 className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
               >
-                {mode === "credit" ? t("pending.confirmCredit") : t("pending.confirmAccept")}
+                {mode === "credit"
+                  ? t("pending.confirmCredit")
+                  : collectAmount > 0
+                    ? t("pending.collectTotal", { amount: rupees(net + collectAmount) })
+                    : t("pending.confirmAccept")}
               </button>
               <button
                 onClick={() => setConfirmingId(null)}

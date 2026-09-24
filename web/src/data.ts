@@ -136,17 +136,23 @@ export async function listPending() {
 }
 
 /**
- * Completes a sale with how it was paid, optionally spending some of the customer's points.
+ * Completes a sale with how it was paid, optionally spending some of the customer's points
+ * and/or collecting an old due in the same transaction.
  *
  * p_payment_mode is required by the database (0021): a call without it is refused, so a
  * stale tab cannot complete a sale with no payment recorded. p_redeem_points is omitted
  * rather than sent as 0 when nothing is redeemed. Parameter names must match
  * 0021_payments_and_day_close.sql exactly -- PostgREST resolves the function by argument
- * name and a mismatch reads as "function not found".
+ * name and a mismatch reads as "function not found". p_collect_due (0023) is likewise
+ * omitted rather than sent as 0, so a call with nothing to collect is byte-identical to
+ * before it existed.
  */
-export async function completeBill(billId: string, mode: PaymentMode, redeemPoints?: number) {
+export async function completeBill(
+  billId: string, mode: PaymentMode, redeemPoints?: number, collectDue?: number,
+) {
   const args: Record<string, unknown> = { p_bill_id: billId, p_payment_mode: mode };
   if (redeemPoints && redeemPoints > 0) args.p_redeem_points = redeemPoints;
+  if (collectDue && collectDue > 0) args.p_collect_due = collectDue;
   return supabase.rpc("complete_bill", args);
 }
 
