@@ -439,6 +439,10 @@ end $$;
 -- Without it, the day this ships every shop would be told thirty past days are unclosed.
 alter table vendors
   add column day_close_from date not null default ((now() at time zone 'Asia/Kolkata')::date);
+-- Existing shops start the day AFTER deploy. Deploy day's sales before this migration went
+-- through without a mode and without a count, so there is nothing honest to close; without
+-- this the banner would ask them to close it the next morning. New shops keep the default.
+update vendors set day_close_from = day_close_from + 1;
 
 -- One row for one day: per-mode totals and counts of done bills, the cash the drawer should
 -- hold, and the tokens still pending (which carry over). Invoker rights: RLS scopes it.

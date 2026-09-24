@@ -1,4 +1,6 @@
 import pg from "pg";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test, assert, assertDenied, assertEqual, assertInvisible } from "./framework.mjs";
 import { sql, DB_URL } from "./fixtures.mjs";
 import { seedTwoVendors } from "./seed.mjs";
@@ -270,6 +272,51 @@ test("unclosed_days ignores days before day_close_from and days with only voided
   await sql(`update bills set status = 'voided', voided_at = completed_at, void_reason = 'x' where id = $1`, [before]);
   const { data: voidedOnly } = await w.a.clients.admin.rpc("unclosed_days");
   assertEqual(voidedOnly, [], "a day with only voided bills needs no close");
+});
+
+test("unclosed_days starts exactly at day_close_from: the day before is never listed", async () => {
+  const w = await seedTwoVendors();
+  await setCloseFrom(w, -2);
+  const dayBefore = await doneBill(w.a, "cash");
+  await backdate(dayBefore, 3);                // day_close_from - 1
+  const firstDay = await doneBill(w.a, "cash");
+  await backdate(firstDay, 2);                 // day_close_from itself
+  const { data, error } = await w.a.clients.admin.rpc("unclosed_days");
+  assert(!error, error?.message);
+  assertEqual(data.map((r) => ymdOf(r.business_date)), [await kolkataDay(-2)],
+    "only day_close_from is listed, not the day before it");
+});
+
+// The harness builds from an empty schema, so no shop exists when 0021 runs and the
+// deploy-time backfill never touches a row. This replays 0021's own day_close_from text,
+// read from the migration file, against a table that has a shop in it -- inside a
+// transaction that is rolled back, so the shared schema is left exactly as it was.
+test("0021 starts an existing shop's day_close_from the day after deploy; a new shop's is its creation day", async () => {
+  const migration = readFileSync(
+    fileURLToPath(new URL("../supabase/migrations/0021_payments_and_day_close.sql", import.meta.url)), "utf8");
+  const block = migration.match(
+    /alter table vendors\s+add column day_close_from[\s\S]*?;(?:\s*--[^\n]*)*\s*update vendors\s+set day_close_from[^;]*;/i);
+  assert(block, "0021 must follow ADD COLUMN day_close_from with an update of existing shops");
+
+  const c = new pg.Client({ connectionString: DB_URL });
+  await c.connect();
+  try {
+    await c.query("begin");
+    const { rows: [old] } = await c.query(`insert into vendors (name) values ('Deployed-on shop') returning id`);
+    await c.query(`alter table vendors drop column day_close_from`);
+    await c.query(block[0]);
+    const { rows: [r] } = await c.query(
+      `select day_close_from::text got, ((now() at time zone 'Asia/Kolkata')::date + 1)::text want
+         from vendors where id = $1`, [old.id]);
+    assertEqual(r.got, r.want, "an existing shop is first asked to close the day after deploy");
+    const { rows: [fresh] } = await c.query(
+      `insert into vendors (name) values ('New shop')
+       returning day_close_from::text got, ((now() at time zone 'Asia/Kolkata')::date)::text want`);
+    assertEqual(fresh.got, fresh.want, "a new shop keeps its creation day");
+  } finally {
+    await c.query("rollback").catch(() => {});
+    await c.end();
+  }
 });
 
 test("clearing the shop's data removes its payments and closes", async () => {
