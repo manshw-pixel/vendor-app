@@ -233,6 +233,8 @@
     "paid": "भुगतान",
     "paidBy": "{{mode}} से भुगतान",
     "onCredit": "उधार",
+    "duePaid": "पिछला बकाया चुकाया",
+    "totalCollected": "कुल प्राप्त",
     "pointsEarned": "अंक मिले",
     "balance": "शेष अंक",
     "expires": "{{date}} तक ({{days}} दिन)",

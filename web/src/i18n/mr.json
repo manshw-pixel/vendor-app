@@ -233,6 +233,8 @@
     "paid": "दिलेले",
     "paidBy": "{{mode}} ने भरले",
     "onCredit": "उधारी",
+    "duePaid": "मागील थकबाकी भरली",
+    "totalCollected": "एकूण मिळाले",
     "pointsEarned": "मिळालेले गुण",
     "balance": "शिल्लक गुण",
     "expires": "{{date}} पर्यंत ({{days}} दिवस)",

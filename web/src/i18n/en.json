@@ -233,6 +233,8 @@
     "paid": "Paid",
     "paidBy": "Paid by {{mode}}",
     "onCredit": "On credit",
+    "duePaid": "Previous due paid",
+    "totalCollected": "Total collected",
     "pointsEarned": "Points earned",
     "balance": "Balance",
     "expires": "Expires {{date}} ({{days}} days)",

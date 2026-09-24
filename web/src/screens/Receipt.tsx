@@ -161,6 +161,18 @@ export default function Receipt() {
                 {t("receipt.paidBy", { mode: t(`pay.${data.payment_mode}`) })}
               </div>
             )}
+            {data.due_collected > 0 && (
+              <>
+                <div data-testid="receipt-due-paid" className="flex justify-between">
+                  <span>{t("receipt.duePaid")}</span>
+                  <span>{amt(data.due_collected)}</span>
+                </div>
+                <div data-testid="receipt-total-collected" className="flex justify-between font-bold">
+                  <span>{t("receipt.totalCollected")}</span>
+                  <span>{amt(data.net + data.due_collected)}</span>
+                </div>
+              </>
+            )}
           </>
         )}
 

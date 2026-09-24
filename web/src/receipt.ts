@@ -44,6 +44,9 @@ export type Receipt = {
   voided: { at: string; reason: string } | null;
   /** How it was paid; null for a bill completed before payment modes existed (0021). */
   payment_mode: PaymentMode | null;
+  /** An old due collected together with this bill (0023), un-reversed; 0 when none. It is a
+   *  repayment, not part of the sale, so it is printed after "Paid", never in the total. */
+  due_collected: number;
 };
 
 /**
@@ -120,6 +123,14 @@ export async function loadReceipt(billId: string): Promise<
 
   if (ledgerError) return { data: null, error: ledgerError };
 
+  const { data: dueRows, error: dueError } = await supabase
+    .from("dues_entries")
+    .select("amount")
+    .eq("bill_id", billId)
+    .is("reversed_at", null);
+
+  if (dueError) return { data: null, error: dueError };
+
   let balance: Receipt["balance"] = null;
   if (b.customer_id) {
     // Parameter name must match 0003_functions.sql exactly; PostgREST resolves the
@@ -177,6 +188,7 @@ export async function loadReceipt(billId: string): Promise<
         ? { at: b.voided_at, reason: b.void_reason }
         : null,
     payment_mode: pay?.mode ?? null,
+    due_collected: ((dueRows ?? []) as { amount: string | number }[]).reduce((s, r) => s + num(r.amount), 0),
   };
 
   return { data, error: null };
