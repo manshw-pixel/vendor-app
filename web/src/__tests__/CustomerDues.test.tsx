@@ -85,6 +85,31 @@ describe("Customer dues", () => {
     expect(screen.getByText(/more than they owe/)).toBeTruthy();
   });
 
+  it("does not let a second tap re-submit while the post-write reload is still pending", async () => {
+    let resolveReload!: (v: { data: { balance: number; entries: DuesEntry[] }; error: null }) => void;
+    // Call 1 (the initial mount's load) uses the default from beforeEach; call 2 (the post-write
+    // reload triggered by Confirm) is the one we hold open here.
+    loadCustomerDues.mockImplementationOnce(() =>
+      Promise.resolve({ data: { balance: 160, entries: ENTRIES }, error: null }),
+    ).mockImplementationOnce(() => new Promise((resolve) => { resolveReload = resolve; }));
+    renderAs("biller");
+
+    fireEvent.click(await screen.findByTestId("cd-receive"));
+    fireEvent.change(screen.getByTestId("cd-amount"), { target: { value: "50" } });
+    fireEvent.click(screen.getByTestId("cd-mode-cash"));
+    fireEvent.click(screen.getByTestId("cd-receive-confirm"));
+
+    // The reload (2nd loadCustomerDues call) is still pending here: the panel/Confirm must already be gone,
+    // so a second tap on the same spot cannot fire a second recordRepayment before the reload lands.
+    await waitFor(() => expect(loadCustomerDues).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("cd-receive-confirm")).toBeNull();
+    expect(recordRepayment).toHaveBeenCalledTimes(1);
+
+    resolveReload({ data: { balance: 110, entries: ENTRIES }, error: null });
+    await waitFor(() => expect(screen.getByTestId("cd-balance").textContent).toMatch(/110\.00/));
+    expect(recordRepayment).toHaveBeenCalledTimes(1);
+  });
+
   it("hides Received payment when nothing is owed", async () => {
     loadCustomerDues.mockResolvedValue({ data: { balance: 0, entries: [] }, error: null });
     renderAs("biller");

@@ -53,14 +53,22 @@ export default function CustomerDues() {
     setProblem(null);
   }
 
-  // A write's refusal is set AFTER the reload, because load() replaces `problem` with its own result.
+  // `busy` stays true through the reload (in a finally, so a thrown write can't strand the page busy),
+  // otherwise the stale balance/panel let a second tap re-submit the same write before the reload lands.
+  // On success the panel/reverse-prompt is closed BEFORE the reload, so a slow reload can't leave a
+  // re-enabled Confirm sitting over stale values. A refusal is set AFTER the reload, because load()
+  // replaces `problem` with its own result, and the panel stays open with the typed values.
   async function run(write: () => Promise<{ error: { message?: string; code?: string } | null }>) {
     setBusy(true);
-    const { error } = await write();
-    setBusy(false);
-    await load();
-    if (error) { setProblem(describeError(error)); return false; }
-    return true;
+    try {
+      const { error } = await write();
+      if (!error) { setPanel(null); setReversing(null); setReason(""); }
+      await load();
+      if (error) { setProblem(describeError(error)); return false; }
+      return true;
+    } finally {
+      setBusy(false);
+    }
   }
 
   const parsed = parseAmount(amount);
@@ -70,14 +78,14 @@ export default function CustomerDues() {
 
   async function receive() {
     if (!parsed.ok || !mode) return;
-    if (await run(() => recordRepayment(customerId, parsed.value, mode, note))) setPanel(null);
+    await run(() => recordRepayment(customerId, parsed.value, mode, note));
   }
   async function opening() {
     if (!parsed.ok) return;
-    if (await run(() => recordOpeningBalance(customerId, parsed.value, note))) setPanel(null);
+    await run(() => recordOpeningBalance(customerId, parsed.value, note));
   }
   async function reverse(id: string) {
-    if (await run(() => reverseDuesEntry(id, reason))) { setReversing(null); setReason(""); }
+    await run(() => reverseDuesEntry(id, reason));
   }
 
   const canReverse = (e: DuesEntry) =>
