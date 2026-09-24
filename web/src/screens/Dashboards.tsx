@@ -161,6 +161,8 @@ export default function Dashboards() {
               );
             })}
           </dl>
+          {/* Why the mode lines no longer add up to "Money collected" (0023). */}
+          <p data-testid="dash-split-note" className="mt-1 text-xs text-slate-400">{t("dash.splitNote")}</p>
         </Card>
         <Card title={t("dash.billCount")}>
           <p data-testid="dash-bill-count" className="text-2xl font-semibold text-slate-800">

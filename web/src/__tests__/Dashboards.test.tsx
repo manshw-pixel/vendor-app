@@ -296,6 +296,8 @@ describe("the dashboard", () => {
     expect(screen.getByTestId("dash-split-card").textContent).toMatch(/0\.00/);
     expect(screen.getByTestId("dash-split-credit").textContent).toMatch(/40\.00/);
     expect(screen.queryByTestId("dash-split-unrecorded")).toBeNull();
+    expect(screen.getByTestId("dash-split-note").textContent)
+      .toBe("Includes dues received; credit shows what is still unpaid");
   });
 
   it("shows Not recorded only when there are such bills", async () => {
