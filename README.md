@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 302 cases, 0 failures
+## ✅ Verified: 311 cases, 0 failures
 
-`npm test` runs **302 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all twenty-two migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **311 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all twenty-three migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -115,6 +115,15 @@ Covered:
   only and awards no points. `dues_list` orders by balance with a FIFO oldest-unpaid date.
   Cash repayments count in expected cash and `day_summary`; UPI, card, openings and
   reversals do not. Nothing leaks across vendors. Clearing a shop's data removes its entries.
+
+- **Collecting dues.** `credit_open()` allocates each customer's repayments over their
+  charges FIFO — opening balances first, then credit bills by completion — so a day's
+  uncollected credit falls when the customer pays, even after that day is closed, while the
+  stored close never moves. `day_summary` and `payment_split_between` keep their existing
+  figures and add uncollected credit and dues by mode. `complete_bill`'s `p_collect_due`
+  records an old due as a repayment linked to the bill in the same transaction: a retry
+  records it once, a refusal (over the balance, Credit mode, no customer, sub-paisa) writes
+  nothing, and a call without it behaves exactly as before.
 
 ### What the local suite does not cover
 
