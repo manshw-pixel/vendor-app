@@ -5,6 +5,7 @@
   "close": {
     "dayClosed": "Today is closed. Ask an admin to reopen it.",
     "alreadyClosed": "This day is already closed. Reload to see it.",
+    "cashChanged": "Sales came in since this screen loaded. Check the new expected cash.",
     "title": "Close the day", "statusOpen": "Open", "statusClosed": "Closed at {{time}} by {{name}}",
     "expected": "Cash expected in the drawer", "counted": "Cash counted", "difference": "Difference",
     "note": "Note", "noteRequired": "The cash does not match. Add a note saying why.",

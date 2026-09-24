@@ -162,4 +162,39 @@ describe("Close day", () => {
     // findAll: the raw detail ("day already closed") is rendered beside the message too.
     expect((await screen.findAllByText(/already closed/i)).length).toBeGreaterThan(0);
   });
+  it("after a refused close, shows why and reloads the summary, keeping what was typed", async () => {
+    // close_day recomputes expected cash on the server. A sale since this screen loaded
+    // makes the count differ; with no note the server refuses. The screen must say so and
+    // show the fresh expected figure, or every retry fails the same way.
+    closeDay.mockResolvedValue({
+      data: null, error: { message: "a note is required when the cash does not match", code: "22023" },
+    });
+    renderAs("biller");
+    fireEvent.change(await screen.findByTestId("close-counted"), { target: { value: "1200" } });
+    loadDaySummary.mockClear();
+    loadDaySummary.mockResolvedValue({ data: { ...SUMMARY, expected_cash: 1350 }, error: null });
+    fireEvent.click(screen.getByTestId("close-submit"));
+    fireEvent.click(screen.getByTestId("close-confirm"));
+
+    expect(await screen.findByText(i18n.t("close.cashChanged"))).toBeTruthy();
+    expect(loadDaySummary).toHaveBeenCalledWith(undefined);
+    await waitFor(() => expect(screen.getByTestId("close-expected").textContent).toMatch(/1,350\.00/));
+    expect(screen.getByTestId("close-counted")).toHaveProperty("value", "1200");
+    expect(screen.getByTestId("close-difference").textContent).toMatch(/150\.00/);
+    // The reload must not wipe the refusal it was triggered by.
+    expect(screen.getByText(i18n.t("close.cashChanged"))).toBeTruthy();
+  });
+
+  it("keeps the typed note when a close is refused", async () => {
+    closeDay.mockResolvedValue({ data: null, error: { message: "day already closed", code: "P0001" } });
+    renderAs("biller");
+    fireEvent.change(await screen.findByTestId("close-counted"), { target: { value: "1190" } });
+    fireEvent.change(screen.getByTestId("close-note"), { target: { value: "change given" } });
+    loadDaySummary.mockClear();
+    fireEvent.click(screen.getByTestId("close-submit"));
+    fireEvent.click(screen.getByTestId("close-confirm"));
+    await waitFor(() => expect(loadDaySummary).toHaveBeenCalledWith(undefined));
+    expect(screen.getByTestId("close-note")).toHaveProperty("value", "change given");
+    expect(screen.getByTestId("close-counted")).toHaveProperty("value", "1190");
+  });
 });

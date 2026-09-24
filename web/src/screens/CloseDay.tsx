@@ -86,7 +86,15 @@ export default function CloseDay() {
     setBusy(true);
     const { error } = await closeDay(summary.business_date, parsed.value, note);
     setBusy(false);
-    if (error) { setProblem(describeError(error)); return; }
+    if (error) {
+      // Reload first so the user sees the server's current expected cash (and whether the
+      // day got closed elsewhere) -- otherwise every retry is checked against the same stale
+      // figure and fails the same way. The typed count and note are kept. The refusal is
+      // set after the reload because load() replaces `problem` with its own result.
+      await load(currentDate.current);
+      setProblem(describeError(error));
+      return;
+    }
     notifyDayClosesChanged();
     setCounted("");
     setNote("");

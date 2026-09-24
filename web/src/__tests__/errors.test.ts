@@ -119,6 +119,9 @@ describe("describeError", () => {
   it("names a closed day", () => {
     expect(describeError({ message: "day is closed", code: "P0001" })?.key).toBe("close.dayClosed");
     expect(describeError({ message: "day already closed", code: "P0001" })?.key).toBe("close.alreadyClosed");
+    expect(
+      describeError({ message: "a note is required when the cash does not match", code: "22023" })?.key,
+    ).toBe("close.cashChanged");
   });
 
   it("maps the whole-number refusals for both stock and quantity", () => {
