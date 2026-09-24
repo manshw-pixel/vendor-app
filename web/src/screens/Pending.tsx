@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 // i18next initialises as a side effect of this import, exactly as Bill.tsx does. The
@@ -55,6 +55,9 @@ export default function Pending() {
   const [redeemInput, setRedeemInput] = useState("");
   // Never preselected: a forgotten tap must not quietly become cash in the day's count.
   const [mode, setMode] = useState<PaymentMode | null>(null);
+  // The bill whose confirm is open, for the customer reads in openConfirm: a slow read for
+  // one bill must never land on another bill's dialog (the Dashboards `wanted` idiom).
+  const opening = useRef<string | null>(null);
 
   async function refresh() {
     const { data, error } = await listPending();
@@ -74,6 +77,7 @@ export default function Pending() {
   // redeem input can be offered. A walk-in bill (no customer_id) skips the read entirely
   // -- there is no loyalty account to spend from, so there is nothing to look up.
   async function openConfirm(bill: PendingBill) {
+    opening.current = bill.id;
     setConfirmingId(bill.id);
     setRedeemInput("");
     setMode(null);
@@ -83,6 +87,8 @@ export default function Pending() {
     setCollectInput("");
     if (!bill.customer_id) return;
     const [points, due] = await Promise.all([customerBalance(bill.customer_id), loadCustomerDue(bill.customer_id)]);
+    // Another bill was opened, or this one cancelled or confirmed, while the reads ran.
+    if (opening.current !== bill.id) return;
     // customerBalance resolves to an array of one row, as PostgREST renders a
     // returns-table function -- not a single object.
     const row = points.data?.[0];
@@ -106,6 +112,7 @@ export default function Pending() {
     const chosen = mode;
     const id = bill.id;
     const points = clampedPoints(bill);
+    opening.current = null;
     setConfirmingId(null);
     setCompletingId(id);
     setCompleted(false);
@@ -113,7 +120,8 @@ export default function Pending() {
     setPointsAwarded(null);
     setPointsReadFailed(false);
     setCompletionUnknown(false);
-    const { error } = collectDue > 0
+    // Only a bill with a customer has a due to collect; the server refuses one anyway.
+    const { error } = collectDue > 0 && bill.customer_id
       ? await completeBill(id, chosen, points, collectDue)
       : await completeBill(id, chosen, points);
     if (error) {
@@ -283,8 +291,11 @@ export default function Pending() {
                   >
                     {t("pending.redeemAll")}
                   </button>
+                  {/* While a due is collected the button carries the one "Collect" figure, so
+                      this line names the bill instead. */}
                   <p data-testid="redeem-summary" className="text-sm text-slate-700">
-                    {t("pending.redeemSummary", { net: rupees(net), used: rupees(points) })}
+                    {t(collectAmount > 0 ? "pending.redeemSummaryBill" : "pending.redeemSummary",
+                      { net: rupees(net), used: rupees(points) })}
                   </p>
                 </div>
               )}
@@ -329,11 +340,16 @@ export default function Pending() {
                                onChange={(e) => setCollectInput(e.target.value)}
                                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
                       </label>
-                      {collectInput.trim() !== "" && !collectParsed.ok && (
+                      {!collectParsed.ok && (
                         <p className="text-xs text-red-700">{t("dues.badAmount")}</p>
                       )}
                       {collectOver && <p className="text-xs text-red-700">{t("dues.overBalanceHint")}</p>}
                     </>
+                  )}
+                  {collectAmount > 0 && (
+                    <p data-testid="pending-collect-breakdown" className="text-sm text-slate-700">
+                      {t("pending.collectBreakdown", { net: rupees(net), due: rupees(collectAmount) })}
+                    </p>
                   )}
                 </div>
               )}
@@ -351,7 +367,7 @@ export default function Pending() {
                     : t("pending.confirmAccept")}
               </button>
               <button
-                onClick={() => setConfirmingId(null)}
+                onClick={() => { opening.current = null; setConfirmingId(null); }}
                 className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300"
               >
                 {t("bill.cancel")}
