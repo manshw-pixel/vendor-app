@@ -315,6 +315,8 @@ describe("the dashboard", () => {
   it("reads outstanding dues once, not on every range change", async () => {
     render(<Dashboards />);
     await screen.findByTestId("dash-dues");
-    await waitFor(() => expect(loadDuesList).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId("range-today"));
+    await waitFor(() => expect(collectedBetween).toHaveBeenCalledTimes(2));
+    expect(loadDuesList).toHaveBeenCalledTimes(1);
   });
 });
