@@ -151,6 +151,19 @@ describe("Customer dues", () => {
     await waitFor(() => expect(recordOpeningBalance).toHaveBeenCalledWith("c1", 500, "old khata"));
   });
 
+  it("closes the reverse panel on Cancel, clearing the reason", async () => {
+    renderAs("biller");
+    fireEvent.click(await screen.findByTestId("cd-reverse-r1"));
+    fireEvent.change(screen.getByTestId("cd-reverse-reason"), { target: { value: "oops" } });
+    fireEvent.click(screen.getByTestId("cd-reverse-cancel"));
+    expect(screen.queryByTestId("cd-reverse-reason")).toBeNull();
+    expect(screen.getByTestId("cd-reverse-r1")).toBeTruthy();
+    expect(reverseDuesEntry).not.toHaveBeenCalled();
+    // Reopening starts blank: the cancelled reason is gone.
+    fireEvent.click(screen.getByTestId("cd-reverse-r1"));
+    expect(screen.getByTestId("cd-reverse-reason")).toHaveProperty("value", "");
+  });
+
   it("offers Reverse on open repayments; not on a closed day's, a reversed one, a bill, or (for a biller) an opening", async () => {
     renderAs("biller");
     await screen.findByTestId("cd-balance");

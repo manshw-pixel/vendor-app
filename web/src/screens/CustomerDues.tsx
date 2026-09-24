@@ -247,6 +247,10 @@ export default function CustomerDues() {
                         className="rounded-lg px-4 py-2 min-h-[44px] bg-amber-600 text-white font-semibold disabled:opacity-50">
                   {t("dues.confirmReverse")}
                 </button>
+                <button data-testid="cd-reverse-cancel" onClick={() => { setReversing(null); setReason(""); }}
+                        className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300">
+                  {t("dues.cancel")}
+                </button>
               </div>
             )}
           </li>
