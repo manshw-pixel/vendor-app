@@ -212,3 +212,73 @@ test("a repayment waiting on a close in progress is refused once the close commi
     await payer.end();
   }
 });
+
+// A done credit bill with no customer, as 0021 allowed: completed while the rule did not
+// exist. Built by completing it with a customer, then removing the customer as a
+// superuser.
+async function orphanCredit(v, opts = {}) {
+  const id = await doneBill(v, "credit", opts);
+  await sql(`update bills set customer_id = null where id = $1`, [id]);
+  return id;
+}
+
+test("credit with no customer is refused and the bill stays billed; cash without one is fine", async () => {
+  const w = await seedTwoVendors();
+  const id = await billedBill(w.a, { customerId: null });
+  const { error } = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: id, p_payment_mode: "credit" });
+  assert(error && /credit needs a customer/.test(error.message), `got ${error?.message ?? "success"}`);
+  const { rows: [b] } = await sql(`select status from bills where id = $1`, [id]);
+  assertEqual(b.status, "billed", "still pending");
+  const { error: cash } = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: id, p_payment_mode: "cash" });
+  assert(!cash, cash?.message);
+});
+
+test("a retry of an already-done credit bill still succeeds", async () => {
+  const w = await seedTwoVendors();
+  const id = await orphanCredit(w.a);                  // done, credit, and now customer-less
+  const { error } = await w.a.clients.biller.rpc("complete_bill", { p_bill_id: id, p_payment_mode: "credit" });
+  assert(!error, `retry refused: ${error?.message}`);
+});
+
+test("unassigned_credit lists done credit bills with no customer, newest first", async () => {
+  const w = await seedTwoVendors();
+  const older = await orphanCredit(w.a, { qty: 1 });   // 40
+  await backdate(older, 1);
+  const newer = await orphanCredit(w.a, { qty: 2 });   // 80
+  await doneBill(w.a, "credit");                       // has a customer: not listed
+  const cashOrphan = await doneBill(w.a, "cash");
+  await sql(`update bills set customer_id = null where id = $1`, [cashOrphan]);   // not credit
+  const { data, error } = await w.a.clients.admin.rpc("unassigned_credit");
+  assert(!error, error?.message);
+  assertEqual(data.map((r) => [r.bill_id, Number(r.amount)]), [[newer, 80], [older, 40]], "listed");
+  const { data: b } = await w.b.clients.admin.rpc("unassigned_credit");
+  assertEqual(b, [], "B sees none of A's");
+});
+
+test("assign_credit_customer: admin only, onto a customer-less done credit bill, no points after the fact", async () => {
+  const w = await seedTwoVendors();
+  const id = await orphanCredit(w.a);                  // 200
+  const assign = (client, bill, customer) =>
+    client.rpc("assign_credit_customer", { p_bill: bill, p_customer: customer });
+
+  assertDenied((await assign(w.a.clients.biller, id, w.a.customerId)).error, "biller assigned");
+  assertDenied((await assign(w.a.clients.admin, id, w.b.customerId)).error, "assigned another shop's customer");
+  assertDenied((await assign(w.b.clients.admin, id, w.b.customerId)).error, "B assigned A's bill");
+
+  const pointsBefore = (await sql(`select count(*)::int n from points_ledger where bill_id = $1`, [id])).rows[0].n;
+  const { error } = await assign(w.a.clients.admin, id, w.a.customerId);
+  assert(!error, error?.message);
+  assertEqual(await due(w.a.customerId), 200, "now owed by the customer");
+  const pointsAfter = (await sql(`select count(*)::int n from points_ledger where bill_id = $1`, [id])).rows[0].n;
+  assertEqual(pointsAfter, pointsBefore, "no points awarded retroactively");
+
+  const twice = await assign(w.a.clients.admin, id, w.a.customerId);
+  assert(twice.error && /bill cannot be assigned/.test(twice.error.message), "re-assigned a bill that has a customer");
+  const cash = await doneBill(w.a, "cash");
+  await sql(`update bills set customer_id = null where id = $1`, [cash]);
+  const notCredit = await assign(w.a.clients.admin, cash, w.a.customerId);
+  assert(notCredit.error && /bill cannot be assigned/.test(notCredit.error.message), "assigned a cash bill");
+  const pending = await billedBill(w.a, { customerId: null });
+  const notDone = await assign(w.a.clients.admin, pending, w.a.customerId);
+  assert(notDone.error && /bill cannot be assigned/.test(notDone.error.message), "assigned a pending bill");
+});
