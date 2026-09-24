@@ -14,6 +14,7 @@ const SUMMARY: DaySummary = {
   expected_cash: 1200,
   pending_tokens: 2,
   dues: { cash: { total: 0, count: 0 }, upi: { total: 0, count: 0 }, card: { total: 0, count: 0 } },
+  creditOpen: { total: 150, count: 1 },
 };
 
 const loadDaySummary = vi.fn();
@@ -199,30 +200,33 @@ describe("Close day", () => {
     expect(screen.getByTestId("close-counted")).toHaveProperty("value", "1190");
   });
 
-  it("breaks expected cash into cash sales and cash dues, and lists dues by mode", async () => {
+  it("merges dues into the mode lines, with a note, and keeps the cash breakdown", async () => {
     loadDaySummary.mockResolvedValue({ data: {
       ...SUMMARY, expected_cash: 1500,
       dues: { cash: { total: 300, count: 2 }, upi: { total: 100, count: 1 }, card: { total: 0, count: 0 } },
     }, error: null });
     renderAs("biller");
-    expect((await screen.findByTestId("close-expected")).textContent).toMatch(/1,500\.00/);
+    const cash = (await screen.findByTestId("close-split-cash")).textContent ?? "";
+    expect(cash).toMatch(/1,500\.00/);                       // 1200 sales + 300 dues
+    expect(cash).toMatch(/6 bills, 2 payments/);
+    expect(screen.getByTestId("close-incl-cash").textContent).toMatch(/incl\..*300\.00.*dues/);
+    expect(screen.getByTestId("close-split-upi").textContent).toMatch(/900\.00/);
+    expect(screen.queryByTestId("close-incl-card")).toBeNull();
+    expect(screen.queryByTestId("close-dues-cash")).toBeNull();
     const breakdown = screen.getByTestId("close-expected-breakdown").textContent ?? "";
     expect(breakdown).toMatch(/Cash sales.*1,200\.00/);
     expect(breakdown).toMatch(/Dues received in cash.*300\.00/);
-    expect(screen.getByTestId("close-dues-upi").textContent).toMatch(/100\.00/);
-    expect(screen.queryByTestId("close-dues-card")).toBeNull();
   });
 
-  it("counts repayments as payments, not bills", async () => {
+  it("shows credit still uncollected, not credit given", async () => {
     loadDaySummary.mockResolvedValue({ data: {
-      ...SUMMARY, expected_cash: 1500,
-      dues: { cash: { total: 300, count: 2 }, upi: { total: 100, count: 1 }, card: { total: 0, count: 0 } },
+      ...SUMMARY, split: { ...SUMMARY.split, credit: { total: 500, count: 3 } }, creditOpen: { total: 0, count: 0 },
     }, error: null });
     renderAs("biller");
-    const cash = (await screen.findByTestId("close-dues-cash")).textContent ?? "";
-    expect(cash).toMatch(/2 payments/);
-    expect(cash).not.toMatch(/bills/);
-    expect(screen.getByTestId("close-dues-upi").textContent).toMatch(/1 payments/);
+    const credit = (await screen.findByTestId("close-split-credit")).textContent ?? "";
+    expect(credit).toMatch(/0\.00/);
+    expect(credit).not.toMatch(/500\.00/);
+    expect(credit).toMatch(/not yet collected/i);
   });
 
   it("shows no breakdown on a day with no dues received", async () => {

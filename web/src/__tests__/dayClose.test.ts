@@ -38,6 +38,12 @@ describe("loadDaySummary", () => {
     const { data } = await loadDaySummary();
     expect(data?.dues).toEqual({ cash: { total: 300, count: 2 }, upi: { total: 5.5, count: 1 }, card: { total: 0, count: 0 } });
   });
+  it("coerces the uncollected credit", async () => {
+    rpc.mockResolvedValue({ data: [{ business_date: "2026-09-24", credit: "200", credit_count: "1",
+      credit_open: "150.00", credit_open_count: "1" }], error: null });
+    const { data } = await loadDaySummary();
+    expect(data?.creditOpen).toEqual({ total: 150, count: 1 });
+  });
 });
 
 describe("writes", () => {
