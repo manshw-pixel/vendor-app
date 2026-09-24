@@ -12,9 +12,9 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 300 cases, 0 failures
+## ✅ Verified: 302 cases, 0 failures
 
-`npm test` runs **300 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+`npm test` runs **302 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
 with all twenty-two migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
