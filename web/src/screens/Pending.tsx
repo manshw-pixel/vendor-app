@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
 import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
+import { loadCustomerDue } from "../dues";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 import { PAYMENT_MODES, type PaymentMode } from "../payments";
@@ -43,6 +44,10 @@ export default function Pending() {
   // while there is nothing to spend from (no customer, a failed read, or a zero
   // balance) -- null is also the signal that hides the redeem input entirely.
   const [balance, setBalance] = useState<number | null>(null);
+  // What the customer already owes on credit (0022), shown before more credit is given.
+  // null hides the line: no customer, nothing owed, or a failed read -- this line is
+  // advice, and a failed read must not block the sale.
+  const [owes, setOwes] = useState<number | null>(null);
   const [redeemInput, setRedeemInput] = useState("");
   // Never preselected: a forgotten tap must not quietly become cash in the day's count.
   const [mode, setMode] = useState<PaymentMode | null>(null);
@@ -69,12 +74,14 @@ export default function Pending() {
     setRedeemInput("");
     setMode(null);
     setBalance(null);
+    setOwes(null);
     if (!bill.customer_id) return;
-    const { data } = await customerBalance(bill.customer_id);
+    const [points, due] = await Promise.all([customerBalance(bill.customer_id), loadCustomerDue(bill.customer_id)]);
     // customerBalance resolves to an array of one row, as PostgREST renders a
     // returns-table function -- not a single object.
-    const row = data?.[0];
+    const row = points.data?.[0];
     setBalance(row && row.balance > 0 ? row.balance : null);
+    setOwes(due.data !== null && due.data > 0 ? due.data : null);
   }
 
   function clampedPoints(bill: PendingBill): number {
@@ -234,6 +241,12 @@ export default function Pending() {
               </h2>
               <p className="text-slate-700">{t("pending.confirmBody")}</p>
 
+              {owes !== null && (
+                <p data-testid="pending-owes" className="text-sm text-amber-700">
+                  {t("dues.alreadyOwes", { amount: rupees(owes) })}
+                </p>
+              )}
+
               {/* Only offered when there is a loyalty account with something in it -- a
                   walk-in bill (no customer_id) or a zero balance has nothing to spend. */}
               {balance !== null && (
@@ -271,8 +284,9 @@ export default function Pending() {
                       type="button"
                       data-testid={`pay-mode-${m}`}
                       aria-pressed={mode === m}
+                      disabled={m === "credit" && !bill.customer_id}
                       onClick={() => setMode(m)}
-                      className={`rounded-lg px-3 py-3 min-h-[44px] border font-semibold ${
+                      className={`rounded-lg px-3 py-3 min-h-[44px] border font-semibold disabled:opacity-50 ${
                         mode === m
                           ? "bg-emerald-600 text-white border-emerald-600"
                           : "bg-white text-slate-700 border-slate-300"}`}
@@ -281,6 +295,9 @@ export default function Pending() {
                     </button>
                   ))}
                 </div>
+                {!bill.customer_id && (
+                  <p className="text-xs text-slate-500">{t("dues.creditHint")}</p>
+                )}
               </fieldset>
 
               <button

@@ -11,3 +11,7 @@ export const PAYMENT_MODES: readonly PaymentMode[] = ["cash", "upi", "card", "cr
 
 /** A reporting label only: a done bill with no payment row (completed before 0021). */
 export type SplitMode = PaymentMode | "unrecorded";
+
+/** How a customer can pay back udhaar (0022). Never credit: you cannot repay credit with credit. */
+export type RepayMode = "cash" | "upi" | "card";
+export const REPAY_MODES: readonly RepayMode[] = ["cash", "upi", "card"];

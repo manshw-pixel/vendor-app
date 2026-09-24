@@ -28,6 +28,10 @@ vi.mock("../data", () => ({
   billToken: (...a: unknown[]) => billToken(...a),
 }));
 
+const loadCustomerDue = vi.fn(async (..._a: unknown[]): Promise<{ data: number | null; error: null }> =>
+  ({ data: 0, error: null }));
+vi.mock("../dues", () => ({ loadCustomerDue: (...a: unknown[]) => loadCustomerDue(...a) }));
+
 let sessionRole: "admin" | "recorder" | "biller" = "admin";
 vi.mock("../components/SessionProvider", () => ({
   useSession: () => ({
@@ -299,5 +303,36 @@ describe("editing a pending bill from the queue", () => {
     renderPending({ role: "biller" });
     await screen.findByText(/token 7/i);
     expect(screen.queryByTestId("bill-amend-b1")).toBeNull();
+  });
+});
+
+describe("credit and dues on completion", () => {
+  it("disables Credit on a bill with no customer, with a hint", async () => {
+    listPending.mockResolvedValueOnce({
+      data: [{ id: "b2", token_no: 8, total: 90, customer_id: null, customers: null }], error: null,
+    });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b2"));
+    expect(screen.getByTestId("pay-mode-credit")).toHaveProperty("disabled", true);
+    // Once a token is issued nobody can add a customer (RLS allows bill edits only while
+    // recording, and amend_pending_bill takes lines only), so the hint must not say to.
+    expect(screen.getByText("Credit needs a customer, chosen when the bill is recorded")).toBeTruthy();
+    expect(screen.getByTestId("pay-mode-cash")).toHaveProperty("disabled", false);
+    expect(loadCustomerDue).not.toHaveBeenCalled();
+  });
+
+  it("shows what the customer already owes before more credit is given", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 1240, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    expect((await screen.findByTestId("pending-owes")).textContent).toMatch(/Already owes ₹1,240\.00/);
+    expect(loadCustomerDue).toHaveBeenCalledWith("c1");
+  });
+
+  it("says nothing about dues when the customer owes nothing", async () => {
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await waitFor(() => expect(loadCustomerDue).toHaveBeenCalled());
+    expect(screen.queryByTestId("pending-owes")).toBeNull();
   });
 });

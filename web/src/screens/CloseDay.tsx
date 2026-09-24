@@ -7,7 +7,7 @@ import {
   type DaySummary,
 } from "../dayClose";
 import { differenceOf, formatBusinessDate, latestPerDate, parseCounted, type CloseRow } from "../closeRules";
-import { PAYMENT_MODES } from "../payments";
+import { PAYMENT_MODES, REPAY_MODES } from "../payments";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 
@@ -153,11 +153,28 @@ export default function CloseDay() {
             ))}
           </dl>
 
+          {REPAY_MODES.some((m) => summary.dues[m].count > 0) && (
+            <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-sm">
+              {REPAY_MODES.filter((m) => summary.dues[m].count > 0).map((m) => (
+                <div key={m} data-testid={`close-dues-${m}`} className="contents">
+                  <dt className="text-slate-600">{t("close.duesMode", { mode: t(`pay.${m}`) })}</dt>
+                  <dd className="text-slate-500 text-right">{t("close.payments", { n: summary.dues[m].count })}</dd>
+                  <dd className="text-slate-800 text-right">{rupees(summary.dues[m].total)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
           <div>
             <p className="text-sm text-slate-500">{t("close.expected")}</p>
             <p data-testid="close-expected" className="text-3xl font-semibold text-slate-800">
               {rupees(summary.expected_cash)}
             </p>
+            {summary.dues.cash.total > 0 && (
+              <p data-testid="close-expected-breakdown" className="text-xs text-slate-500">
+                {t("close.cashSales")} {rupees(summary.split.cash.total)} + {t("close.duesCash")} {rupees(summary.dues.cash.total)}
+              </p>
+            )}
           </div>
 
           {summary.pending_tokens > 0 && (

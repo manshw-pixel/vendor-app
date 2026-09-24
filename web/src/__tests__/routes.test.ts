@@ -9,7 +9,7 @@ describe("routesForRole", () => {
   it("gives the biller the queue and the history", () => {
     // A biller completes bills and sees each total as they do it, so the record of what
     // they completed is theirs too. bills_read would permit more; this is nav, not policy.
-    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending", "/completed", "/close"]);
+    expect(routesForRole("biller").map((r) => r.path)).toEqual(["/pending", "/completed", "/dues", "/close"]);
   });
 
   it("gives admin the full set, with staff folded into settings", () => {
@@ -19,6 +19,7 @@ describe("routesForRole", () => {
       "/completed",
       "/items",
       "/customers",
+      "/dues",
       "/requests",
       "/stock",
       "/settings",
@@ -118,5 +119,16 @@ describe("the receipt route", () => {
     expect(canAccess("biller", "/completedxyz")).toBe(false);
     expect(canAccess("biller", "/receipt")).toBe(false);
     expect(canAccess("biller", "/receiptxyz/b1")).toBe(false);
+  });
+});
+
+describe("the dues screens", () => {
+  it("gives the dues screens to admin and biller, never the recorder", () => {
+    expect(canAccess("admin", "/dues")).toBe(true);
+    expect(canAccess("biller", "/dues/c1")).toBe(true);
+    expect(canAccess("admin", "/dues/c1")).toBe(true);
+    expect(canAccess("recorder", "/dues")).toBe(false);
+    expect(canAccess("recorder", "/dues/c1")).toBe(false);
+    expect(canAccess("biller", "/dues/c1/x")).toBe(false);
   });
 });

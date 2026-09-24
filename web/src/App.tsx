@@ -15,6 +15,8 @@ import Stock from "./screens/Stock";
 import Completed from "./screens/Completed";
 import Dashboards from "./screens/Dashboards";
 import CloseDay from "./screens/CloseDay";
+import Dues from "./screens/Dues";
+import CustomerDues from "./screens/CustomerDues";
 import Settings from "./screens/Settings";
 import Receipt from "./screens/Receipt";
 import AmendBill from "./screens/AmendBill";
@@ -142,6 +144,8 @@ function ShellRoutes({ role, vendorName, name }:
         <Route path="/completed" element={<Completed />} />
         <Route path="/dashboards" element={<Dashboards />} />
         <Route path="/close" element={<CloseDay />} />
+        <Route path="/dues" element={<Dues />} />
+        <Route path="/dues/:customerId" element={<CustomerDues />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/staff" element={<Navigate to="/settings" replace />} />
         <Route path="*" element={<Navigate to={homeFor(role)} replace />} />

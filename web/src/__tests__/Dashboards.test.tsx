@@ -65,6 +65,16 @@ function stubRequests(data: RequestCount[]) {
   requestsBetween.mockResolvedValueOnce({ data, error: null });
 }
 
+const loadDuesList = vi.fn(async (..._a: unknown[]) => ({
+  data: [
+    { customer_id: "c1", name: "A", flat_no: "1", mobile: "9", balance: 1000, oldest_unpaid: "2026-09-01" },
+    { customer_id: "c2", name: "B", flat_no: "2", mobile: "8", balance: 240.5, oldest_unpaid: "2026-09-10" },
+    { customer_id: "c3", name: "C", flat_no: "3", mobile: "7", balance: -50, oldest_unpaid: null },
+  ],
+  error: null as { message?: string; code?: string } | null,
+}));
+vi.mock("../dues", () => ({ loadDuesList: (...a: unknown[]) => loadDuesList(...a) }));
+
 const { default: Dashboards } = await import("../screens/Dashboards");
 
 beforeEach(() => vi.clearAllMocks());
@@ -293,5 +303,20 @@ describe("the dashboard", () => {
     });
     render(<Dashboards />);
     expect((await screen.findByTestId("dash-split-unrecorded")).textContent).toMatch(/90\.00/);
+  });
+
+  it("shows outstanding dues: what is owed and by how many customers", async () => {
+    render(<Dashboards />);
+    const card = await screen.findByTestId("dash-dues");
+    await waitFor(() => expect(card.textContent).toMatch(/1,240\.50/));
+    expect(card.textContent).toMatch(/2 customers/);
+  });
+
+  it("reads outstanding dues once, not on every range change", async () => {
+    render(<Dashboards />);
+    await screen.findByTestId("dash-dues");
+    fireEvent.click(screen.getByTestId("range-today"));
+    await waitFor(() => expect(collectedBetween).toHaveBeenCalledTimes(2));
+    expect(loadDuesList).toHaveBeenCalledTimes(1);
   });
 });
