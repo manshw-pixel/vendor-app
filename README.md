@@ -12,9 +12,9 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 311 cases, 0 failures
+## ✅ Verified: 316 cases, 0 failures
 
-`npm test` runs **311 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+`npm test` runs **316 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
 with all twenty-three migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
@@ -123,7 +123,8 @@ Covered:
   figures and add uncollected credit and dues by mode. `complete_bill`'s `p_collect_due`
   records an old due as a repayment linked to the bill in the same transaction: a retry
   records it once, a refusal (over the balance, Credit mode, no customer, sub-paisa) writes
-  nothing, and a call without it behaves exactly as before.
+  nothing, and a call without it behaves exactly as before. Entering an opening balance later can
+  raise an earlier day's Credit line, because openings count as the oldest debt.
 
 ### What the local suite does not cover
 
