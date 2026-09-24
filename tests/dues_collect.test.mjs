@@ -97,3 +97,79 @@ test("payment_split_between adds dues by mode and uncollected credit", async () 
   assertEqual(by.dues_cash, [20, 1], "dues by cash");
   assertEqual(by.credit_open, [150, 1], "uncollected credit");
 });
+
+const due = async (customerId) =>
+  Number((await sql(`select customer_due($1) d`, [customerId])).rows[0].d);
+const complete = (client, bill, mode, collect) =>
+  client.rpc("complete_bill", collect === undefined
+    ? { p_bill_id: bill, p_payment_mode: mode }
+    : { p_bill_id: bill, p_payment_mode: mode, p_collect_due: collect });
+
+test("collecting a due with a bill: one repayment linked to the bill, counted in the day's cash", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit");                            // owes 200
+  const bill = await billedBill(w.a);                       // new 200 bill
+  const { error } = await complete(w.a.clients.biller, bill, "cash", 150);
+  assert(!error, error?.message);
+  const { rows } = await sql(`select kind, mode, amount, bill_id, created_by from dues_entries where vendor_id = $1`, [w.a.vendorId]);
+  assertEqual(rows.map((r) => [r.kind, r.mode, Number(r.amount), r.bill_id, r.created_by]),
+    [["repayment", "cash", 150, bill, w.a.billerId]], "one linked repayment");
+  assertEqual(await due(w.a.customerId), 50, "balance after");
+  const { data } = await w.a.clients.biller.rpc("day_summary", {});
+  assertEqual([Number(data[0].cash), Number(data[0].dues_cash), Number(data[0].expected_cash)], [200, 150, 350],
+    "the sale stays a sale; the due is a repayment; both are cash in the drawer");
+});
+
+test("a retry of a completed bill that collected a due records nothing more", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit");
+  const bill = await billedBill(w.a);
+  await complete(w.a.clients.biller, bill, "upi", 100);
+  const { error } = await complete(w.a.clients.biller, bill, "upi", 100);
+  assert(!error, `retry refused: ${error?.message}`);
+  const { rows } = await sql(`select count(*)::int n from dues_entries where bill_id = $1`, [bill]);
+  assertEqual(rows[0].n, 1, "recorded once");
+});
+
+test("a refused collect writes nothing: the bill stays pending", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit", { qty: 1 });                // owes 40
+  const bill = await billedBill(w.a);
+  const cases = [
+    [40.01, "cash", /more than the balance/],
+    [10, "credit", /can only be collected in cash, upi or card/],
+    [1.005, "cash", /zero or more, to the paisa/],
+    [-1, "cash", /zero or more, to the paisa/],
+  ];
+  for (const [amount, mode, re] of cases) {
+    const { error } = await complete(w.a.clients.biller, bill, mode, amount);
+    assert(error && re.test(error.message), `amount=${amount} mode=${mode}: ${error?.message ?? "success"}`);
+  }
+  const { rows: [b] } = await sql(`select status from bills where id = $1`, [bill]);
+  assertEqual(b.status, "billed", "still pending");
+  const { rows } = await sql(
+    `select (select count(*) from dues_entries where vendor_id = $1 and kind = 'repayment')::int d,
+            (select count(*) from bill_payments where bill_id = $2)::int p`, [w.a.vendorId, bill]);
+  assertEqual(rows[0], { d: 0, p: 0 }, "nothing written");
+});
+
+test("a collect on a bill with no customer is refused", async () => {
+  const w = await seedTwoVendors();
+  const bill = await billedBill(w.a, { customerId: null });
+  const { error } = await complete(w.a.clients.biller, bill, "cash", 10);
+  assert(error && /credit needs a customer/.test(error.message), `got ${error?.message ?? "success"}`);
+});
+
+test("without p_collect_due (an old tab) or with 0, completion is unchanged and records no due", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit");
+  const old = await billedBill(w.a);
+  const { error: e1 } = await complete(w.a.clients.biller, old, "cash");
+  assert(!e1, e1?.message);
+  const zero = await billedBill(w.a);
+  const { error: e2 } = await complete(w.a.clients.biller, zero, "card", 0);
+  assert(!e2, e2?.message);
+  const { rows } = await sql(`select count(*)::int n from dues_entries where vendor_id = $1`, [w.a.vendorId]);
+  assertEqual(rows[0].n, 0, "no due recorded");
+  assertEqual(await due(w.a.customerId), 200, "still owed");
+});
