@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 282 cases, 0 failures
+## ✅ Verified: 300 cases, 0 failures
 
-`npm test` runs **282 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all twenty-one migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **300 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all twenty-two migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -102,6 +102,19 @@ Covered:
   `reopen_day()` is admin only with a reason and keeps history. `unclosed_days()` ignores
   days before `vendors.day_close_from`. Clearing a shop's data removes its payments and
   closes.
+
+- **Dues (udhaar).** A customer's balance is derived: credit bills still done, plus opening
+  balances, minus repayments, with reversed entries ignored. A voided credit bill drops out,
+  so a part-paid one leaves the customer overpaid. `record_repayment` admits admin and
+  biller, refuses more than the balance, a closed day and a non-cash/UPI/card mode, and two
+  tills taking the last payment at once succeed exactly once. A repayment waiting on a close
+  in progress is refused once the close commits. `record_opening_balance` is admin only with
+  a note. `reverse_dues_entry` needs a reason, keeps history, lets only an admin reverse an
+  opening, and refuses a repayment on a closed day. `complete_bill` refuses credit with no
+  customer, but a retry of a done bill still succeeds. `assign_credit_customer` is admin
+  only and awards no points. `dues_list` orders by balance with a FIFO oldest-unpaid date.
+  Cash repayments count in expected cash and `day_summary`; UPI, card, openings and
+  reversals do not. Nothing leaks across vendors. Clearing a shop's data removes its entries.
 
 ### What the local suite does not cover
 
