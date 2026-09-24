@@ -15,7 +15,7 @@
     "confirmAccept": "हो, बंद करा", "cancel": "रद्द करा", "history": "अलीकडचे दिवस",
     "notClosedList": "अजून बंद नाही", "closeThis": "बंद करा", "backToToday": "आजवर परत",
     "reopen": "पुन्हा उघडा", "reopenReason": "पुन्हा का उघडत आहात?", "reopenAccept": "दिवस पुन्हा उघडा",
-    "reopened": "पुन्हा उघडला", "creditNote": "अजून वसूल नाही", "bills": "{{n}} बिले",
+    "reopened": "पुन्हा उघडला", "creditNote": "अजून वसूल नाही", "bills": "{{n}} बिले", "payments": "{{n}} पेमेंट",
     "banner": "{{date}} बंद झालेला नाही.", "bannerMore": "{{date}} आणि आणखी {{n}} दिवस बंद झालेले नाहीत.", "bannerAction": "आता बंद करा",
     "cashSales": "रोख विक्री", "duesCash": "रोखीने मिळालेली उधारी", "duesMode": "उधारी वसुली · {{mode}}"
   },

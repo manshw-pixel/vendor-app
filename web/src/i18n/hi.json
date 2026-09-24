@@ -15,7 +15,7 @@
     "confirmAccept": "हाँ, बंद करें", "cancel": "रद्द करें", "history": "हाल के दिन",
     "notClosedList": "अभी बंद नहीं", "closeThis": "बंद करें", "backToToday": "आज पर वापस",
     "reopen": "फिर खोलें", "reopenReason": "फिर क्यों खोल रहे हैं?", "reopenAccept": "दिन फिर खोलें",
-    "reopened": "फिर खोला गया", "creditNote": "अभी वसूल नहीं", "bills": "{{n}} बिल",
+    "reopened": "फिर खोला गया", "creditNote": "अभी वसूल नहीं", "bills": "{{n}} बिल", "payments": "{{n}} भुगतान",
     "banner": "{{date}} बंद नहीं हुआ है।", "bannerMore": "{{date}} और {{n}} और दिन बंद नहीं हुए हैं।", "bannerAction": "अभी बंद करें",
     "cashSales": "नकद बिक्री", "duesCash": "नकद में मिला उधार", "duesMode": "उधार वसूली · {{mode}}"
   },

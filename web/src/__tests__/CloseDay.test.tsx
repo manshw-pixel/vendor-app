@@ -213,6 +213,18 @@ describe("Close day", () => {
     expect(screen.queryByTestId("close-dues-card")).toBeNull();
   });
 
+  it("counts repayments as payments, not bills", async () => {
+    loadDaySummary.mockResolvedValue({ data: {
+      ...SUMMARY, expected_cash: 1500,
+      dues: { cash: { total: 300, count: 2 }, upi: { total: 100, count: 1 }, card: { total: 0, count: 0 } },
+    }, error: null });
+    renderAs("biller");
+    const cash = (await screen.findByTestId("close-dues-cash")).textContent ?? "";
+    expect(cash).toMatch(/2 payments/);
+    expect(cash).not.toMatch(/bills/);
+    expect(screen.getByTestId("close-dues-upi").textContent).toMatch(/1 payments/);
+  });
+
   it("shows no breakdown on a day with no dues received", async () => {
     renderAs("biller");
     await screen.findByTestId("close-expected");

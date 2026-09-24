@@ -158,7 +158,7 @@ export default function CloseDay() {
               {REPAY_MODES.filter((m) => summary.dues[m].count > 0).map((m) => (
                 <div key={m} data-testid={`close-dues-${m}`} className="contents">
                   <dt className="text-slate-600">{t("close.duesMode", { mode: t(`pay.${m}`) })}</dt>
-                  <dd className="text-slate-500 text-right">{t("close.bills", { n: summary.dues[m].count })}</dd>
+                  <dd className="text-slate-500 text-right">{t("close.payments", { n: summary.dues[m].count })}</dd>
                   <dd className="text-slate-800 text-right">{rupees(summary.dues[m].total)}</dd>
                 </div>
               ))}

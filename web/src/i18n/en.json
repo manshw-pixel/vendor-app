@@ -15,7 +15,7 @@
     "confirmAccept": "Yes, close it", "cancel": "Cancel", "history": "Recent days",
     "notClosedList": "Not closed yet", "closeThis": "Close", "backToToday": "Back to today",
     "reopen": "Reopen", "reopenReason": "Why reopen?", "reopenAccept": "Reopen day",
-    "reopened": "Reopened", "creditNote": "not yet collected", "bills": "{{n}} bills",
+    "reopened": "Reopened", "creditNote": "not yet collected", "bills": "{{n}} bills", "payments": "{{n}} payments",
     "banner": "{{date}} is not closed.", "bannerMore": "{{date}} and {{n}} more days are not closed.", "bannerAction": "Close now",
     "cashSales": "Cash sales", "duesCash": "Dues received in cash", "duesMode": "Dues · {{mode}}"
   },
