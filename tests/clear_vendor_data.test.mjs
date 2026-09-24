@@ -168,7 +168,7 @@ test("clear_vendor_data empties a bill that redeemed points, ledger and all", as
   await sql(`insert into points_ledger (vendor_id, customer_id, points, expires_at)
              values ($1,$2,100, now() + interval '30 days')`, [world.a.vendorId, c.id]);
 
-  await sql(`select complete_bill($1, null, $2)`, [b.id, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [b.id, 40]);
   const { rows: [row] } = await sql(`select redeemed_points from bills where id = $1`, [b.id]);
   assertEqual(row.redeemed_points, 40, "precondition: the bill actually redeemed points");
   const { rows: [ledgerBefore] } = await sql(

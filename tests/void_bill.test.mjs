@@ -16,7 +16,7 @@ async function doneBill(v, { qty = 5, price = 40, stockKg = 100, redeem = 0, com
   await sql(`insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
              values ($1,$2,$3,$4,$5,$6)`, [b.id, v.vendorId, i.id, qty, price, qty * price]);
   await sql(`select issue_token($1)`, [b.id]);
-  await sql(`select complete_bill($1, null, $2)`, [b.id, redeem]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [b.id, redeem]);
   if (completedAt) await sql(`update bills set completed_at = $2 where id = $1`, [b.id, completedAt]);
   return { itemId: i.id, billId: b.id };
 }

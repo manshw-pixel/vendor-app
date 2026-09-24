@@ -21,7 +21,7 @@ async function world() {
                  values ($1,$2,$3,2,50,100)`, [b.id, v.vendorId, id]);
     }
     await sql(`select issue_token($1)`, [b.id]);
-    await sql(`select complete_bill($1)`, [b.id]);
+    await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [b.id]);
     return b.id;
   };
   const kept = [await doneBill(), await doneBill(), await doneBill()];

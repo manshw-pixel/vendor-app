@@ -1,6 +1,7 @@
 import type { Unit } from "./units";
 import { supabase } from "./supabase";
 import { toBounds, type Range } from "./dateRange";
+import type { SplitMode } from "./payments";
 
 /**
  * The reads behind the history and dashboard screens.
@@ -153,6 +154,15 @@ export async function billLines(billId: string) {
 export async function collectedBetween(range: Range) {
   const { fromTs, toTs } = toBounds(range);
   return supabase.rpc("collected_between", { p_from: fromTs, p_to: toTs });
+}
+
+export type PaymentSplit = { mode: SplitMode; total: string | number; bill_count: string | number };
+
+/** Money collected per payment mode, summed in SQL for the same reasons as collectedBetween.
+ *  'unrecorded' is a done bill with no payment row -- completed before 0021. */
+export async function paymentSplitBetween(range: Range) {
+  const { fromTs, toTs } = toBounds(range);
+  return supabase.rpc("payment_split_between", { p_from: fromTs, p_to: toTs });
 }
 
 /** Parameter names must match 0007_analytics_by_date.sql exactly; PostgREST resolves the

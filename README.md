@@ -12,10 +12,10 @@ database on every run, so it is barred from ever reaching Cloud. See
 - Design: [`docs/design.md`](docs/design.md)
 - Plan this implements: [`docs/plan-database-foundation.md`](docs/plan-database-foundation.md)
 
-## ✅ Verified: 233 cases, 0 failures
+## ✅ Verified: 282 cases, 0 failures
 
-`npm test` runs **233 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
-with all nineteen migrations applied from `supabase/migrations/` in filename order,
+`npm test` runs **282 cases, 0 failures** (exit 0) against native **PostgreSQL 17.9**,
+with all twenty-one migrations applied from `supabase/migrations/` in filename order,
 unmodified — the same files `supabase db push` sends to Cloud.
 
 **RLS is genuinely exercised, not merely present.** Signed-in clients share a `pg.Pool`;
@@ -87,6 +87,21 @@ Covered:
   shop makes `current_user_role()` return `suspended`, which every write policy and every
   billing function refuses at once while the other shop is untouched; reinstating restores
   them. A shop admin cannot change `suspended_at`.
+
+- **Payment mode.** `complete_bill()` refuses a missing or unknown mode and writes exactly
+  one `bill_payments` row for the amount collected after points (zero when points cover the
+  bill); a retry writes no second row; nobody can write the table directly and it does not
+  leak across vendors. `payment_split_between` groups by mode, leaves voided bills out and
+  reports bills completed before modes existed as `unrecorded`.
+
+- **Day close.** `close_day()` admits admin and biller, computes expected cash on the
+  server from cash payments only, needs a note when the count differs, and refuses a
+  double close, a future date and a bad amount. While a date is closed `complete_bill` and
+  `void_bill` refuse and `issue_token` does not; a retry of an already-done bill still
+  succeeds; a completion waiting on a close in progress is refused once it commits.
+  `reopen_day()` is admin only with a reason and keeps history. `unclosed_days()` ignores
+  days before `vendors.day_close_from`. Clearing a shop's data removes its payments and
+  closes.
 
 ### What the local suite does not cover
 

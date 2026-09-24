@@ -1,4 +1,5 @@
 import type { Unit } from "./units";
+import type { PaymentMode } from "./payments";
 import { supabase } from "./supabase";
 
 /**
@@ -41,6 +42,8 @@ export type Receipt = {
   /** Set when this bill was voided after completion; the slip prints VOIDED and the
    *  reason but every other figure below is left exactly as it was collected. */
   voided: { at: string; reason: string } | null;
+  /** How it was paid; null for a bill completed before payment modes existed (0021). */
+  payment_mode: PaymentMode | null;
 };
 
 /**
@@ -57,7 +60,7 @@ export type Receipt = {
 const RECEIPT_COLS =
   "token_no, completed_at, total, redeemed_points, customer_id, status, voided_at, void_reason, " +
   "customers(name, flat_no), app_users!bills_biller_id_fkey(name), " +
-  "vendors(name, address, phone)";
+  "vendors(name, address, phone), bill_payments(mode)";
 
 /** PostgREST serialises numeric as TEXT to avoid float rounding. Everything monetary
  *  passes through here before it reaches arithmetic or rendering. */
@@ -95,6 +98,7 @@ export async function loadReceipt(billId: string): Promise<
     customers: { name: string; flat_no: string } | null;
     app_users: { name: string } | null;
     vendors: { name: string; address: string | null; phone: string | null } | null;
+    bill_payments: { mode: PaymentMode } | { mode: PaymentMode }[] | null;
   };
 
   const { data: lineRows, error: lineError } = await supabase
@@ -137,6 +141,10 @@ export async function loadReceipt(billId: string): Promise<
   const net = num(b.total);
   const redeemed = num(b.redeemed_points);
 
+  // bill_payments.bill_id is unique, so PostgREST may embed it as one object rather than an
+  // array. Accept both rather than depend on how the relationship is detected.
+  const pay = Array.isArray(b.bill_payments) ? b.bill_payments[0] : b.bill_payments;
+
   const data: Receipt = {
     token_no: b.token_no,
     completed_at: b.completed_at,
@@ -168,6 +176,7 @@ export async function loadReceipt(billId: string): Promise<
       b.status === "voided" && b.voided_at && b.void_reason
         ? { at: b.voided_at, reason: b.void_reason }
         : null,
+    payment_mode: pay?.mode ?? null,
   };
 
   return { data, error: null };

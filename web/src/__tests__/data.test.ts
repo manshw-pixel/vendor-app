@@ -100,18 +100,18 @@ describe("issueToken", () => {
 });
 
 describe("the billing data layer, with redemption", () => {
-  it("sends the points to complete_bill under the parameter name the function declares", async () => {
-    // PostgREST resolves the overload by argument NAME. A mismatch here reads as
-    // "function not found", which is how migration 0007 broke the live dashboard.
-    await completeBill("b1", 40);
-    expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1", p_redeem_points: 40 });
+  it("sends the payment mode and the points", async () => {
+    await completeBill("b1", "upi", 40);
+    expect(rpc).toHaveBeenCalledWith("complete_bill", {
+      p_bill_id: "b1", p_payment_mode: "upi", p_redeem_points: 40,
+    });
   });
 
   it("omits the points entirely when none are redeemed", async () => {
     // The function defaults p_redeem_points to 0; sending an explicit 0 is equivalent but
     // sending undefined is not, so the no-redemption path must not send the key at all.
-    await completeBill("b1");
-    expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1" });
+    await completeBill("b1", "cash");
+    expect(rpc).toHaveBeenCalledWith("complete_bill", { p_bill_id: "b1", p_payment_mode: "cash" });
   });
 
   it("asks for the customer id in the pending queue", async () => {

@@ -51,7 +51,7 @@ test("redeeming subtracts from the bill and from the balance", async () => {
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
 
   const b = await billRow(w.billId);
   assertEqual(Number(b.total), 460, "the bill should record the net actually collected");
@@ -73,7 +73,7 @@ test("a redemption row expires WITH the points it consumed, not later", async ()
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 10);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
   assertEqual(await balance(w.customerId), 60, "precondition: 60 left before expiry");
 
   const { rows: [batch] } = await sql(
@@ -100,7 +100,7 @@ test("a redemption never drives the balance negative once the batch expires", as
   // outlives the batch it was spent from, and the customer ends up owing points.
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 30);
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 100]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 100]);
   assertEqual(await balance(w.customerId), 0, "precondition: fully spent");
 
   await sql(`update points_ledger set expires_at = expires_at - interval '31 days'
@@ -114,7 +114,7 @@ test("redemption consumes the soonest-expiring points first, across batches", as
   await grant(w, 100, 10);   // expires first
   await grant(w, 50, 60);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 120]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 120]);
 
   assertEqual(await balance(w.customerId), 30, "150 granted minus 120 spent");
 
@@ -136,7 +136,7 @@ test("the sooner batch expiring leaves exactly the later batch's remainder", asy
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 10);
   await grant(w, 50, 60);
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 120]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 120]);
 
   await sql(`update points_ledger set expires_at = expires_at - interval '11 days'
               where customer_id = $1`, [w.customerId]);
@@ -149,7 +149,7 @@ test("redeeming more than the balance applies only what the customer has", async
   const w = await billedBill({ total: 500 });
   await grant(w, 30, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 200]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 200]);
 
   const b = await billRow(w.billId);
   assertEqual(b.redeemed_points, 30, "only the 30 they had");
@@ -161,7 +161,7 @@ test("redeeming more than the bill applies only what the bill can absorb", async
   const w = await billedBill({ total: 100 });
   await grant(w, 500, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 500]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 500]);
 
   const b = await billRow(w.billId);
   assertEqual(b.redeemed_points, 100, "capped at the bill");
@@ -175,7 +175,7 @@ test("a part-rupee bill absorbs only whole points", async () => {
   const w = await billedBill({ total: 99.5 });
   await grant(w, 500, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 500]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 500]);
 
   const b = await billRow(w.billId);
   assertEqual(b.redeemed_points, 99, "99 whole points, not 99.5");
@@ -190,7 +190,7 @@ test("points are earned on what was paid, not on the bill before redemption", as
   const w = await billedBill({ total: 620 });
   await grant(w, 40, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
 
   const { rows: [r] } = await sql(
     `select coalesce(sum(points),0)::int as p from points_ledger
@@ -204,7 +204,7 @@ test("a bill that still clears the threshold after redeeming does earn", async (
   const w = await billedBill({ total: 700 });
   await grant(w, 40, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
 
   const { rows: [r] } = await sql(
     `select coalesce(sum(points),0)::int as p from points_ledger
@@ -218,10 +218,10 @@ test("completing an already-done bill again does not redeem twice", async () => 
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 30);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
   const after = await balance(w.customerId);
 
-  await sql(`select complete_bill($1, null, $2)`, [w.billId, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [w.billId, 40]);
 
   assertEqual(await balance(w.customerId), after, "the second call must change nothing");
   assertEqual((await billRow(w.billId)).redeemed_points, 40, "and must not double the record");
@@ -231,7 +231,7 @@ test("redeeming zero leaves the ledger untouched", async () => {
   const w = await billedBill({ total: 500 });
   await grant(w, 100, 30);
 
-  await sql(`select complete_bill($1)`, [w.billId]);
+  await sql(`select complete_bill($1, p_payment_mode => 'cash')`, [w.billId]);
 
   assertEqual(await balance(w.customerId), 100, "nothing spent");
   const { rows } = await sql(
@@ -252,7 +252,7 @@ test("a bill with no customer cannot redeem", async () => {
              values ($1,$2,$3,5,40,500)`, [b.id, v.id, i.id]);
   await sql(`select issue_token($1)`, [b.id]);
 
-  await sql(`select complete_bill($1, null, $2)`, [b.id, 40]);
+  await sql(`select complete_bill($1, null, $2, 'cash')`, [b.id, 40]);
 
   const { rows: [r] } = await sql(`select total, redeemed_points from bills where id = $1`, [b.id]);
   assertEqual(Number(r.total), 500, "nothing to redeem against, so the full total stands");
@@ -269,7 +269,7 @@ test("a recorder still cannot complete a bill, redemption or not", async () => {
     [w.vendorId, world.a.recorderId]);
 
   const { error } = await world.a.clients.recorder
-    .rpc("complete_bill", { p_bill_id: w.billId, p_redeem_points: 40 });
+    .rpc("complete_bill", { p_bill_id: w.billId, p_redeem_points: 40, p_payment_mode: "cash" });
   assert(error, "a recorder must not be able to complete a sale");
   // Match the specific role-refusal message, not just any error: an overload ambiguity or
   // a stale PostgREST schema cache also surfaces as an error (e.g. "function not found")

@@ -7,6 +7,7 @@ import { LANGS, type Lang } from "../i18n/locales";
 import { setLang } from "../i18n";
 import type { Role } from "../config";
 import { useLowStock } from "../useLowStock";
+import { UnclosedBanner } from "./UnclosedBanner";
 
 export function LangSwitch() {
   const { i18n, t } = useTranslation();
@@ -50,6 +51,7 @@ export function Shell({ role, vendorName, name, children }:
   return (
     <div className="min-h-screen">
       <OfflineBanner />
+      <UnclosedBanner role={role} />
       <header className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div className="min-w-0">
