@@ -418,3 +418,212 @@ end $$;
 
 revoke all on function assign_credit_customer(uuid, uuid) from public, anon;
 grant execute on function assign_credit_customer(uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- What the Dues screens read
+-- ---------------------------------------------------------------------------
+
+-- Every customer whose balance is not zero, most owed first, overpaid last. oldest_unpaid
+-- is FIFO, like a khata: repayments clear the oldest charge first, so it is the date of the
+-- first charge the running total of charges has not yet been paid past. Invoker rights: RLS
+-- on customers, bills, bill_payments and dues_entries scopes every row.
+create function dues_list()
+  returns table (customer_id uuid, name text, flat_no text, mobile text, balance numeric, oldest_unpaid date)
+  language sql stable as $$
+  with charges as (
+    select b.customer_id, b.completed_at as at,
+           (b.completed_at at time zone 'Asia/Kolkata')::date as day, p.amount
+      from bills b join bill_payments p on p.bill_id = b.id
+     where b.status = 'done' and p.mode = 'credit' and b.customer_id is not null
+    union all
+    select e.customer_id, e.created_at, e.business_date, e.amount
+      from dues_entries e
+     where e.kind = 'opening' and e.reversed_at is null
+  ), repaid as (
+    select e.customer_id, sum(e.amount) as total
+      from dues_entries e
+     where e.kind = 'repayment' and e.reversed_at is null
+     group by e.customer_id
+  ), charged as (
+    select c.customer_id, sum(c.amount) as total from charges c group by c.customer_id
+  ), running as (
+    select c.customer_id, c.day,
+           sum(c.amount) over (partition by c.customer_id order by c.at, c.day
+                               rows between unbounded preceding and current row) as upto
+      from charges c
+  ), bal as (
+    select cu.id, cu.name, cu.flat_no, cu.mobile,
+           coalesce(ch.total, 0) - coalesce(rp.total, 0) as balance,
+           coalesce(rp.total, 0) as paid
+      from customers cu
+      left join charged ch on ch.customer_id = cu.id
+      left join repaid rp on rp.customer_id = cu.id
+  )
+  select bal.id, bal.name, bal.flat_no, bal.mobile, bal.balance,
+         case when bal.balance > 0 then
+           (select min(r.day) from running r where r.customer_id = bal.id and r.upto > bal.paid)
+         end
+    from bal
+   where bal.balance <> 0
+   order by bal.balance desc, bal.name;
+$$;
+
+revoke all on function dues_list() from public, anon;
+grant execute on function dues_list() to authenticated, service_role;
+
+-- One customer's history, newest first. Voided credit bills are left out: they are not
+-- owed. day_closed is set only for a repayment whose day has an active close -- the web
+-- hides Reverse for it, and reverse_dues_entry refuses it anyway. Invoker rights.
+create function customer_dues(p_customer uuid)
+  returns table (kind text, id uuid, at timestamptz, business_date date, amount numeric, mode text,
+                 note text, by_name text, token_no integer, reversed_at timestamptz,
+                 reversed_by_name text, reverse_reason text, day_closed boolean)
+  language sql stable as $$
+  select 'credit_bill'::text, b.id, b.completed_at, (b.completed_at at time zone 'Asia/Kolkata')::date,
+         p.amount, null::text, null::text, u.name, b.token_no, null::timestamptz, null::text, null::text,
+         false
+    from bills b
+    join bill_payments p on p.bill_id = b.id
+    left join app_users u on u.id = b.biller_id
+   where b.customer_id = p_customer and b.status = 'done' and p.mode = 'credit'
+  union all
+  select e.kind, e.id, e.created_at, e.business_date, e.amount, e.mode, e.note, u.name, null::integer,
+         e.reversed_at, ru.name, e.reverse_reason,
+         e.kind = 'repayment' and exists (
+           select 1 from day_closes dc
+            where dc.vendor_id = e.vendor_id and dc.business_date = e.business_date
+              and dc.reopened_at is null)
+    from dues_entries e
+    left join app_users u on u.id = e.created_by
+    left join app_users ru on ru.id = e.reversed_by
+   where e.customer_id = p_customer
+   order by 3 desc;
+$$;
+
+revoke all on function customer_dues(uuid) from public, anon;
+grant execute on function customer_dues(uuid) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Repayments in the day's cash
+-- ---------------------------------------------------------------------------
+
+-- Same signature as 0021, so create or replace. Cash sales plus un-reversed cash repayments.
+create or replace function expected_cash_for(p_vendor uuid, p_date date) returns numeric
+  language sql stable as $$
+  select coalesce((select sum(p.amount)
+                     from bill_payments p
+                     join bills b on b.id = p.bill_id
+                    where b.vendor_id = p_vendor
+                      and b.status = 'done'
+                      and p.mode = 'cash'
+                      and (b.completed_at at time zone 'Asia/Kolkata')::date = p_date), 0)
+       + coalesce((select sum(e.amount)
+                     from dues_entries e
+                    where e.vendor_id = p_vendor
+                      and e.kind = 'repayment' and e.mode = 'cash'
+                      and e.reversed_at is null
+                      and e.business_date = p_date), 0);
+$$;
+
+revoke all on function expected_cash_for(uuid, date) from public, anon, authenticated;
+
+-- The return type grows, so DROP then CREATE (create or replace cannot change it). The 0021
+-- columns keep their names and order; the dues columns are appended, so an old tab reading
+-- this by column name is unaffected.
+drop function day_summary(date);
+
+create function day_summary(p_date date default null)
+  returns table (
+    business_date    date,
+    cash             numeric, cash_count       bigint,
+    upi              numeric, upi_count        bigint,
+    card             numeric, card_count       bigint,
+    credit           numeric, credit_count     bigint,
+    unrecorded       numeric, unrecorded_count bigint,
+    expected_cash    numeric,
+    pending_tokens   bigint,
+    dues_cash        numeric, dues_cash_count  bigint,
+    dues_upi         numeric, dues_upi_count   bigint,
+    dues_card        numeric, dues_card_count  bigint
+  )
+  language sql stable as $$
+  with d as (
+    select coalesce(p_date, (now() at time zone 'Asia/Kolkata')::date) as day
+  ), done as (
+    select b.total, p.mode, p.amount
+      from bills b
+      left join bill_payments p on p.bill_id = b.id
+     where b.status = 'done'
+       and (b.completed_at at time zone 'Asia/Kolkata')::date = (select day from d)
+  ), repaid as (
+    select e.mode, e.amount
+      from dues_entries e
+     where e.kind = 'repayment' and e.reversed_at is null
+       and e.business_date = (select day from d)
+  ), s as (
+    select coalesce(sum(amount) filter (where mode = 'cash'), 0)   as cash,   count(*) filter (where mode = 'cash')   as cash_count,
+           coalesce(sum(amount) filter (where mode = 'upi'), 0)    as upi,    count(*) filter (where mode = 'upi')    as upi_count,
+           coalesce(sum(amount) filter (where mode = 'card'), 0)   as card,   count(*) filter (where mode = 'card')   as card_count,
+           coalesce(sum(amount) filter (where mode = 'credit'), 0) as credit, count(*) filter (where mode = 'credit') as credit_count,
+           coalesce(sum(total) filter (where mode is null), 0)     as unrecorded, count(*) filter (where mode is null) as unrecorded_count
+      from done
+  ), r as (
+    select coalesce(sum(amount) filter (where mode = 'cash'), 0) as dues_cash, count(*) filter (where mode = 'cash') as dues_cash_count,
+           coalesce(sum(amount) filter (where mode = 'upi'), 0)  as dues_upi,  count(*) filter (where mode = 'upi')  as dues_upi_count,
+           coalesce(sum(amount) filter (where mode = 'card'), 0) as dues_card, count(*) filter (where mode = 'card') as dues_card_count
+      from repaid
+  )
+  select (select day from d),
+         s.cash, s.cash_count, s.upi, s.upi_count, s.card, s.card_count,
+         s.credit, s.credit_count, s.unrecorded, s.unrecorded_count,
+         s.cash + r.dues_cash,
+         (select count(*) from bills where status = 'billed'),
+         r.dues_cash, r.dues_cash_count, r.dues_upi, r.dues_upi_count, r.dues_card, r.dues_card_count
+    from s, r;
+$$;
+
+revoke all on function day_summary(date) from public, anon;
+grant execute on function day_summary(date) to authenticated, service_role;
+
+-- clear_vendor_data(): byte-for-byte 0021 plus dues_entries, deleted before customers (its FK has no cascade).
+create or replace function clear_vendor_data()
+  returns table (bills integer, customers integer, points_rows integer)
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_vendor uuid := current_vendor_id();
+  v_bills  integer;
+  v_custs  integer;
+  v_points integer;
+begin
+  -- Unlike issue_token()/complete_bill(), a null current_vendor_id() is NOT waved through.
+  -- This one derives its entire scope FROM the caller, so a null vendor has nothing to mean.
+  if v_vendor is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may clear their shop''s data'
+      using errcode = '42501';
+  end if;
+
+  -- Order is forced by the foreign keys: points_ledger.bill_id -> bills and
+  -- bills.customer_id -> customers have NO cascade.
+  delete from points_ledger where vendor_id = v_vendor;
+  get diagnostics v_points = row_count;
+
+  delete from bill_payments where vendor_id = v_vendor;
+  delete from bill_items where vendor_id = v_vendor;
+  delete from bills where vendor_id = v_vendor;
+  get diagnostics v_bills = row_count;
+
+  -- Records ABOUT the bills and points just deleted.
+  delete from day_closes where vendor_id = v_vendor;
+  delete from stock_requests where vendor_id = v_vendor;
+  delete from stock_movements where vendor_id = v_vendor;
+  delete from outbound_messages where vendor_id = v_vendor;
+
+  delete from dues_entries where vendor_id = v_vendor;
+  delete from customers where vendor_id = v_vendor;
+  get diagnostics v_custs = row_count;
+
+  -- Tokens restart at 1. Safe only because the bills are gone.
+  update vendor_counters set last_token = 0 where vendor_id = v_vendor;
+
+  return query select v_bills, v_custs, v_points;
+end $$;

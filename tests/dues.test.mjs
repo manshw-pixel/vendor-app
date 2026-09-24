@@ -282,3 +282,103 @@ test("assign_credit_customer: admin only, onto a customer-less done credit bill,
   const notDone = await assign(w.a.clients.admin, pending, w.a.customerId);
   assert(notDone.error && /bill cannot be assigned/.test(notDone.error.message), "assigned a pending bill");
 });
+
+async function secondCustomer(v, name = "Zed") {
+  const { rows: [c] } = await sql(
+    `insert into customers (vendor_id, name, flat_no, mobile) values ($1,$2,'B-2',$3) returning id`,
+    [v.vendorId, name, `+91888${Math.floor(Math.random() * 1e7)}`]);
+  return c.id;
+}
+
+test("dues_list: owing customers by balance, overpaid last, settled left out, this shop only", async () => {
+  const w = await seedTwoVendors();
+  const zed = await secondCustomer(w.a);
+  const settled = await secondCustomer(w.a, "Settled");
+  await doneBill(w.a, "credit", { qty: 1 });                       // A's customer owes 40
+  await doneBill(w.a, "credit", { customerId: zed });               // Zed owes 200
+  await doneBill(w.a, "credit", { qty: 1, customerId: settled });
+  await repay(w.a.clients.biller, settled, 40);                     // settled: 0
+  const over = await doneBill(w.a, "credit", { qty: 2 });           // A's customer now 120
+  await repay(w.a.clients.biller, w.a.customerId, 100);             // 20
+  await w.a.clients.biller.rpc("void_bill", { p_bill_id: over, p_reason: "x" });   // -60
+
+  const { data, error } = await w.a.clients.biller.rpc("dues_list");
+  assert(!error, error?.message);
+  assertEqual(data.map((r) => [r.name, Number(r.balance)]), [["Zed", 200], ["Cust A", -60]], "list");
+  assertEqual(data[1].oldest_unpaid, null, "an overpaid customer has no oldest unpaid date");
+  const { data: b } = await w.b.clients.admin.rpc("dues_list");
+  assertEqual(b, [], "B sees none of A's");
+});
+
+test("dues_list: the oldest unpaid date is FIFO over charges", async () => {
+  const w = await seedTwoVendors();
+  const first = await doneBill(w.a, "credit");                      // 200, three days ago
+  await backdate(first, 3);
+  const second = await doneBill(w.a, "credit", { qty: 2 });         // 80, yesterday
+  await backdate(second, 1);
+  await repay(w.a.clients.biller, w.a.customerId, 150);
+  const oldest = async () => ymdOf((await w.a.clients.admin.rpc("dues_list")).data[0].oldest_unpaid);
+  assertEqual(await oldest(), await kolkataDay(-3), "150 of 200 paid: the first charge is still open");
+  await repay(w.a.clients.biller, w.a.customerId, 50);
+  assertEqual(await oldest(), await kolkataDay(-1), "the first charge is covered: the second is oldest");
+});
+
+test("customer_dues: bills, openings, repayments and reversals, newest first, with names and the closed flag", async () => {
+  const w = await seedTwoVendors();
+  const bill = await doneBill(w.a, "credit");
+  await backdate(bill, 1);
+  const voided = await doneBill(w.a, "credit", { qty: 1 });
+  await w.a.clients.biller.rpc("void_bill", { p_bill_id: voided, p_reason: "x" });   // not listed
+  await w.a.clients.admin.rpc("record_opening_balance", { p_customer: w.a.customerId, p_amount: 30, p_note: "khata" });
+  const { data: r } = await repay(w.a.clients.biller, w.a.customerId, 20, "upi");
+  await w.a.clients.admin.rpc("reverse_dues_entry", { p_entry: r.id, p_reason: "typo" });
+  await repay(w.a.clients.biller, w.a.customerId, 10);
+  await w.a.clients.biller.rpc("close_day", { p_date: await kolkataDay(), p_counted_cash: 10, p_note: null });
+
+  const { data, error } = await w.a.clients.biller.rpc("customer_dues", { p_customer: w.a.customerId });
+  assert(!error, error?.message);
+  assertEqual(data.map((e) => e.kind), ["repayment", "repayment", "opening", "credit_bill"], "order");
+  const [latest, reversed, opening, credit] = data;
+  assertEqual([Number(latest.amount), latest.mode, latest.by_name, latest.day_closed],
+    [10, "cash", "Biller A", true], "latest repayment");
+  assertEqual([reversed.reverse_reason, reversed.reversed_by_name], ["typo", "Admin A"], "reversal");
+  assertEqual([opening.note, opening.day_closed], ["khata", false], "an opening is never day-locked");
+  assertEqual([credit.id, Number(credit.amount), typeof credit.token_no], [bill, 200, "number"], "credit bill");
+  const { data: other } = await w.b.clients.admin.rpc("customer_dues", { p_customer: w.a.customerId });
+  assertEqual(other, [], "B read A's customer's timeline");
+});
+
+test("cash repayments count in expected cash and day_summary; UPI, card, openings and reversals do not", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "cash");                                      // cash sale 200
+  await doneBill(w.a, "credit");                                    // owes 200
+  await w.a.clients.admin.rpc("record_opening_balance", { p_customer: w.a.customerId, p_amount: 500, p_note: "khata" });
+  await repay(w.a.clients.biller, w.a.customerId, 100, "cash");
+  await repay(w.a.clients.biller, w.a.customerId, 50, "upi");
+  await repay(w.a.clients.biller, w.a.customerId, 25, "card");
+  const { data: wrong } = await repay(w.a.clients.biller, w.a.customerId, 30, "cash");
+  await w.a.clients.biller.rpc("reverse_dues_entry", { p_entry: wrong.id, p_reason: "typo" });
+
+  const { data, error } = await w.a.clients.biller.rpc("day_summary", {});
+  assert(!error, error?.message);
+  const s = data[0];
+  assertEqual(
+    [s.cash, s.dues_cash, s.dues_cash_count, s.dues_upi, s.dues_upi_count, s.dues_card, s.dues_card_count,
+     s.expected_cash].map(Number),
+    [200, 100, 1, 50, 1, 25, 1, 300], "summary");
+  const { data: closed, error: ce } = await w.a.clients.biller.rpc("close_day",
+    { p_date: await kolkataDay(), p_counted_cash: 300, p_note: null });
+  assert(!ce, ce?.message);
+  assertEqual(Number(closed.expected_cash), 300, "close counts cash sales plus cash dues");
+});
+
+test("clearing the shop's data removes its dues entries", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit");
+  await repay(w.a.clients.biller, w.a.customerId, 10);
+  await w.a.clients.admin.rpc("record_opening_balance", { p_customer: w.a.customerId, p_amount: 5, p_note: "k" });
+  const { error } = await w.a.clients.admin.rpc("clear_vendor_data");
+  assert(!error, error?.message);
+  const { rows } = await sql(`select count(*)::int n from dues_entries where vendor_id = $1`, [w.a.vendorId]);
+  assertEqual(rows[0].n, 0, "left behind");
+});
