@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
-import { loadDuesList, type DuesRow } from "../dues";
+import { assignCreditCustomer, loadDuesList, loadUnassignedCredit, type DuesRow, type UnassignedBill } from "../dues";
 import { matchDues, totalOutstanding } from "../duesRules";
 import { formatBusinessDate } from "../closeRules";
 import { describeError } from "../errors";
 import { rupees } from "../money";
+import { listCustomers } from "../data";
+import { matchCustomers, type Customer } from "../customers";
 
 /**
  * Who owes what. The balances and their order are the server's (dues_list, 0022); this
@@ -19,14 +21,48 @@ export default function Dues() {
   const [rows, setRows] = useState<DuesRow[] | null>(null);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [query, setQuery] = useState("");
+  const [unassigned, setUnassigned] = useState<UnassignedBill[]>([]);
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [pickQuery, setPickQuery] = useState("");
+  const isAdmin = session.kind === "ready" && session.role === "admin";
 
-  useEffect(() => {
-    void (async () => {
-      const { data, error } = await loadDuesList();
-      setProblem(describeError(error));
-      setRows(data);
-    })();
-  }, []);
+  const load = useCallback(async () => {
+    const [list, orphans] = await Promise.all([
+      loadDuesList(),
+      isAdmin ? loadUnassignedCredit() : Promise.resolve({ data: [] as UnassignedBill[], error: null }),
+    ]);
+    setProblem(describeError(list.error) ?? describeError(orphans.error));
+    setRows(list.data);
+    setUnassigned(orphans.data ?? []);
+  }, [isAdmin]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function startAssign(billId: string) {
+    setAssigning(billId);
+    setPickQuery("");
+    if (customers.length === 0) {
+      const { data, error } = await listCustomers();
+      if (error) { setProblem(describeError(error)); return; }
+      setCustomers((data ?? []) as Customer[]);
+    }
+  }
+
+  async function assign(billId: string, customerId: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await assignCreditCustomer(billId, customerId);
+      setAssigning(null);
+      await load();
+      if (error) setProblem(describeError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (session.kind !== "ready") return null;
   const total = totalOutstanding(rows ?? []);
@@ -48,7 +84,53 @@ export default function Dues() {
         </p>
       )}
 
-      <div data-testid="dues-unassigned-slot" />
+      {isAdmin && unassigned.length > 0 && (
+        <section className="bg-white border border-amber-200 rounded-xl p-3 space-y-2">
+          <button data-testid="dues-unassigned" onClick={() => setShowUnassigned((s) => !s)}
+                  className="w-full text-left text-sm font-semibold text-amber-800 min-h-[44px]">
+            {t("dues.unassigned", {
+              n: unassigned.length,
+              amount: rupees(unassigned.reduce((s, b) => s + b.amount, 0)),
+            })}
+          </button>
+          {showUnassigned && (
+            <ul className="space-y-2">
+              {unassigned.map((b) => (
+                <li key={b.bill_id} className="text-sm space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-700">
+                      {t("dues.kind.credit_bill", { n: b.token_no ?? "—" })} · {rupees(b.amount)}
+                    </span>
+                    <button data-testid={`dues-assign-${b.bill_id}`} onClick={() => void startAssign(b.bill_id)}
+                            className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]">
+                      {t("dues.assign")}
+                    </button>
+                  </div>
+                  {assigning === b.bill_id && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-500">{t("dues.assignPick", { n: b.token_no ?? "—" })}</p>
+                      <input value={pickQuery} onChange={(e) => setPickQuery(e.target.value)}
+                             aria-label={t("dues.search")} placeholder={t("dues.search")}
+                             className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]" />
+                      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                        {matchCustomers(customers, pickQuery).map((c) => (
+                          <li key={c.id}>
+                            <button data-testid={`dues-assign-pick-${c.id}`} onClick={() => void assign(b.bill_id, c.id)}
+                                    disabled={busy}
+                                    className="w-full text-left px-3 py-2 min-h-[44px] disabled:opacity-50">
+                              {c.name} · {c.flat_no}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <input
         data-testid="dues-search"
