@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { describeError } from "../errors";
+import i18n from "../i18n";
 
 describe("describeError", () => {
   it("returns null for no error", () => {
@@ -138,5 +139,13 @@ describe("describeError", () => {
     expect(describeError({ message: "more than the balance", code: "P0001" })?.key).toBe("dues.overBalance");
     expect(describeError({ message: "already reversed", code: "P0001" })?.key).toBe("dues.alreadyReversed");
     expect(describeError({ message: "bill cannot be assigned", code: "P0001" })?.key).toBe("dues.cannotAssign");
+  });
+
+  it("tells the biller what is actually possible when credit has no customer", async () => {
+    // No one can add a customer to an issued bill, so the message must not say "add one".
+    await i18n.changeLanguage("en");
+    expect(i18n.t("dues.needCustomer")).toBe(
+      "Credit needs a customer on the bill. Choose the customer when recording the bill, or pick another way to pay.",
+    );
   });
 });

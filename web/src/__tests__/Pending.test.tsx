@@ -314,7 +314,9 @@ describe("credit and dues on completion", () => {
     renderPending({ role: "biller" });
     fireEvent.click(await screen.findByTestId("pending-complete-b2"));
     expect(screen.getByTestId("pay-mode-credit")).toHaveProperty("disabled", true);
-    expect(screen.getByText(/Add a customer to give credit/)).toBeTruthy();
+    // Once a token is issued nobody can add a customer (RLS allows bill edits only while
+    // recording, and amend_pending_bill takes lines only), so the hint must not say to.
+    expect(screen.getByText("Credit needs a customer, chosen when the bill is recorded")).toBeTruthy();
     expect(screen.getByTestId("pay-mode-cash")).toHaveProperty("disabled", false);
     expect(loadCustomerDue).not.toHaveBeenCalled();
   });

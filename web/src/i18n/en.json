@@ -355,11 +355,11 @@
     "by": "by {{name}}",
     "badAmount": "Enter an amount more than zero, with at most two decimals.",
     "overBalanceHint": "That is more than they owe.",
-    "needCustomer": "Credit needs a customer on the bill. Add one, or pick another way to pay.",
+    "needCustomer": "Credit needs a customer on the bill. Choose the customer when recording the bill, or pick another way to pay.",
     "overBalance": "That is more than they owe. Check the balance.",
     "alreadyReversed": "This entry was already reversed.",
     "cannotAssign": "This bill cannot be given a customer.",
-    "creditHint": "Add a customer to give credit",
+    "creditHint": "Credit needs a customer, chosen when the bill is recorded",
     "alreadyOwes": "Already owes {{amount}}",
     "outstandingCard": "Outstanding dues",
     "outstandingCount": "{{n}} customers"
