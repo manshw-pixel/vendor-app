@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { Customer } from "../customers";
 
 const all: Customer[] = [
@@ -26,19 +27,28 @@ vi.mock("../admin", () => ({
   customerPoints: (...a: unknown[]) => customerPoints(...a),
 }));
 
+let role: "admin" | "recorder" = "recorder";
+vi.mock("../components/SessionProvider", () => ({
+  useSession: () => ({ kind: "ready", userId: "u1", vendorId: "v1", vendorName: "V", name: "S", role }),
+}));
+
 const { default: Customers } = await import("../screens/Customers");
 
-beforeEach(() => vi.clearAllMocks());
+function renderIt() {
+  return render(<MemoryRouter><Customers /></MemoryRouter>);
+}
+
+beforeEach(() => { vi.clearAllMocks(); role = "recorder"; });
 
 describe("the customers screen", () => {
   it("lists customers", async () => {
-    render(<Customers />);
+    renderIt();
     expect(await screen.findByText(/Asha/)).toBeTruthy();
     expect(screen.getByText(/Bhau/)).toBeTruthy();
   });
 
   it("filters with the same matcher the bill flow uses", async () => {
-    render(<Customers />);
+    renderIt();
     await screen.findByText(/Asha/);
     fireEvent.change(screen.getByTestId("customer-search"), { target: { value: "B-2" } });
     await waitFor(() => expect(screen.queryByText(/Asha/)).toBeNull());
@@ -46,7 +56,7 @@ describe("the customers screen", () => {
   });
 
   it("shows the points balance when a customer is opened", async () => {
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     await waitFor(() => expect(customerPoints).toHaveBeenCalledWith("c1"));
     expect(await screen.findByText(/120/)).toBeTruthy();
@@ -56,7 +66,7 @@ describe("the customers screen", () => {
     // Zero points is a real answer -- a bill under the first threshold earns none. A
     // failed call is not, and the two must not read alike.
     customerPoints.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     expect(await screen.findByText(/could not be checked|तपासता आले नाहीं|जांचे नहीं/i)).toBeTruthy();
   });
@@ -65,7 +75,7 @@ describe("the customers screen", () => {
     // Zero rows is legitimate: a customer under the vendor's first spend threshold has
     // earned no points and the ledger holds no row for them.
     customerPoints.mockResolvedValueOnce({ data: [], error: null });
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     expect(await screen.findByText(/\b0\b/)).toBeTruthy();
     expect(screen.queryByText(/could not be checked|तपासता आले नाहीं|जांचे नहीं/i)).toBeNull();
@@ -83,7 +93,7 @@ describe("the customers screen", () => {
     customerPoints.mockImplementationOnce(() => aPromise);
     customerPoints.mockResolvedValueOnce({ data: [{ balance: 50, days_left: 10 }], error: null });
 
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     fireEvent.click(await screen.findByTestId("customer-c2"));
     await screen.findByText(/50/);
@@ -95,7 +105,7 @@ describe("the customers screen", () => {
   });
 
   it("saves an edit by id", async () => {
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     fireEvent.change(screen.getByTestId("customer-field-flat_no"), { target: { value: "A-9" } });
     fireEvent.click(screen.getByTestId("customer-save"));
@@ -105,7 +115,7 @@ describe("the customers screen", () => {
 
   it("refuses to save with a field blanked", async () => {
     // #11 makes all three mandatory, and validateCustomer already reports them at once.
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     fireEvent.change(screen.getByTestId("customer-field-mobile"), { target: { value: "" } });
     fireEvent.click(screen.getByTestId("customer-save"));
@@ -121,7 +131,7 @@ describe("the customers screen", () => {
         message: 'duplicate key value violates unique constraint "customers_vendor_id_mobile_key"',
       },
     });
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     fireEvent.change(screen.getByTestId("customer-field-mobile"), { target: { value: "+919000000002" } });
     fireEvent.click(screen.getByTestId("customer-save"));
@@ -131,14 +141,32 @@ describe("the customers screen", () => {
   it("offers no delete", async () => {
     // A customer carries bills and an append-only ledger; a delete cascades the ledger
     // and orphans bills.customer_id.
-    render(<Customers />);
+    renderIt();
     fireEvent.click(await screen.findByTestId("customer-c1"));
     expect(screen.queryByRole("button", { name: /delete|remove|काढून|हटाएं/i })).toBeNull();
   });
 
   it("says nothing yet on an empty list", async () => {
     listCustomers.mockResolvedValueOnce({ data: [], error: null });
-    render(<Customers />);
+    renderIt();
     expect(await screen.findByText(/no customers yet|अजून ग्राहक नाहीत|कोई ग्राहक नहीं/i)).toBeTruthy();
+  });
+
+  it("gives an admin a Dues link per customer, so an opening balance is reachable for anyone", async () => {
+    // dues_list only lists non-zero balances, so a customer who owes nothing -- exactly who
+    // an opening balance is for -- is reachable only from here.
+    role = "admin";
+    renderIt();
+    const link = await screen.findByTestId("customer-dues-c1");
+    expect(link.getAttribute("href")).toBe("/dues/c1");
+    expect(link.textContent).toMatch(/Dues/);
+    expect(screen.getByTestId("customer-dues-c2").getAttribute("href")).toBe("/dues/c2");
+  });
+
+  it("gives a recorder no Dues link: /dues is not theirs", async () => {
+    role = "recorder";
+    renderIt();
+    await screen.findByText(/Asha/);
+    expect(screen.queryByTestId("customer-dues-c1")).toBeNull();
   });
 });

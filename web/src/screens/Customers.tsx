@@ -1,6 +1,8 @@
 import "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { useSession } from "../components/SessionProvider";
 import { listCustomers } from "../data";
 import { updateCustomer, customerPoints } from "../admin";
 import { matchCustomers, validateCustomer, isDuplicateMobile, type Customer } from "../customers";
@@ -16,6 +18,9 @@ const FIELDS = [
 
 export default function Customers() {
   const { t } = useTranslation();
+  const session = useSession();
+  // /dues is admin/biller only (routes.ts); a recorder sees Customers but not dues.
+  const isAdmin = session.kind === "ready" && session.role === "admin";
   const [all, setAll] = useState<Customer[]>([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Customer | null>(null);
@@ -153,14 +158,25 @@ export default function Customers() {
       ) : (
         <ul className="space-y-2">
           {shown.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="flex gap-2">
               <button
                 data-testid={`customer-${c.id}`} onClick={() => void openCustomer(c)}
-                className="w-full text-left bg-white border border-slate-200 rounded-xl p-3 min-h-[44px]"
+                className="flex-1 text-left bg-white border border-slate-200 rounded-xl p-3 min-h-[44px]"
               >
                 <span className="font-medium text-slate-800">{c.name}</span>
                 <span className="block text-sm text-slate-500">{c.flat_no} · {c.mobile}</span>
               </button>
+              {isAdmin && (
+                // The only other way into /dues/:id is a Dues-list row, and that list shows
+                // non-zero balances only -- so an opening balance for someone who owes
+                // nothing yet is reachable only from here.
+                <Link
+                  to={`/dues/${c.id}`} data-testid={`customer-dues-${c.id}`}
+                  className="flex items-center bg-white border border-slate-200 rounded-xl px-4 min-h-[44px] text-sm text-emerald-700 underline"
+                >
+                  {t("customersScreen.dues")}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
