@@ -52,6 +52,11 @@ export function describeError(
   // close_day recomputes expected cash itself. The screen only lets a no-note close through
   // when the count matched ITS figure, so this refusal means sales landed after it loaded.
   if (/note is required/i.test(detail)) return { key: "close.cashChanged", detail };
+  // Dues (0022), plpgsql refusals matched on message like the others.
+  if (/credit needs a customer/i.test(detail)) return { key: "dues.needCustomer", detail };
+  if (/more than the balance/i.test(detail)) return { key: "dues.overBalance", detail };
+  if (/already reversed/i.test(detail)) return { key: "dues.alreadyReversed", detail };
+  if (/bill cannot be assigned/i.test(detail)) return { key: "dues.cannotAssign", detail };
   // amend_pending_bill's status guard (0013/0015 family): "bill <id> is <status>, expected
   // billed" -- raised when the bill Completed.tsx is trying to edit has already moved past
   // `billed` (voided, completed, or amended again) since the screen loaded it. Matched on

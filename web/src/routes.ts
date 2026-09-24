@@ -19,6 +19,7 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
   biller: [
     { path: "/pending", labelKey: "nav.pending" },
     { path: "/completed", labelKey: "nav.completed" },
+    { path: "/dues", labelKey: "nav.dues" },
     { path: "/close", labelKey: "nav.close" },
   ],
   admin: [
@@ -27,6 +28,7 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
     { path: "/completed", labelKey: "nav.completed" },
     { path: "/items", labelKey: "nav.items" },
     { path: "/customers", labelKey: "nav.customers" },
+    { path: "/dues", labelKey: "nav.dues" },
     { path: "/requests", labelKey: "nav.requests" },
     { path: "/stock", labelKey: "nav.stock" },
     { path: "/settings", labelKey: "nav.settings" },
@@ -45,8 +47,8 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
  */
 const UNLISTED: Record<Role, readonly string[]> = {
   recorder: ["/amend"],
-  biller: ["/receipt"],
-  admin: ["/receipt", "/amend"],
+  biller: ["/receipt", "/dues"],
+  admin: ["/receipt", "/amend", "/dues"],
 };
 
 const matchesUnlisted = (prefix: string, path: string): boolean => {

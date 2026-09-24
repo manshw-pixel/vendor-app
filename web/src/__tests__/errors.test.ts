@@ -132,4 +132,11 @@ describe("describeError", () => {
       describeError({ code: "P0001", message: "quantity must be a whole number for this unit" })?.key,
     ).toBe("unit.notWhole");
   });
+
+  it("maps the dues refusals", () => {
+    expect(describeError({ message: "credit needs a customer", code: "22023" })?.key).toBe("dues.needCustomer");
+    expect(describeError({ message: "more than the balance", code: "P0001" })?.key).toBe("dues.overBalance");
+    expect(describeError({ message: "already reversed", code: "P0001" })?.key).toBe("dues.alreadyReversed");
+    expect(describeError({ message: "bill cannot be assigned", code: "P0001" })?.key).toBe("dues.cannotAssign");
+  });
 });
