@@ -12,6 +12,8 @@ import { itemName, type Lang } from "../i18n/locales";
 import { qtyText } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
+import { loadDuesList } from "../dues";
+import { totalOutstanding } from "../duesRules";
 import "../i18n";
 
 function Card({ title, subtitle, children }: {
@@ -42,6 +44,7 @@ export default function Dashboards() {
   const [split, setSplit] = useState<Record<string, number>>({});
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(true);
+  const [owed, setOwed] = useState<{ amount: number; count: number } | null>(null);
 
   /** Which range the newest request was for. Tapping "This month" then "Today" fires two
    *  overlapping fetches, and the month one is the slower; without this guard it lands
@@ -87,6 +90,14 @@ export default function Dashboards() {
   }, []);
 
   useEffect(() => { void load(range); }, [range, load]);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await loadDuesList();
+      // A failed read leaves the card out rather than showing ₹0.00 as if nothing were owed.
+      if (data) setOwed(totalOutstanding(data));
+    })();
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -150,6 +161,14 @@ export default function Dashboards() {
             </p>
           )}
         </Card>
+        {owed && (
+          <Card title={t("dues.outstandingCard")}>
+            <div data-testid="dash-dues">
+              <p className="text-2xl font-semibold text-slate-800">{rupees(owed.amount)}</p>
+              <p className="text-xs text-slate-500">{t("dues.outstandingCount", { n: owed.count })}</p>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Card title={t("dash.topItems")} subtitle={t("dash.topItemsSub")}>
