@@ -383,6 +383,7 @@ create function unassigned_credit()
     from bills b
     join bill_payments p on p.bill_id = b.id
    where b.status = 'done' and p.mode = 'credit' and b.customer_id is null
+     and current_user_role() = 'admin'
    order by b.completed_at desc;
 $$;
 
@@ -627,3 +628,46 @@ begin
 
   return query select v_bills, v_custs, v_points;
 end $$;
+
+-- unclosed_days(): 0021's body verbatim, plus past days whose only cash came from dues
+-- repayments. A repayment moves cash into the till, so its day needs a close just as a
+-- sales day does. Un-reversed repayments only: a reversed one moved no cash, and an
+-- opening balance never does. Invoker rights: RLS on bills, dues_entries, vendors and
+-- day_closes scopes it.
+create or replace function unclosed_days() returns table (business_date date)
+  language sql stable as $$
+  select distinct d.business_date
+    from (
+      select (b.completed_at at time zone 'Asia/Kolkata')::date as business_date
+        from bills b
+        join vendors v on v.id = b.vendor_id
+       where b.status = 'done'
+         and b.completed_at >= now() - interval '31 days'
+         and (b.completed_at at time zone 'Asia/Kolkata')::date <  (now() at time zone 'Asia/Kolkata')::date
+         and (b.completed_at at time zone 'Asia/Kolkata')::date >= (now() at time zone 'Asia/Kolkata')::date - 30
+         and (b.completed_at at time zone 'Asia/Kolkata')::date >= v.day_close_from
+         and not exists (
+           select 1 from day_closes c
+            where c.vendor_id = b.vendor_id
+              and c.business_date = (b.completed_at at time zone 'Asia/Kolkata')::date
+              and c.reopened_at is null)
+      union
+      select e.business_date
+        from dues_entries e
+        join vendors v on v.id = e.vendor_id
+       where e.kind = 'repayment'
+         and e.reversed_at is null
+         and e.business_date <  (now() at time zone 'Asia/Kolkata')::date
+         and e.business_date >= (now() at time zone 'Asia/Kolkata')::date - 30
+         and e.business_date >= v.day_close_from
+         and not exists (
+           select 1 from day_closes c
+            where c.vendor_id = e.vendor_id
+              and c.business_date = e.business_date
+              and c.reopened_at is null)
+    ) d
+   order by d.business_date desc;
+$$;
+
+revoke all on function unclosed_days() from public, anon;
+grant execute on function unclosed_days() to authenticated, service_role;

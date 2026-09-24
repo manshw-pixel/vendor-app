@@ -255,6 +255,16 @@ test("unassigned_credit lists done credit bills with no customer, newest first",
   assertEqual(b, [], "B sees none of A's");
 });
 
+test("unassigned_credit is for admins: a biller gets an empty list", async () => {
+  const w = await seedTwoVendors();
+  const id = await orphanCredit(w.a);
+  const { data: adm } = await w.a.clients.admin.rpc("unassigned_credit");
+  assertEqual(adm.map((r) => r.bill_id), [id], "admin sees it");
+  const { data, error } = await w.a.clients.biller.rpc("unassigned_credit");
+  assert(!error, error?.message);
+  assertEqual(data, [], "biller sees none");
+});
+
 test("assign_credit_customer: admin only, onto a customer-less done credit bill, no points after the fact", async () => {
   const w = await seedTwoVendors();
   const id = await orphanCredit(w.a);                  // 200
@@ -381,4 +391,39 @@ test("clearing the shop's data removes its dues entries", async () => {
   assert(!error, error?.message);
   const { rows } = await sql(`select count(*)::int n from dues_entries where vendor_id = $1`, [w.a.vendorId]);
   assertEqual(rows[0].n, 0, "left behind");
+});
+
+test("unclosed_days lists a past day whose only cash was a repayment, until it is closed", async () => {
+  const w = await seedTwoVendors();
+  await sql(`update vendors set day_close_from = (now() at time zone 'Asia/Kolkata')::date - 10 where id = $1`,
+    [w.a.vendorId]);
+  await doneBill(w.a, "credit");                                       // today: owes 200, never listed
+  const move = (id, days) => sql(
+    `update dues_entries set business_date = (now() at time zone 'Asia/Kolkata')::date - $2::int,
+                             created_at = created_at - ($2 || ' days')::interval where id = $1`,
+    [id, days]);
+  const { data: r } = await repay(w.a.clients.biller, w.a.customerId, 50);
+  await move(r.id, 2);                                                 // listed
+  const { data: gone } = await repay(w.a.clients.biller, w.a.customerId, 20);
+  const { error: rv } = await w.a.clients.admin.rpc("reverse_dues_entry", { p_entry: gone.id, p_reason: "x" });
+  assert(!rv, rv?.message);
+  await move(gone.id, 3);                                              // reversed: not listed
+  const { data: ob } = await w.a.clients.admin.rpc("record_opening_balance",
+    { p_customer: w.a.customerId, p_amount: 10, p_note: "khata" });
+  await move(ob.id, 4);                                                // an opening moves no cash
+  const { data: early } = await repay(w.a.clients.biller, w.a.customerId, 5);
+  await move(early.id, 12);                                            // before day_close_from
+  const twoAgo = await kolkataDay(-2);
+
+  const { data, error } = await w.a.clients.biller.rpc("unclosed_days");
+  assert(!error, error?.message);
+  assertEqual(data.map((d) => ymdOf(d.business_date)), [twoAgo], "the repayment-only day");
+  const { data: other } = await w.b.clients.admin.rpc("unclosed_days");
+  assertEqual(other, [], "B sees none of A's days");
+
+  const { error: c } = await w.a.clients.biller.rpc("close_day",
+    { p_date: twoAgo, p_counted_cash: 50, p_note: null });
+  assert(!c, c?.message);
+  const { data: after } = await w.a.clients.biller.rpc("unclosed_days");
+  assertEqual(after, [], "closed day no longer listed");
 });
