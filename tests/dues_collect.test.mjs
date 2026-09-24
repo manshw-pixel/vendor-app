@@ -173,3 +173,74 @@ test("without p_collect_due (an old tab) or with 0, completion is unchanged and 
   assertEqual(rows[0].n, 0, "no due recorded");
   assertEqual(await due(w.a.customerId), 200, "still owed");
 });
+
+const ymdOf = (v) => {
+  if (typeof v === "string") return v.slice(0, 10);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+};
+
+test("dues_list's oldest unpaid date agrees with credit_open when an opening is entered after a credit bill", async () => {
+  const w = await seedTwoVendors();
+  const bill = await doneBill(w.a, "credit", { qty: 1, price: 100 });   // 100, yesterday
+  await backdate(bill, 1);
+  await w.a.clients.admin.rpc("record_opening_balance",
+    { p_customer: w.a.customerId, p_amount: 200, p_note: "khata" });     // entered today, still the oldest debt
+  await repay(w.a.clients.biller, w.a.customerId, 100);                  // clears half the opening
+  assertEqual(await openOf(bill), 100, "credit_open: the bill is untouched");
+  const { data, error } = await w.a.clients.admin.rpc("dues_list");
+  assert(!error, error?.message);
+  assertEqual(ymdOf(data[0].oldest_unpaid), await kolkataDay(-1), "dues_list: the bill's day is still unpaid");
+});
+
+test("a collect on a closed day is refused and writes nothing", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit", { qty: 1 });                             // owes 40
+  const bill = await billedBill(w.a);
+  const { error: c } = await w.a.clients.biller.rpc("close_day",
+    { p_date: await kolkataDay(), p_counted_cash: 0, p_note: null });
+  assert(!c, c?.message);
+  const { error } = await complete(w.a.clients.biller, bill, "cash", 40);
+  assert(error && /day is closed/.test(error.message), `got ${error?.message ?? "success"}`);
+  const { rows } = await sql(
+    `select (select count(*) from dues_entries where vendor_id = $1)::int d,
+            (select count(*) from bill_payments where bill_id = $2)::int p,
+            (select status from bills where id = $2) s`, [w.a.vendorId, bill]);
+  assertEqual(rows[0], { d: 0, p: 0, s: "billed" }, "nothing written");
+});
+
+test("clear_vendor_data succeeds with a repayment linked to a bill", async () => {
+  const w = await seedTwoVendors();
+  await doneBill(w.a, "credit");
+  const bill = await billedBill(w.a);
+  const { error: e } = await complete(w.a.clients.biller, bill, "cash", 50);
+  assert(!e, e?.message);
+  const { error } = await w.a.clients.admin.rpc("clear_vendor_data");
+  assert(!error, error?.message);
+  const { rows } = await sql(`select count(*)::int n from dues_entries where vendor_id = $1`, [w.a.vendorId]);
+  assertEqual(rows[0].n, 0, "left behind");
+});
+
+test("reversing a repayment makes credit_open rise again", async () => {
+  const w = await seedTwoVendors();
+  const bill = await doneBill(w.a, "credit");                           // 200
+  const { data: r } = await repay(w.a.clients.biller, w.a.customerId, 150);
+  assertEqual(await openOf(bill), 50, "after the repayment");
+  const { error } = await w.a.clients.admin.rpc("reverse_dues_entry", { p_entry: r.id, p_reason: "typo" });
+  assert(!error, error?.message);
+  assertEqual(await openOf(bill), 200, "after the reversal");
+});
+
+test("points ignore a collected due: they are measured on the bill alone", async () => {
+  const w = await seedTwoVendors();
+  const { rows: [v] } = await sql(`select points_threshold_1 t from vendors where id = $1`, [w.a.vendorId]);
+  const t1 = Number(v.t);
+  await doneBill(w.a, "credit", { qty: 1, price: 100 });                // owes 100
+  const bill = await billedBill(w.a, { qty: 1, price: t1 - 1 });        // just under the threshold
+  const { error } = await complete(w.a.clients.biller, bill, "cash", 100);   // net + due = t1 + 99
+  assert(!error, error?.message);
+  const { rows } = await sql(`select coalesce(sum(points), 0)::int n from points_ledger where bill_id = $1`, [bill]);
+  assertEqual(rows[0].n, 0, "the bill alone earns nothing");
+  const { rows: d } = await sql(`select count(*)::int n from dues_entries where bill_id = $1`, [bill]);
+  assertEqual(d[0].n, 1, "the due was collected");
+});

@@ -53,6 +53,54 @@ $$;
 revoke all on function credit_open() from public, anon;
 grant execute on function credit_open() to authenticated, service_role;
 
+-- dues_list: 0022's body, with its running window put in credit_open's FIFO order (openings
+-- first, then by time, ties by id). 0022 ordered by time alone, so an opening entered after
+-- a credit bill counted as newer, and the list's "since" date contradicted Close day's
+-- Credit line. Same return type, so create or replace.
+create or replace function dues_list()
+  returns table (customer_id uuid, name text, flat_no text, mobile text, balance numeric, oldest_unpaid date)
+  language sql stable as $$
+  with charges as (
+    select b.customer_id, 1 as rank, b.completed_at as at, b.id as tie,
+           (b.completed_at at time zone 'Asia/Kolkata')::date as day, p.amount
+      from bills b join bill_payments p on p.bill_id = b.id
+     where b.status = 'done' and p.mode = 'credit' and b.customer_id is not null
+    union all
+    select e.customer_id, 0, e.created_at, e.id, e.business_date, e.amount
+      from dues_entries e
+     where e.kind = 'opening' and e.reversed_at is null
+  ), repaid as (
+    select e.customer_id, sum(e.amount) as total
+      from dues_entries e
+     where e.kind = 'repayment' and e.reversed_at is null
+     group by e.customer_id
+  ), charged as (
+    select c.customer_id, sum(c.amount) as total from charges c group by c.customer_id
+  ), running as (
+    select c.customer_id, c.day,
+           sum(c.amount) over (partition by c.customer_id order by c.rank, c.at, c.tie
+                               rows between unbounded preceding and current row) as upto
+      from charges c
+  ), bal as (
+    select cu.id, cu.name, cu.flat_no, cu.mobile,
+           coalesce(ch.total, 0) - coalesce(rp.total, 0) as balance,
+           coalesce(rp.total, 0) as paid
+      from customers cu
+      left join charged ch on ch.customer_id = cu.id
+      left join repaid rp on rp.customer_id = cu.id
+  )
+  select bal.id, bal.name, bal.flat_no, bal.mobile, bal.balance,
+         case when bal.balance > 0 then
+           (select min(r.day) from running r where r.customer_id = bal.id and r.upto > bal.paid)
+         end
+    from bal
+   where bal.balance <> 0
+   order by bal.balance desc, bal.name;
+$$;
+
+revoke all on function dues_list() from public, anon;
+grant execute on function dues_list() to authenticated, service_role;
+
 -- ---------------------------------------------------------------------------
 -- day_summary: 0022's columns unchanged, credit_open appended
 -- ---------------------------------------------------------------------------
