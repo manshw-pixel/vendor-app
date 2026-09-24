@@ -32,6 +32,7 @@ import "./create_item_with_cost.test.mjs";
 import "./payments.test.mjs";
 import "./day_close.test.mjs";
 import "./dues.test.mjs";
+import "./dues_collect.test.mjs";
 
 try {
   await bootstrap();
