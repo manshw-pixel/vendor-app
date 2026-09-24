@@ -161,6 +161,22 @@ export default function Receipt() {
                 {t("receipt.paidBy", { mode: t(`pay.${data.payment_mode}`) })}
               </div>
             )}
+            {data.due_collected > 0 && (
+              <>
+                <div data-testid="receipt-due-paid" className="flex justify-between">
+                  <span>{t("receipt.duePaid")}</span>
+                  <span>{amt(data.due_collected)}</span>
+                </div>
+                {/* A voided sale was not collected, but the due paid with it stands (a void
+                    never reverses the repayment), so only the total is left off. */}
+                {!data.voided && (
+                  <div data-testid="receipt-total-collected" className="flex justify-between font-bold">
+                    <span>{t("receipt.totalCollected")}</span>
+                    <span>{amt(data.net + data.due_collected)}</span>
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
 

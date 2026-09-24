@@ -42,6 +42,7 @@ const paymentSplitBetween = vi.fn(async (..._a: unknown[]): Promise<{
 }> => ({ data: [
   { mode: "cash", total: "200.00", bill_count: "1" },
   { mode: "credit", total: "40.00", bill_count: "1" },
+  { mode: "credit_open", total: "40.00", bill_count: "1" },
   { mode: "upi", total: "110.50", bill_count: "1" },
 ], error: null }));
 
@@ -295,6 +296,8 @@ describe("the dashboard", () => {
     expect(screen.getByTestId("dash-split-card").textContent).toMatch(/0\.00/);
     expect(screen.getByTestId("dash-split-credit").textContent).toMatch(/40\.00/);
     expect(screen.queryByTestId("dash-split-unrecorded")).toBeNull();
+    expect(screen.getByTestId("dash-split-note").textContent)
+      .toBe("Includes dues received; credit shows what is still unpaid");
   });
 
   it("shows Not recorded only when there are such bills", async () => {
@@ -318,5 +321,22 @@ describe("the dashboard", () => {
     fireEvent.click(screen.getByTestId("range-today"));
     await waitFor(() => expect(collectedBetween).toHaveBeenCalledTimes(2));
     expect(loadDuesList).toHaveBeenCalledTimes(1);
+  });
+
+  it("merges dues into the split and shows credit still uncollected", async () => {
+    paymentSplitBetween.mockResolvedValueOnce({ data: [
+      { mode: "cash", total: "200.00", bill_count: "1" },
+      { mode: "credit", total: "40.00", bill_count: "1" },
+      { mode: "credit_open", total: "10.00", bill_count: "1" },
+      { mode: "dues_cash", total: "30.00", bill_count: "1" },
+      { mode: "upi", total: "110.50", bill_count: "1" },
+    ], error: null });
+    render(<Dashboards />);
+    await waitFor(() => expect(screen.getByTestId("dash-split-cash").textContent).toMatch(/230\.00/));
+    expect(screen.getByTestId("dash-incl-cash").textContent).toMatch(/30\.00/);
+    expect(screen.getByTestId("dash-split-credit").textContent).toMatch(/10\.00/);
+    expect(screen.getByTestId("dash-split-credit").textContent).not.toMatch(/40\.00/);
+    expect(screen.getByTestId("dash-split-upi").textContent).toMatch(/110\.50/);
+    expect(screen.queryByTestId("dash-incl-upi")).toBeNull();
   });
 });

@@ -57,6 +57,7 @@ export function describeError(
   if (/more than the balance/i.test(detail)) return { key: "dues.overBalance", detail };
   if (/already reversed/i.test(detail)) return { key: "dues.alreadyReversed", detail };
   if (/bill cannot be assigned/i.test(detail)) return { key: "dues.cannotAssign", detail };
+  if (/due can only be collected/i.test(detail)) return { key: "dues.collectModeOnly", detail };
   // amend_pending_bill's status guard (0013/0015 family): "bill <id> is <status>, expected
   // billed" -- raised when the bill Completed.tsx is trying to edit has already moved past
   // `billed` (voided, completed, or amended again) since the screen loaded it. Matched on

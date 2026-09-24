@@ -29,6 +29,7 @@ const FULL: ReceiptData = {
   balance: { balance: 260, days_left: 15 },
   voided: null,
   payment_mode: null,
+  due_collected: 0,
 };
 
 const renderAt = () =>
@@ -186,6 +187,36 @@ describe("Receipt", () => {
     renderAt();
     await screen.findByTestId("receipt-total");
     expect(screen.queryByTestId("receipt-mode")).toBeNull();
+  });
+
+  it("prints the previous due paid and the total collected", async () => {
+    await i18n.changeLanguage("en");
+    loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: "cash", due_collected: 240 }, error: null });
+    renderAt();
+    expect((await screen.findByTestId("receipt-due-paid")).textContent).toMatch(/Previous due paid.*240\.00/);
+    expect(screen.getByTestId("receipt-total-collected").textContent).toMatch(/Total collected.*406\.00/);
+    expect(screen.getByTestId("receipt-paid").textContent).toMatch(/166\.00/);   // the sale is unchanged
+  });
+
+  it("on a voided slip, prints the due paid but no total collected", async () => {
+    await i18n.changeLanguage("en");
+    loadReceipt.mockResolvedValue({
+      data: { ...FULL, payment_mode: "cash", due_collected: 240,
+              voided: { at: "2026-09-18T09:00:00.000Z", reason: "typed twice" } },
+      error: null,
+    });
+    renderAt();
+    expect((await screen.findByTestId("receipt-due-paid")).textContent).toMatch(/Previous due paid.*240\.00/);
+    expect(screen.queryByTestId("receipt-total-collected")).toBeNull();
+  });
+
+  it("prints neither line when no due was collected", async () => {
+    await i18n.changeLanguage("en");
+    loadReceipt.mockResolvedValue({ data: { ...FULL, payment_mode: "cash" }, error: null });
+    renderAt();
+    await screen.findByTestId("receipt-paid");
+    expect(screen.queryByTestId("receipt-due-paid")).toBeNull();
+    expect(screen.queryByTestId("receipt-total-collected")).toBeNull();
   });
 
   it("says so when the bill cannot be loaded", async () => {

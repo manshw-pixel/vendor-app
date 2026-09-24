@@ -336,3 +336,108 @@ describe("credit and dues on completion", () => {
     expect(screen.queryByTestId("pending-owes")).toBeNull();
   });
 });
+
+describe("collecting a previous due with the bill", () => {
+  it("offers it only when they owe and the mode is not Credit, pre-filled with what they owe", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 1240, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    expect(screen.queryByTestId("pending-collect")).toBeNull();          // no mode yet
+    fireEvent.click(screen.getByTestId("pay-mode-credit"));
+    expect(screen.queryByTestId("pending-collect")).toBeNull();          // credit: hidden
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    const box = screen.getByTestId("pending-collect") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(screen.getByTestId("pending-collect-amount")).toHaveProperty("value", "1240");
+  });
+
+  it("sends the due and shows the combined total on the button", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 1240, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    fireEvent.click(screen.getByTestId("pay-mode-upi"));
+    fireEvent.click(screen.getByTestId("pending-collect"));
+    fireEvent.change(screen.getByTestId("pending-collect-amount"), { target: { value: "240" } });
+    const confirm = screen.getByTestId("pending-confirm-b1");
+    expect(confirm.textContent).toMatch(/Collect ₹740\.00/);            // 500 bill + 240 due
+    fireEvent.click(confirm);
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "upi", 0, 240));
+  });
+
+  it("will not send more than they owe", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 100, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    fireEvent.click(screen.getByTestId("pending-collect"));
+    fireEvent.change(screen.getByTestId("pending-collect-amount"), { target: { value: "100.01" } });
+    expect(screen.getByTestId("pending-confirm-b1")).toHaveProperty("disabled", true);
+    expect(screen.getByText(/more than they owe/)).toBeTruthy();
+  });
+
+  it("an unticked box sends no due, exactly as before", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 100, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    fireEvent.click(screen.getByTestId("pending-confirm-b1"));
+    await waitFor(() => expect(completeBill).toHaveBeenCalledWith("b1", "cash", 0));
+  });
+});
+
+describe("dues on the confirm: review fixes", () => {
+  it("a slow due read for one bill never lands on another bill's dialog", async () => {
+    listPending.mockResolvedValueOnce({
+      data: [
+        { id: "b1", token_no: 7, total: 500, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } },
+        { id: "b2", token_no: 8, total: 120, customer_id: null, customers: null },
+      ],
+      error: null,
+    });
+    let releaseDue: (v: { data: number | null; error: null }) => void = () => {};
+    loadCustomerDue.mockImplementationOnce(() => new Promise((r) => { releaseDue = r; }));
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));   // A: the due read hangs
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    fireEvent.click(screen.getByTestId("pending-complete-b2"));          // B: a walk-in
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    releaseDue({ data: 1240, error: null });                            // A's read lands late
+    await waitFor(() => expect(loadCustomerDue).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByTestId("pending-confirm-b2")).toBeTruthy();
+    expect(screen.queryByTestId("pending-owes")).toBeNull();
+    expect(screen.queryByTestId("pending-collect")).toBeNull();
+  });
+
+  it("with points and a ticked due, the only 'Collect' figure is the total", async () => {
+    customerBalance.mockResolvedValueOnce({ data: [{ balance: 300, days_left: 12 }], error: null });
+    loadCustomerDue.mockResolvedValueOnce({ data: 1240, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    fireEvent.click(screen.getByTestId("pending-collect"));
+    expect(screen.getByTestId("pending-confirm-b1").textContent).toMatch(/Collect ₹1,740\.00/);
+    expect(screen.getByTestId("pending-collect-breakdown").textContent)
+      .toMatch(/Bill ₹500\.00 \+ previous due ₹1,240\.00/);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).not.toMatch(/Collect ₹500/);
+  });
+
+  it("a ticked due with an empty amount says why the button is off", async () => {
+    loadCustomerDue.mockResolvedValueOnce({ data: 100, error: null });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    await screen.findByTestId("pending-owes");
+    fireEvent.click(screen.getByTestId("pay-mode-cash"));
+    fireEvent.click(screen.getByTestId("pending-collect"));
+    fireEvent.change(screen.getByTestId("pending-collect-amount"), { target: { value: "" } });
+    expect(screen.getByTestId("pending-confirm-b1")).toHaveProperty("disabled", true);
+    expect(screen.getByText(/Enter an amount more than zero/)).toBeTruthy();
+  });
+});

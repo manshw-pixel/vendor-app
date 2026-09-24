@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 type Row = Record<string, unknown>;
-const responses = { bills: {} as Row, lines: [] as Row[], ledger: [] as Row[] };
+const responses = { bills: {} as Row, lines: [] as Row[], ledger: [] as Row[], dues: [] as Row[] };
 const rpcResult = { data: [{ balance: 260, days_left: 15 }], error: null as unknown };
 // Set only by the error-path test, to force the bills read to fail without fighting
 // vi.mock's module replacement (a vi.spyOn over an already-mocked module is unreliable).
@@ -16,7 +16,7 @@ const captured: {
 
 const make = (table: string) => {
   const o: Record<string, unknown> = {};
-  for (const k of ["select", "eq", "in", "gt", "order", "limit"]) {
+  for (const k of ["select", "eq", "in", "gt", "is", "order", "limit"]) {
     o[k] = (...a: unknown[]) => {
       if (k === "select") captured.selects.push(a[0] as string);
       if (k === "eq") captured.eqs.push([table, a]);
@@ -27,7 +27,9 @@ const make = (table: string) => {
   o.maybeSingle = async () =>
     billsError.value ? { data: null, error: billsError.value } : { data: responses.bills, error: null };
   (o as { then: unknown }).then = (res: (v: unknown) => unknown) => {
-    const data = table === "bill_items" ? responses.lines : responses.ledger;
+    const data = table === "bill_items" ? responses.lines
+      : table === "dues_entries" ? responses.dues
+      : responses.ledger;
     return Promise.resolve({ data, error: null }).then(res);
   };
   return o;
@@ -63,6 +65,7 @@ beforeEach(() => {
       items: { name_en: "Tomato", name_hi: "टमाटर", name_mr: "टोमॅटो", unit: "kg" } },
   ];
   responses.ledger = [{ points: 0 }];
+  responses.dues = [];
   rpcResult.data = [{ balance: 260, days_left: 15 }];
   rpcResult.error = null;
   billsError.value = null;
@@ -167,6 +170,18 @@ describe("loadReceipt", () => {
     expect((await loadReceipt("b1")).data?.payment_mode).toBe("cash");
     responses.bills = { ...responses.bills, bill_payments: null };
     expect((await loadReceipt("b1")).data?.payment_mode).toBeNull();
+  });
+
+  it("reports a due collected with the bill, reversed ones excluded by the query", async () => {
+    responses.dues = [{ amount: "240.00" }];
+    const { data } = await loadReceipt("b1");
+    expect(data?.due_collected).toBe(240);
+    expect(captured.tables).toContain("dues_entries");
+  });
+
+  it("reports no due when none was collected", async () => {
+    const { data } = await loadReceipt("b1");
+    expect(data?.due_collected).toBe(0);
   });
 
   it("returns the error and no data when the bill cannot be read", async () => {

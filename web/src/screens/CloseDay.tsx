@@ -7,7 +7,7 @@ import {
   type DaySummary,
 } from "../dayClose";
 import { differenceOf, formatBusinessDate, latestPerDate, parseCounted, type CloseRow } from "../closeRules";
-import { PAYMENT_MODES, REPAY_MODES } from "../payments";
+import { PAYMENT_MODES } from "../payments";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 
@@ -141,29 +141,33 @@ export default function CloseDay() {
           </div>
 
           <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-sm">
-            {[...PAYMENT_MODES, ...(summary.split.unrecorded.count > 0 ? ["unrecorded" as const] : [])].map((m) => (
-              <div key={m} data-testid={`close-split-${m}`} className="contents">
-                <dt className="text-slate-600">
-                  {t(`pay.${m}`)}
-                  {m === "credit" && <span className="text-xs text-slate-400"> ({t("close.creditNote")})</span>}
-                </dt>
-                <dd className="text-slate-500 text-right">{t("close.bills", { n: summary.split[m].count })}</dd>
-                <dd className="text-slate-800 text-right">{rupees(summary.split[m].total)}</dd>
-              </div>
-            ))}
-          </dl>
-
-          {REPAY_MODES.some((m) => summary.dues[m].count > 0) && (
-            <dl className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-sm">
-              {REPAY_MODES.filter((m) => summary.dues[m].count > 0).map((m) => (
-                <div key={m} data-testid={`close-dues-${m}`} className="contents">
-                  <dt className="text-slate-600">{t("close.duesMode", { mode: t(`pay.${m}`) })}</dt>
-                  <dd className="text-slate-500 text-right">{t("close.payments", { n: summary.dues[m].count })}</dd>
-                  <dd className="text-slate-800 text-right">{rupees(summary.dues[m].total)}</dd>
+            {[...PAYMENT_MODES, ...(summary.split.unrecorded.count > 0 ? ["unrecorded" as const] : [])].map((m) => {
+              // Dues received today count under the mode they were paid in; Credit is what of
+              // today's credit is still uncollected. The server keeps both apart (0023).
+              const dues = m === "cash" || m === "upi" || m === "card" ? summary.dues[m] : null;
+              const total = m === "credit" ? summary.creditOpen.total : summary.split[m].total + (dues?.total ?? 0);
+              const bills = m === "credit" ? summary.creditOpen.count : summary.split[m].count;
+              return (
+                <div key={m} data-testid={`close-split-${m}`} className="contents">
+                  <dt className="text-slate-600">
+                    {t(`pay.${m}`)}
+                    {m === "credit" && <span className="text-xs text-slate-400"> ({t("close.creditNote")})</span>}
+                    {dues && dues.total > 0 && (
+                      <span data-testid={`close-incl-${m}`} className="block text-xs text-slate-400">
+                        {t("close.inclDues", { amount: rupees(dues.total) })}
+                      </span>
+                    )}
+                  </dt>
+                  <dd className="text-slate-500 text-right">
+                    {dues && dues.count > 0
+                      ? t("close.billsAndPayments", { bills, payments: dues.count })
+                      : t("close.bills", { n: bills })}
+                  </dd>
+                  <dd className="text-slate-800 text-right">{rupees(total)}</dd>
                 </div>
-              ))}
-            </dl>
-          )}
+              );
+            })}
+          </dl>
 
           <div>
             <p className="text-sm text-slate-500">{t("close.expected")}</p>

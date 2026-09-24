@@ -21,6 +21,9 @@ export type DaySummary = {
   pending_tokens: number;
   /** Repayments of udhaar received that day (0022), by mode. Cash is already in expected_cash. */
   dues: Record<RepayMode, { total: number; count: number }>;
+  /** Credit given that day that is still uncollected, as of now (0023). Falls as the
+   *  customer pays, FIFO -- even after the day is closed. */
+  creditOpen: { total: number; count: number };
 };
 
 /** Omitting the date asks the server for today in Asia/Kolkata, so a phone on the wrong
@@ -42,6 +45,7 @@ export async function loadDaySummary(date?: string): Promise<{ data: DaySummary 
       pending_tokens: num(r.pending_tokens),
       dues: Object.fromEntries(REPAY_MODES.map((m) => [m, { total: num(r[`dues_${m}`]), count: num(r[`dues_${m}_count`]) }])) as
         Record<RepayMode, { total: number; count: number }>,
+      creditOpen: { total: num(r.credit_open), count: num(r.credit_open_count) },
     },
     error: null,
   };
