@@ -1,11 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const rpc = vi.fn();
-vi.mock("../supabase", () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
+// from("customers").select(...).eq("id", ...).maybeSingle() -- each step recorded.
+const maybeSingle = vi.fn();
+const eq = vi.fn(() => ({ maybeSingle }));
+const select = vi.fn(() => ({ eq }));
+const from = vi.fn((..._a: unknown[]) => ({ select }));
+vi.mock("../supabase", () => ({
+  supabase: { rpc: (...a: unknown[]) => rpc(...a), from: (...a: unknown[]) => from(...a) },
+}));
 
 const dues = await import("../dues");
 
-beforeEach(() => rpc.mockReset());
+beforeEach(() => {
+  rpc.mockReset();
+  vi.clearAllMocks();
+  maybeSingle.mockResolvedValue({ data: { name: "Asha", flat_no: "A-1", mobile: "9" }, error: null });
+});
 
 describe("dues API", () => {
   it("coerces the list's numeric strings and trims dates", async () => {
@@ -28,6 +39,26 @@ describe("dues API", () => {
     expect(rpc).toHaveBeenCalledWith("customer_dues", { p_customer: "c1" });
     expect(data?.balance).toBe(160);
     expect(data?.entries[0]?.amount).toBe(40);
+  });
+
+  it("reads the customer's name, flat and mobile alongside, RLS-scoped with no vendor filter", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+    const { data } = await dues.loadCustomerDues("c1");
+    expect(from).toHaveBeenCalledWith("customers");
+    expect(select).toHaveBeenCalledWith("name, flat_no, mobile");
+    expect(eq).toHaveBeenCalledTimes(1);
+    expect(eq).toHaveBeenCalledWith("id", "c1");
+    expect(data?.customer).toEqual({ name: "Asha", flat_no: "A-1", mobile: "9" });
+  });
+
+  it("gives customer null when no row is visible, and fails on a customer read error", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+    maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    expect((await dues.loadCustomerDues("c1")).data?.customer).toBeNull();
+    maybeSingle.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    const r = await dues.loadCustomerDues("c1");
+    expect(r.data).toBeNull();
+    expect(r.error).toEqual({ message: "boom" });
   });
 
   it("sends the writers' parameter names exactly, with a blank note as null", async () => {

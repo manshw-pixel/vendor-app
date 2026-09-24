@@ -42,18 +42,30 @@ export async function loadDuesList(): Promise<{ data: DuesRow[] | null; error: D
   };
 }
 
-/** The balance comes from customer_due, the one server definition, never summed here. */
+export type DuesCustomer = { name: string; flat_no: string; mobile: string };
+
+/**
+ * The balance comes from customer_due, the one server definition, never summed here.
+ * The customer row is read beside it so the page can say whose dues these are; RLS
+ * scopes it, and a row this user cannot see comes back as `customer: null`.
+ */
 export async function loadCustomerDues(
   customerId: string,
-): Promise<{ data: { balance: number; entries: DuesEntry[] } | null; error: DbError }> {
-  const [bal, tl] = await Promise.all([
+): Promise<{
+  data: { balance: number; entries: DuesEntry[]; customer: DuesCustomer | null } | null;
+  error: DbError;
+}> {
+  const [bal, tl, cust] = await Promise.all([
     supabase.rpc("customer_due", { p_customer: customerId }),
     supabase.rpc("customer_dues", { p_customer: customerId }),
+    supabase.from("customers").select("name, flat_no, mobile").eq("id", customerId).maybeSingle(),
   ]);
-  const error = bal.error ?? tl.error;
+  const error = bal.error ?? tl.error ?? cust.error;
   if (error) return { data: null, error };
+  const c = cust.data as Record<string, unknown> | null;
   return {
     data: {
+      customer: c ? { name: String(c.name), flat_no: String(c.flat_no), mobile: String(c.mobile) } : null,
       balance: num(bal.data),
       entries: ((tl.data ?? []) as Record<string, unknown>[]).map((r) => ({
         kind: r.kind as DuesEntry["kind"], id: String(r.id), at: String(r.at),

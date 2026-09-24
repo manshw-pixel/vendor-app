@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
 import {
-  loadCustomerDues, recordOpeningBalance, recordRepayment, reverseDuesEntry, type DuesEntry,
+  loadCustomerDues, recordOpeningBalance, recordRepayment, reverseDuesEntry, type DuesEntry, type DuesCustomer,
 } from "../dues";
 import { parseAmount } from "../duesRules";
 import { formatBusinessDate } from "../closeRules";
@@ -23,6 +23,7 @@ export default function CustomerDues() {
   const { customerId = "" } = useParams();
 
   const [balance, setBalance] = useState<number | null>(null);
+  const [customer, setCustomer] = useState<DuesCustomer | null>(null);
   const [entries, setEntries] = useState<DuesEntry[]>([]);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,7 +37,7 @@ export default function CustomerDues() {
   const load = useCallback(async () => {
     const { data, error } = await loadCustomerDues(customerId);
     setProblem(describeError(error));
-    if (data) { setBalance(data.balance); setEntries(data.entries); }
+    if (data) { setBalance(data.balance); setEntries(data.entries); setCustomer(data.customer ?? null); }
   }, [customerId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -100,6 +101,13 @@ export default function CustomerDues() {
   return (
     <div className="space-y-4">
       <Link to="/dues" className="text-sm text-emerald-700 underline">{t("dues.title")}</Link>
+
+      {customer && (
+        <div data-testid="cd-customer">
+          <h2 className="font-semibold text-slate-800">{customer.name}</h2>
+          <p className="text-sm text-slate-500">{customer.flat_no} · {customer.mobile}</p>
+        </div>
+      )}
 
       {problem && (
         <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">

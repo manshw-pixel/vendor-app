@@ -47,13 +47,24 @@ function renderAs(r: "admin" | "biller") {
 beforeEach(async () => {
   vi.clearAllMocks();
   await i18n.changeLanguage("en");
-  loadCustomerDues.mockResolvedValue({ data: { balance: 160, entries: ENTRIES }, error: null });
+  loadCustomerDues.mockResolvedValue({
+    data: { balance: 160, entries: ENTRIES, customer: { name: "Asha Patil", flat_no: "A-101", mobile: "+919000000001" } },
+    error: null,
+  });
   recordRepayment.mockResolvedValue({ error: null });
   recordOpeningBalance.mockResolvedValue({ error: null });
   reverseDuesEntry.mockResolvedValue({ error: null });
 });
 
 describe("Customer dues", () => {
+  it("names the customer at the top: name, flat and mobile", async () => {
+    renderAs("biller");
+    const head = await screen.findByTestId("cd-customer");
+    expect(head.textContent).toMatch(/Asha Patil/);
+    expect(head.textContent).toMatch(/A-101/);
+    expect(head.textContent).toMatch(/\+919000000001/);
+  });
+
   it("shows the balance and the timeline, with a receipt link on credit bills", async () => {
     renderAs("biller");
     expect((await screen.findByTestId("cd-balance")).textContent).toMatch(/160\.00/);
