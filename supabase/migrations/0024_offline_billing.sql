@@ -227,3 +227,157 @@ begin
                               p_collect_due, now(), true);
 end $$;
 -- create or replace keeps 0023's grants.
+
+-- ---------------------------------------------------------------------------
+-- Part 2: the offline sale
+-- ---------------------------------------------------------------------------
+alter table bills
+  add column client_id    uuid unique,
+  add column occurred_at  timestamptz,
+  add column device_label text;
+
+create table sync_issues (
+  id          uuid primary key default gen_random_uuid(),
+  vendor_id   uuid not null references vendors(id) on delete cascade,
+  bill_id     uuid not null references bills(id) on delete cascade,
+  kind        text not null check (kind in ('redeem_shortfall','due_overcollected',
+                                            'rebooked_closed_day','time_clamped')),
+  amount      numeric(10,2),
+  detail      jsonb not null default '{}',
+  status      text not null default 'open' check (status in ('open','added_as_due','dismissed')),
+  resolved_by uuid references app_users(id),
+  resolved_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index sync_issues_open_idx on sync_issues(vendor_id) where status = 'open';
+
+alter table sync_issues enable row level security;
+-- The owner settles these; staff at the counter are not asked to.
+create policy sync_issues_admin_read on sync_issues for select to authenticated
+  using (vendor_id = current_vendor_id() and current_user_role() = 'admin');
+
+create function _offline_result(p_bill_id uuid) returns jsonb
+  language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'bill_id', b.id, 'token_no', b.token_no,
+    'issues', coalesce((select jsonb_agg(jsonb_build_object('kind', s.kind, 'amount', s.amount)
+                                          order by s.kind)
+                          from sync_issues s where s.bill_id = b.id), '[]'::jsonb))
+    from bills b where b.id = p_bill_id;
+$$;
+revoke all on function _offline_result(uuid) from public, anon, authenticated;
+
+create function record_offline_bill(p_client_id uuid, p_bill jsonb) returns jsonb
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_vendor    uuid := current_vendor_id();
+  v_existing  bills%rowtype;
+  v_bill_id   uuid;
+  v_token     integer;
+  v_customer  uuid := nullif(p_bill->>'customer_id', '')::uuid;
+  v_mode      text := p_bill->>'payment_mode';
+  v_redeem    integer := coalesce((p_bill->>'redeem_points')::integer, 0);
+  v_collect   numeric := coalesce((p_bill->>'collect_due')::numeric, 0);
+  v_lines     jsonb := p_bill->'lines';
+  v_req_at    timestamptz := (p_bill->>'occurred_at')::timestamptz;
+  v_at        timestamptz;
+  v_due       numeric;
+  v_redeemed  integer;
+begin
+  if v_vendor is null or current_user_role() not in ('admin', 'recorder', 'biller') then
+    raise exception 'only shop staff may record an offline bill' using errcode = '42501';
+  end if;
+  if p_client_id is null or v_req_at is null then
+    raise exception 'client id and time are required' using errcode = '22023';
+  end if;
+
+  -- Idempotent by client_id: a lost reply's resend returns the first result. The unique
+  -- constraint makes a concurrent double-send fail the second insert, and its retry lands here.
+  select * into v_existing from bills where client_id = p_client_id;
+  if found then
+    if v_existing.vendor_id <> v_vendor then
+      raise exception 'bill is not in your shop' using errcode = '42501';
+    end if;
+    return _offline_result(v_existing.id);
+  end if;
+
+  if jsonb_typeof(v_lines) <> 'array' or jsonb_array_length(v_lines) = 0 then
+    raise exception 'refusing an offline bill with no lines' using errcode = '22023';
+  end if;
+  if exists (select 1 from jsonb_to_recordset(v_lines) l(item_id uuid)
+              left join items i on i.id = l.item_id and i.vendor_id = v_vendor
+             where i.id is null) then
+    raise exception 'an item on this bill no longer exists' using errcode = 'P0002';
+  end if;
+  if v_customer is not null and not exists
+       (select 1 from customers where id = v_customer and vendor_id = v_vendor) then
+    raise exception 'the customer on this bill no longer exists' using errcode = 'P0002';
+  end if;
+  perform assert_whole_qty(l.item_id, l.qty_kg)
+    from jsonb_to_recordset(v_lines) as l(item_id uuid, qty_kg numeric);
+
+  insert into bills (vendor_id, customer_id, recorder_id, status, client_id, occurred_at, device_label)
+  values (v_vendor, v_customer, auth.uid(), 'recording', p_client_id, v_req_at, p_bill->>'device_label')
+  returning id into v_bill_id;
+
+  v_at := least(greatest(v_req_at, now() - interval '7 days'), now());
+  if v_at <> v_req_at then
+    insert into sync_issues (vendor_id, bill_id, kind, detail)
+    values (v_vendor, v_bill_id, 'time_clamped',
+            jsonb_build_object('requested', v_req_at, 'used', v_at));
+  end if;
+
+  -- A closed day's signed-off cash is never changed: book the sale to now instead.
+  if exists (select 1 from day_closes
+              where vendor_id = v_vendor
+                and business_date = (v_at at time zone 'Asia/Kolkata')::date
+                and reopened_at is null) then
+    insert into sync_issues (vendor_id, bill_id, kind, detail)
+    values (v_vendor, v_bill_id, 'rebooked_closed_day',
+            jsonb_build_object('from', (v_at at time zone 'Asia/Kolkata')::date,
+                               'to', (now() at time zone 'Asia/Kolkata')::date));
+    v_at := now();
+  end if;
+
+  -- The price the customer actually paid; totals computed here, as replace_bill_lines does.
+  insert into bill_items (bill_id, vendor_id, item_id, qty_kg, unit_price, line_total)
+  select v_bill_id, v_vendor, l.item_id, l.qty_kg, l.unit_price, round(l.qty_kg * l.unit_price, 2)
+    from jsonb_to_recordset(v_lines) as l(item_id uuid, qty_kg numeric, unit_price numeric);
+
+  -- A real token, as issue_token allocates it -- but no token_issued message: the customer
+  -- has already left with their goods.
+  update vendor_counters set last_token = last_token + 1
+   where vendor_id = v_vendor returning last_token into v_token;
+  update bills
+     set token_no = v_token, status = 'billed',
+         total = (select coalesce(sum(line_total), 0) from bill_items where bill_id = v_bill_id)
+   where id = v_bill_id;
+
+  -- Same lock order as the core: vendor, then customer.
+  perform 1 from vendors where id = v_vendor for share;
+  if v_customer is not null then
+    perform 1 from customers where id = v_customer for update;
+  end if;
+
+  if v_collect > 0 and v_customer is not null then
+    v_due := greatest(customer_due(v_customer), 0);
+    if v_collect > v_due then
+      insert into sync_issues (vendor_id, bill_id, kind, amount)
+      values (v_vendor, v_bill_id, 'due_overcollected', v_collect - v_due);
+      v_collect := v_due;
+    end if;
+  end if;
+
+  perform _complete_bill_core(v_bill_id, auth.uid(), v_redeem, v_mode, v_collect, v_at, false);
+
+  select redeemed_points into v_redeemed from bills where id = v_bill_id;
+  if v_redeem > v_redeemed then
+    insert into sync_issues (vendor_id, bill_id, kind, amount)
+    values (v_vendor, v_bill_id, 'redeem_shortfall', v_redeem - v_redeemed);
+  end if;
+
+  return _offline_result(v_bill_id);
+end $$;
+
+revoke all on function record_offline_bill(uuid, jsonb) from public, anon;
+grant execute on function record_offline_bill(uuid, jsonb) to authenticated;

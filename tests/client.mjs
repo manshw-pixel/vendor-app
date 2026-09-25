@@ -203,6 +203,16 @@ class Client {
     // setof function too.
     if (!(await isSetReturning(this.#pool, fn))) {
       result.data = result.data.length ? result.data[0] : null;
+      // `select * from fn(...)` on a scalar-returning function (e.g. `returns jsonb`)
+      // yields one column named after the function, wrapping the value in
+      // `{ [fn]: value }`. PostgREST's real RPC endpoint returns that value directly, so
+      // unwrap it here too -- otherwise every scalar-returning function's callers would
+      // see an extra, PostgREST-inauthentic layer that composite/table-returning
+      // functions (whose column names are the row's real field names) never have.
+      if (result.data && typeof result.data === "object") {
+        const keys = Object.keys(result.data);
+        if (keys.length === 1 && keys[0] === fn) result.data = result.data[fn];
+      }
     }
     return result;
   }
