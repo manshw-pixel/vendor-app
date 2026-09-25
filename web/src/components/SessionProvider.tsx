@@ -127,7 +127,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Any other null session (INITIAL_SESSION above all, which auth-js emits to every new
       // subscriber) goes through the same fallback as getSession, so it cannot clobber a
       // session getSession just opened from the cache.
-      if (!s) noSession(null);
+      // Already opened from the cache: leave it; the "online" re-check resolves it. A null
+      // event carries no network signal, so it must not overrule getSession's fetch failure.
+      if (!s) { if (!openedFromCache) noSession(null); }
       else {
         apply({ kind: "loading" });
         void load(s.user.id, s.user.email ?? "");

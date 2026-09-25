@@ -231,4 +231,20 @@ describe("SessionProvider", () => {
     expect(screen.getByTestId("probe").textContent).toBe("ready");
     expect(screen.getByTestId("routing").textContent).toBe("online");
   });
+
+  it("a later INITIAL_SESSION null event leaves a cache-opened session alone", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
+    getSession.mockResolvedValue({ data: { session: null }, error: { message: "Failed to fetch" } });
+    let fire: (e: string, s: null) => void = () => {};
+    onAuthStateChange.mockImplementation(((cb: (e: string, s: null) => void) => { fire = cb; return noSub; }) as never);
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("cache").textContent).toBe("cache"));
+
+    act(() => { fire("INITIAL_SESSION", null); });
+
+    expect(screen.getByTestId("probe").textContent).toBe("ready");
+    expect(screen.getByTestId("cache").textContent).toBe("cache");
+  });
 });
