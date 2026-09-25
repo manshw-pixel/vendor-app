@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { SessionProvider, useSession } from "../components/SessionProvider";
 import { recallSession, rememberSession } from "../offline/sessionCache";
 import type { AppUserRow } from "../session";
+import { useRouteOffline } from "../offline/useRouteOffline";
 
 const { getSession, onAuthStateChange, maybeSingle, ownerMaybeSingle } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -24,12 +25,20 @@ vi.mock("../supabase", () => ({
 
 function Probe() {
   const s = useSession();
-  return <div data-testid="probe">{s.kind}</div>;
+  const routeOffline = useRouteOffline();
+  return (
+    <>
+      <div data-testid="probe">{s.kind}</div>
+      <div data-testid="cache">{s.kind === "ready" && s.fromCache ? "cache" : "live"}</div>
+      <div data-testid="routing">{routeOffline ? "offline" : "online"}</div>
+    </>
+  );
 }
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   localStorage.clear();
 });
 
@@ -105,8 +114,12 @@ describe("SessionProvider", () => {
     vendors: { name: "My Kirana", suspended_at: null }, must_change_password: false,
   } as unknown as AppUserRow;
 
+  const TOKEN_KEY = "sb-proj-auth-token";
+  const noSub = { data: { subscription: { unsubscribe: vi.fn() } } };
+
   it("opens from the cached session when getSession fails on the network", async () => {
     rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
     getSession.mockResolvedValue({ data: { session: null }, error: { message: "Failed to fetch" } });
 
     render(<SessionProvider><Probe /></SessionProvider>);
@@ -151,5 +164,71 @@ describe("SessionProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("ready"));
     expect(recallSession()).toEqual({ userId: "u1", email: "r@b.test", row: cachedRow });
+  });
+
+  it("stays signed out on a network failure when no auth token is stored on the device", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    getSession.mockResolvedValue({ data: { session: null }, error: { message: "Failed to fetch" } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("signedOut"));
+  });
+
+  it("an INITIAL_SESSION null event offline does not clobber the cached session", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    getSession.mockReturnValue(new Promise(() => {}));
+    onAuthStateChange.mockImplementation(((cb: (e: string, s: null) => void) => {
+      cb("INITIAL_SESSION", null);
+      return noSub;
+    }) as never);
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("ready"));
+  });
+
+  it("a cache-opened session routes as offline even when navigator says online", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
+    getSession.mockResolvedValue({ data: { session: null }, error: { message: "Failed to fetch" } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("cache").textContent).toBe("cache"));
+    expect(screen.getByTestId("routing").textContent).toBe("offline");
+  });
+
+  it("back online with no session, a cache-opened session goes to signed out", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
+    getSession.mockResolvedValueOnce({ data: { session: null }, error: { message: "Failed to fetch" } })
+      .mockResolvedValueOnce({ data: { session: null }, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("cache").textContent).toBe("cache"));
+
+    act(() => { window.dispatchEvent(new Event("online")); });
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("signedOut"));
+  });
+
+  it("back online with a session, the fresh row replaces the cached one", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    localStorage.setItem(TOKEN_KEY, "{}");
+    getSession.mockResolvedValueOnce({ data: { session: null }, error: { message: "Failed to fetch" } })
+      .mockResolvedValueOnce({ data: { session: { user: { id: "u1", email: "r@b.test" } } }, error: null });
+    maybeSingle.mockResolvedValue({ data: cachedRow, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(screen.getByTestId("cache").textContent).toBe("cache"));
+
+    act(() => { window.dispatchEvent(new Event("online")); });
+
+    await waitFor(() => expect(screen.getByTestId("cache").textContent).toBe("live"));
+    expect(screen.getByTestId("probe").textContent).toBe("ready");
+    expect(screen.getByTestId("routing").textContent).toBe("online");
   });
 });

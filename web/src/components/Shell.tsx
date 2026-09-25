@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, NavLink } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { supabase } from "../supabase";
 import { routesForRole } from "../routes";
 import { LANGS, type Lang } from "../i18n/locales";
@@ -10,6 +10,8 @@ import { useLowStock } from "../useLowStock";
 import { UnclosedBanner } from "./UnclosedBanner";
 import { useSession } from "./SessionProvider";
 import { useOnline } from "../offline/useOnline";
+import { useRouteOffline } from "../offline/useRouteOffline";
+import { OfflineChip } from "./OfflineChip";
 import { useOutbox } from "../offline/useOutbox";
 
 export function LangSwitch() {
@@ -25,21 +27,6 @@ export function LangSwitch() {
   );
 }
 
-/** Shown while offline, or while this device holds bills the server has not accepted
- *  yet; links to the queue. */
-function OfflineChip({ online, waiting, attention }: { online: boolean; waiting: number; attention: number }) {
-  const { t } = useTranslation();
-  if (online && waiting + attention === 0) return null;
-  return (
-    <Link to="/outbox" className="block bg-amber-100 text-amber-900 text-sm px-4 py-2 text-center">
-      {!online && t("offline.chip")}{!online && waiting + attention > 0 && " · "}
-      {waiting > 0 && t("offline.waiting", { count: waiting })}
-      {waiting > 0 && attention > 0 && " · "}
-      {attention > 0 && t("offline.attention", { count: attention })}
-    </Link>
-  );
-}
-
 export function Shell({ role, vendorName, name, children }:
   { role: Role; vendorName: string; name: string; children: ReactNode }) {
   const { t } = useTranslation();
@@ -48,6 +35,7 @@ export function Shell({ role, vendorName, name, children }:
   const lowStock = useLowStock(role === "admin");
   const session = useSession();
   const online = useOnline();
+  const routeOffline = useRouteOffline();
   const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
   return (
     <div className="min-h-screen">
@@ -70,7 +58,7 @@ export function Shell({ role, vendorName, name, children }:
       </header>
       <nav className="bg-white border-b border-slate-200 px-4 overflow-x-auto">
         <div className="max-w-3xl mx-auto flex gap-1">
-          {routesForRole(role, { offline: !online }).map((r) => (
+          {routesForRole(role, { offline: routeOffline }).map((r) => (
             <NavLink key={r.path} to={r.path}
                      className={({ isActive }) =>
                        `px-3 py-2 text-sm whitespace-nowrap border-b-2 min-h-[44px] flex items-center ${

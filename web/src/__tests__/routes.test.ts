@@ -132,7 +132,6 @@ describe("the dues screens", () => {
     expect(canAccess("recorder", "/dues/c1")).toBe(false);
     expect(canAccess("biller", "/dues/c1/x")).toBe(false);
   });
-
 });
 
 describe("offline routes", () => {

@@ -12,10 +12,22 @@ export function rememberSession(userId: string, email: string, row: AppUserRow):
 export function recallSession(): Cached | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    return v && typeof v.userId === "string" && v.row ? (v as Cached) : null;
+    return v && typeof v.userId === "string" && v.row
+      && typeof v.row.role === "string" && typeof v.row.vendor_id === "string" ? (v as Cached) : null;
   } catch { return null; }
 }
 
 export function forgetSession(): void {
   try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+}
+
+/** True while supabase-js still holds an auth token on this device. A device whose stored
+ *  session is gone (signed out, expired and cleared) must open signed out, even offline. */
+export function hasStoredAuthToken(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (/^sb-.*-auth-token$/.test(localStorage.key(i) ?? "")) return true;
+    }
+  } catch { /* storage blocked */ }
+  return false;
 }

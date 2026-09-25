@@ -28,6 +28,9 @@ export type SessionState =
       vendorName: string;
       name: string;
       role: Role;
+      // Opened from this device's last-session cache because the server could not be
+      // reached. Routing treats it as offline until a live read replaces it.
+      fromCache?: boolean;
     }
   // A shop the platform owner suspended. Checked before mustChangePassword so a staff
   // member mid password-reset at a suspended shop still lands here, not in that flow.
