@@ -440,6 +440,65 @@ before the provider was chosen. An empty Gupshup balance (402) is treated as RET
 so topping up rescues messages queued during the gap instead of them having failed
 silently.
 
+## Offline billing
+
+A shop with no internet must keep selling. Migration `0024` adds `record_offline_bill`,
+a `security definer` RPC that books a bill as already complete (sold + paid) and assigns
+a real token on sync — no pending-token flow offline — plus a `sync_issues` table for
+whatever the sale did that the server couldn't fully honour.
+
+**Every role can bill offline** — admin, recorder, biller. Offline, the only two screens
+reachable are **Bill** (against the cached catalogue, customers, points balances and
+dues) and the **queue view** ("Offline · N bills waiting"). History, Dues, Day close and
+the admin screens all show "needs connection" until the app is back online. Customers
+cannot be created offline, and no slip prints offline — the real receipt comes from
+History once the bill has synced.
+
+The done screen shows the amount the counter should actually take — total minus points
+redeemed minus due collected — and `Offline #n`, a per-device sequence, instead of a
+token.
+
+A device reopened while still offline signs back in as whoever last used it, provided
+its Supabase auth token is still in storage; once the connection returns, that session
+is re-verified with the server rather than trusted indefinitely.
+
+**Syncing.** On reconnect the queue sends oldest first, one bill at a time, retrying
+network failures with backoff. A bill the server rejects is marked "needs attention" and
+the queue moves on to the next one. `record_offline_bill` is keyed on `client_id`, so
+resending is always safe.
+
+**Sync issues (admin only).** Anything a synced bill couldn't fully honour surfaces here
+rather than being silently dropped or lost:
+
+- `redeem_shortfall` — the customer redeemed more points than they had left by the time
+  the bill synced. **Add as due** books the shortfall as an opening due for that
+  customer; **Dismiss** clears it with no further action.
+- `due_overcollected` — more due was collected than the customer actually owed by sync
+  time. **Dismiss** only; the owner refunds or keeps the excess as an advance outside the
+  app.
+- `rebooked_closed_day` — the bill's recorded time falls on a business date that was
+  already closed, so it was booked to the current business date instead (its original
+  time is kept). A closed day's signed-off cash is never rewritten.
+- `time_clamped` — the device's clock was more than 7 days off, so the bill's time was
+  clamped into `[now() - 7 days, now()]`. **Dismiss** only.
+
+If today is also closed, a bill with an open issue stays "needs attention" until the day
+is reopened.
+
+**Service worker.** `web/public/sw.js` is generated per build and carries that build's
+version, so a stale worker can't serve a mismatched app shell. A new deploy shows a
+"new version" prompt; it never reloads on its own mid-sale.
+
+**Deploy order:** apply `0024` in the SQL editor and insert its `schema_migrations` row
+**before** merging or deploying the web app — the client calls `record_offline_bill`
+directly, and the Pages workflow only ever deploys the SPA, never migrations.
+
+**Manual smoke test after deploy** (from the design's Testing section): DevTools →
+Offline → reload → bill with each of cash, credit, redeem and collect-due → reconnect →
+verify History, the real tokens, and Sync issues. Also check `idbKV` in a real browser's
+Application/Storage panel — the cache and queue are IndexedDB, and Vitest's mocked
+`indexedDB` cannot stand in for that.
+
 ## Not in this slice
 
 `whatsapp-webhook` (the inbound bot: points queries, item suggestions, history on
