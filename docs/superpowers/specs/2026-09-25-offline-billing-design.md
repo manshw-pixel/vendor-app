@@ -22,14 +22,19 @@ only; billing still works).
    collection — validated on sync.
 4. On sync conflict: **record the sale, drop/cap the failed part, flag it** in a Sync
    issues list for the owner. Money that changed hands is never lost.
+5. **Every role may bill offline** (admin, recorder, biller). Offline, a biller also
+   gets the Bill screen, and the Bill screen of every role ends in a checkout step
+   (payment mode, redeem, collect due) instead of issuing a token.
 
 ## Counter experience
 
 - Offline, the Bill screen works against the cached catalogue, customers, points
   balances and dues. A header chip shows "Offline · N bills waiting" (also shown online
   while the queue is non-empty).
-- An offline bill completes immediately. The slip prints `Offline #n` (per-device
-  sequence) instead of a token, and marks points and due figures as provisional.
+- An offline bill completes immediately. The done screen shows `Offline #n` (per-device
+  sequence) instead of a token, the total, and marks points and due as provisional.
+  No slip is printed offline; the normal receipt is available from History once synced.
+- Customers are picked from the cache; creating a customer needs a connection.
 - On reconnect the queue syncs automatically, oldest first, one bill at a time. Synced
   bills appear in History at the time they were made (`occurred_at`), with their real
   token.
@@ -51,10 +56,12 @@ only; billing still works).
   resolved_by, resolved_at, created_at)`.
   `kind` ∈ `redeem_shortfall`, `due_overcollected`, `rebooked_closed_day`,
   `time_clamped`. RLS: read by the tenant's admin only; writes only via functions.
+- `bills.device_label text` (nullable; `Offline #n`).
 
 ### `record_offline_bill(p_client_id uuid, p_bill jsonb) returns jsonb`
 
-`security definer`, same tenant/role guard as `complete_bill` (admin or biller).
+`security definer`. Caller must be a signed-in shop user of role admin, recorder or
+biller.
 Payload: `lines[] {item_id, qty_kg, unit_price}`, `customer_id?`, `payment_mode`,
 `redeem_points?`, `collect_due?`, `occurred_at`, `device_label`.
 Returns `{bill_id, token_no, issues: [...]}`.
@@ -89,9 +96,13 @@ two paths cannot drift. `complete_bill`'s external behaviour is unchanged.
 ### Sync issue functions
 
 - `open_sync_issues()` — admin-only list for the tenant.
-- `resolve_sync_issue(p_id uuid, p_action text)` — admin-only; `add_as_due` writes a
-  dues entry for the bill's customer (refused when the bill has no customer) and sets
-  status `added_as_due`; `dismiss` sets `dismissed`. Resolving twice is refused.
+- `resolve_sync_issue(p_id uuid, p_action text)` — admin-only. `add_as_due` is offered
+  only for `redeem_shortfall` (the customer took goods worth that much against points
+  they did not have): it writes an `opening` dues entry for the bill's customer and sets
+  `added_as_due`. `dismiss` works for every kind (for `due_overcollected` the owner
+  refunds or keeps it as an advance outside the app). Resolving twice is refused.
+- `offline_balances()` — every customer's unexpired points and current due for the
+  caller's shop, one call, used to fill the device cache.
 
 ## Client
 
