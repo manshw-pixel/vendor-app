@@ -1,6 +1,17 @@
 {
   "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language" },
   "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards", "completed": "Completed", "requests": "Requests", "stock": "Stock in/out", "close": "Close day", "dues": "Dues", "outbox": "Waiting to sync", "syncIssues": "Sync issues" },
+  "outbox": { "empty": "Nothing waiting. Every bill is synced.", "syncNow": "Sync now", "retry": "Retry", "waiting": "Waiting", "attention": "Needs attention" },
+  "syncIssues": {
+    "empty": "No sync issues.",
+    "addAsDue": "Add as due", "dismiss": "Dismiss",
+    "kind": {
+      "redeem_shortfall": "Redeemed points that were not there; {{amount}} was not paid.",
+      "due_overcollected": "Collected {{amount}} more than the customer owed. Refund it or keep it as an advance.",
+      "rebooked_closed_day": "Made on {{from}}, which was already closed, so it was added to {{to}}.",
+      "time_clamped": "The device clock was wrong; the sale was given the nearest allowed time."
+    }
+  },
   "pay": { "cash": "Cash", "upi": "UPI", "card": "Card", "credit": "Credit", "unrecorded": "Not recorded" },
   "close": {
     "dayClosed": "Today is closed. Ask an admin to reopen it.",

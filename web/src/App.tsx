@@ -20,6 +20,8 @@ import CustomerDues from "./screens/CustomerDues";
 import Settings from "./screens/Settings";
 import Receipt from "./screens/Receipt";
 import AmendBill from "./screens/AmendBill";
+import Outbox from "./screens/Outbox";
+import SyncIssues from "./screens/SyncIssues";
 import OwnerConsole from "./screens/OwnerConsole";
 import { homeFor } from "./routes";
 import type { Role } from "./config";
@@ -146,6 +148,8 @@ function ShellRoutes({ role, vendorName, name }:
         <Route path="/close" element={<CloseDay />} />
         <Route path="/dues" element={<Dues />} />
         <Route path="/dues/:customerId" element={<CustomerDues />} />
+        <Route path="/outbox" element={<Outbox />} />
+        <Route path="/sync-issues" element={<SyncIssues />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/staff" element={<Navigate to="/settings" replace />} />
         <Route path="*" element={<Navigate to={homeFor(role)} replace />} />
