@@ -160,12 +160,8 @@ test("dues_entries are invisible across vendors and unwritable directly; custome
   const { rows } = await sql(`select amount from dues_entries where vendor_id = $1`, [w.a.vendorId]);
   assertEqual(Number(rows[0].amount), 10, "a direct update changed the entry");
   const { data: seen } = await w.b.clients.admin.rpc("customer_due", { p_customer: w.a.customerId });
-  // The local harness (tests/client.mjs) unwraps a non-setof function's single row to an
-  // object keyed by the return column (real PostgREST returns the bare scalar for a
-  // scalar-returning function); pull the value out either way -- same pattern as
-  // platform_owner.test.mjs's scalarOf.
-  const scalar = seen !== null && typeof seen === "object" ? seen[Object.keys(seen)[0]] : seen;
-  assertEqual(Number(scalar), 0, "B read A's customer's balance");
+  // tests/client.mjs's rpc shim already unwraps the scalar result, same as real PostgREST.
+  assertEqual(Number(seen), 0, "B read A's customer's balance");
 });
 
 test("two tills repaying the last amount at once: exactly one succeeds", async () => {

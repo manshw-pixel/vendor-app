@@ -381,3 +381,80 @@ end $$;
 
 revoke all on function record_offline_bill(uuid, jsonb) from public, anon;
 grant execute on function record_offline_bill(uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Part 3: the owner's list, and the device cache's balances
+-- ---------------------------------------------------------------------------
+create function open_sync_issues()
+  returns table (id uuid, bill_id uuid, token_no integer, kind text, amount numeric,
+                 detail jsonb, created_at timestamptz, customer_name text)
+  language plpgsql stable security definer set search_path = public as $$
+begin
+  if current_vendor_id() is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may see sync issues' using errcode = '42501';
+  end if;
+  return query
+    select s.id, s.bill_id, b.token_no, s.kind, s.amount, s.detail, s.created_at, c.name
+      from sync_issues s
+      join bills b on b.id = s.bill_id
+      left join customers c on c.id = b.customer_id
+     where s.vendor_id = current_vendor_id() and s.status = 'open'
+     order by s.created_at;
+end $$;
+revoke all on function open_sync_issues() from public, anon;
+grant execute on function open_sync_issues() to authenticated;
+
+create function resolve_sync_issue(p_id uuid, p_action text) returns void
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_issue sync_issues%rowtype;
+  v_bill  bills%rowtype;
+begin
+  if current_vendor_id() is null or current_user_role() <> 'admin' then
+    raise exception 'only an admin may resolve a sync issue' using errcode = '42501';
+  end if;
+  if p_action not in ('add_as_due', 'dismiss') then
+    raise exception 'action must be add_as_due or dismiss' using errcode = '22023';
+  end if;
+  select * into v_issue from sync_issues where id = p_id for update;
+  if not found or v_issue.vendor_id <> current_vendor_id() then
+    raise exception 'issue is not in your shop' using errcode = '42501';
+  end if;
+  if v_issue.status <> 'open' then
+    raise exception 'already resolved' using errcode = 'P0001';
+  end if;
+
+  if p_action = 'add_as_due' then
+    select * into v_bill from bills where id = v_issue.bill_id;
+    -- Only a redemption shortfall is money the customer owes: they took goods against
+    -- points they did not have. An over-collected due is the shop's to refund.
+    if v_issue.kind <> 'redeem_shortfall' or v_bill.customer_id is null then
+      raise exception 'only a points shortfall with a customer can become a due' using errcode = '22023';
+    end if;
+    insert into dues_entries (vendor_id, customer_id, kind, amount, note, business_date, created_by, bill_id)
+    values (v_issue.vendor_id, v_bill.customer_id, 'opening', v_issue.amount,
+            'Offline bill #' || v_bill.token_no || ': points not available',
+            (now() at time zone 'Asia/Kolkata')::date, auth.uid(), v_bill.id);
+  end if;
+
+  update sync_issues
+     set status = case p_action when 'add_as_due' then 'added_as_due' else 'dismissed' end,
+         resolved_by = auth.uid(), resolved_at = now()
+   where id = p_id;
+end $$;
+revoke all on function resolve_sync_issue(uuid, text) from public, anon;
+grant execute on function resolve_sync_issue(uuid, text) to authenticated;
+
+create function offline_balances()
+  returns table (customer_id uuid, points integer, due numeric)
+  language sql stable security definer set search_path = public as $$
+  select c.id,
+         coalesce((select sum(p.points) from points_ledger p
+                    where p.customer_id = c.id and p.expires_at > now()), 0)::integer,
+         customer_due(c.id)
+    from customers c
+   where c.vendor_id = current_vendor_id()
+   order by c.id;
+$$;
+revoke all on function offline_balances() from public, anon;
+grant execute on function offline_balances() to authenticated;

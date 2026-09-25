@@ -148,3 +148,56 @@ test("sync_issues: admin reads, recorder and other shop do not", async () => {
   const b = await w.b.clients.admin.from("sync_issues").select("kind");
   assertEqual(b.data, [], "other shop does not");
 });
+
+async function shortfall(w) {
+  const { data } = await rec(w.a.clients.admin, uuid(), payload(w.a, { redeem_points: 15 }));
+  return (await sql(`select id from sync_issues where bill_id = $1`, [data.bill_id])).rows[0].id;
+}
+
+test("resolve_sync_issue: add_as_due writes an opening due and closes the issue; twice is refused", async () => {
+  const w = await seedTwoVendors();
+  const id = await shortfall(w);
+  const { error } = await w.a.clients.admin.rpc("resolve_sync_issue", { p_id: id, p_action: "add_as_due" });
+  assert(!error, error?.message);
+  const { rows: [d] } = await sql(`select customer_due($1)::float d`, [w.a.customerId]);
+  assertEqual(d.d, 15, "customer owes the shortfall");
+  const again = await w.a.clients.admin.rpc("resolve_sync_issue", { p_id: id, p_action: "dismiss" });
+  assert(again.error && /already resolved/.test(again.error.message), again.error?.message);
+});
+
+test("resolve_sync_issue: add_as_due is refused for other kinds; dismiss works; non-admin refused", async () => {
+  const w = await seedTwoVendors();
+  const { data } = await rec(w.a.clients.admin, uuid(), payload(w.a, { occurred_at: new Date(Date.now() + 3600e3).toISOString() }));
+  const id = (await sql(`select id from sync_issues where bill_id = $1`, [data.bill_id])).rows[0].id;
+  const bad = await w.a.clients.admin.rpc("resolve_sync_issue", { p_id: id, p_action: "add_as_due" });
+  assert(bad.error, "time_clamped cannot become a due");
+  const biller = await w.a.clients.biller.rpc("resolve_sync_issue", { p_id: id, p_action: "dismiss" });
+  assert(biller.error, "biller refused");
+  const ok = await w.a.clients.admin.rpc("resolve_sync_issue", { p_id: id, p_action: "dismiss" });
+  assert(!ok.error, ok.error?.message);
+  const { data: open } = await w.a.clients.admin.rpc("open_sync_issues");
+  assertEqual(open, [], "none open");
+});
+
+test("open_sync_issues lists the shop's open issues with token and customer", async () => {
+  const w = await seedTwoVendors();
+  await shortfall(w);
+  const { data, error } = await w.a.clients.admin.rpc("open_sync_issues");
+  assert(!error, error?.message);
+  assertEqual(data.length, 1);
+  assertEqual([data[0].kind, Number(data[0].amount), data[0].customer_name], ["redeem_shortfall", 15, "Cust A"]);
+  assert(data[0].token_no > 0);
+  const r = await w.a.clients.recorder.rpc("open_sync_issues");
+  assert(r.error, "recorder refused");
+});
+
+test("offline_balances: points and due per customer, own shop only", async () => {
+  const w = await seedTwoVendors();
+  await sql(`insert into points_ledger (vendor_id, customer_id, points, expires_at)
+             values ($1,$2,12, now() + interval '5 days'), ($1,$2,99, now() - interval '1 day')`,
+            [w.a.vendorId, w.a.customerId]);
+  await w.a.clients.admin.rpc("record_opening_balance", { p_customer: w.a.customerId, p_amount: 30, p_note: "k" });
+  const { data, error } = await w.a.clients.recorder.rpc("offline_balances");
+  assert(!error, error?.message);
+  assertEqual(data.map((r) => [r.customer_id, r.points, Number(r.due)]), [[w.a.customerId, 12, 30]]);
+});
