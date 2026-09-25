@@ -3,6 +3,7 @@ import type { Draft } from "./billing";
 import type { Unit } from "./units";
 import type { Customer } from "./customers";
 import type { PaymentMode } from "./payments";
+import type { OfflineBill } from "./offline/outbox";
 
 export type PostgrestErrorLike = { message?: string; code?: string } | null;
 
@@ -236,6 +237,19 @@ export async function billDraftLines(billId: string) {
 /** Every customer's unexpired points and current due in one call, for the offline cache. */
 export async function offlineBalances() {
   return supabase.rpc("offline_balances");
+}
+
+/** Idempotent on clientId (0024): a resend after a lost reply returns the first result. */
+export async function recordOfflineBill(b: OfflineBill) {
+  return supabase.rpc("record_offline_bill", {
+    p_client_id: b.clientId,
+    p_bill: {
+      lines: b.lines.map((l) => ({ item_id: l.itemId, qty_kg: l.qtyKg, unit_price: l.unitPrice })),
+      customer_id: b.customerId, payment_mode: b.mode,
+      redeem_points: b.redeemPoints, collect_due: b.collectDue,
+      occurred_at: b.occurredAt, device_label: `Offline #${b.seq}`,
+    },
+  });
 }
 
 export type { Customer, Draft };
