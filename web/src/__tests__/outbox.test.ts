@@ -60,12 +60,21 @@ describe("outbox", () => {
     expect(await ob.listOutbox("v1")).toHaveLength(0);
   });
 
-  it("treats a 23505 unique-violation as a network error and leaves the bill waiting", async () => {
+  it("treats a 23505 unique-violation as a pause (not attention) and leaves the bill waiting", async () => {
     await ob.enqueue(base()); await ob.enqueue(base());
     const send = vi.fn(async () => ({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } }));
     const r = await ob.flush("v1", send);
     expect(send).toHaveBeenCalledTimes(1);
     expect(r).toEqual({ sent: 0, attention: 0, stoppedOffline: true });
     expect((await ob.listOutbox("v1")).every((b) => b.state === "waiting")).toBe(true);
+  });
+
+  it("isNetworkError itself does not treat 23505 as a network error", () => {
+    expect(ob.isNetworkError({ code: "23505", message: "duplicate key" })).toBe(false);
+  });
+
+  it("assigns distinct seqs to concurrent enqueues", async () => {
+    const [a, b] = await Promise.all([ob.enqueue(base()), ob.enqueue(base())]);
+    expect([a.seq, b.seq].sort()).toEqual([1, 2]);
   });
 });

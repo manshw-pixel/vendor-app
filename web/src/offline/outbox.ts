@@ -15,25 +15,29 @@ export type FlushResult = { sent: number; attention: number; stoppedOffline: boo
 const billKey = (v: string, id: string) => `outbox:${v}:${id}`;
 const seqKey = (v: string) => `outbox-seq:${v}`;
 
-/** A resend of the same clientId racing another can come back as Postgres 23505
- *  (unique_violation) instead of the RPC's own idempotent success; treat it like a
- *  network error so the bill stays waiting and the next attempt hits the idempotent path. */
 export function isNetworkError(e: { message?: string; code?: string } | null): boolean {
-  if (!e) return false;
-  if (e.code === "23505") return true;
-  return !e.code && /fetch|network|load failed/i.test(e.message ?? "");
+  return !!e && !e.code && /fetch|network|load failed/i.test(e.message ?? "");
 }
 
-export async function enqueue(
+// Serialises enqueue() calls so two quick enqueues (e.g. fired concurrently) can't both
+// read the same seq before either writes it back.
+let enqueueChain: Promise<unknown> = Promise.resolve();
+
+export function enqueue(
   b: Omit<OfflineBill, "seq" | "state" | "clientId" | "occurredAt">,
 ): Promise<OfflineBill> {
-  const kv = getKV();
-  const seq = ((await kv.get<number>(seqKey(b.vendorId))) ?? 0) + 1;
-  await kv.set(seqKey(b.vendorId), seq);
-  const bill: OfflineBill = { ...b, seq, state: "waiting", clientId: crypto.randomUUID(),
-                              occurredAt: new Date().toISOString() };
-  await kv.set(billKey(b.vendorId, bill.clientId), bill);
-  return bill;
+  const next = enqueueChain.then(async () => {
+    const kv = getKV();
+    const seq = ((await kv.get<number>(seqKey(b.vendorId))) ?? 0) + 1;
+    await kv.set(seqKey(b.vendorId), seq);
+    const bill: OfflineBill = { ...b, seq, state: "waiting", clientId: crypto.randomUUID(),
+                                occurredAt: new Date().toISOString() };
+    await kv.set(billKey(b.vendorId, bill.clientId), bill);
+    return bill;
+  });
+  // Keep the chain alive even if this call rejects, so a later enqueue isn't blocked forever.
+  enqueueChain = next.catch(() => {});
+  return next;
 }
 
 export async function listOutbox(vendorId: string): Promise<OfflineBill[]> {
@@ -63,7 +67,11 @@ export async function flush(
     try { reply = await send(b); }
     catch (e) { reply = { data: null, error: { message: String((e as Error)?.message ?? e) } }; }
     if (!reply.error) { await kv.del(billKey(vendorId, b.clientId)); r.sent++; continue; }
-    if (isNetworkError(reply.error)) { r.stoppedOffline = true; break; }
+    // A resend of the same clientId racing another can come back as Postgres 23505
+    // (unique_violation) instead of the RPC's own idempotent success; pause the run like a
+    // network error so the bill stays waiting and the next attempt hits the idempotent path.
+    const pause = isNetworkError(reply.error) || reply.error.code === "23505";
+    if (pause) { r.stoppedOffline = true; break; }
     await kv.set(billKey(vendorId, b.clientId), { ...b, state: "attention", error: reply.error.message ?? "" });
     r.attention++;
   }
