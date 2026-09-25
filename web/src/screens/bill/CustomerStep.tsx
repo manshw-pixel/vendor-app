@@ -14,11 +14,14 @@ export function CustomerStep({
   vendorId,
   onPick,
   onCreated,
+  allowCreate = true,
 }: {
   customers: readonly Customer[];
   vendorId: string;
   onPick: (c: Customer) => void;
   onCreated: (c: Customer) => void;
+  /** False offline: a customer row cannot be created without the server. */
+  allowCreate?: boolean;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -112,7 +115,9 @@ export function CustomerStep({
         ))}
       </ul>
 
-      {!adding ? (
+      {!allowCreate ? (
+        <p className="text-sm text-slate-500">{t("offline.noNewCustomer")}</p>
+      ) : !adding ? (
         <button
           onClick={() => setAdding(true)}
           className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white"

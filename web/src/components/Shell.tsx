@@ -8,6 +8,13 @@ import { setLang } from "../i18n";
 import type { Role } from "../config";
 import { useLowStock } from "../useLowStock";
 import { UnclosedBanner } from "./UnclosedBanner";
+import { useSession } from "./SessionProvider";
+import { useOnline } from "../offline/useOnline";
+import { useRouteOffline } from "../offline/useRouteOffline";
+import { OfflineChip } from "./OfflineChip";
+import { useOutbox } from "../offline/useOutbox";
+import { useSnapshotRefresh } from "../offline/useSnapshotRefresh";
+import { getUpdateReady, onUpdateReady } from "../offline/updateReady";
 
 export function LangSwitch() {
   const { i18n, t } = useTranslation();
@@ -22,24 +29,30 @@ export function LangSwitch() {
   );
 }
 
-/** Online-only by design: tokens are issued atomically server-side and cannot be
- *  generated offline, so the app says so plainly rather than queueing work it cannot
- *  complete. */
-function OfflineBanner() {
+/** Shown when a new service worker has installed alongside the current one. Reloading is
+ *  always the person's choice: an unattended reload could wipe an in-progress bill. */
+export function UpdateBanner() {
   const { t } = useTranslation();
-  const [offline, setOffline] = useState(!navigator.onLine);
-  useEffect(() => {
-    const on = () => setOffline(false);
-    const off = () => setOffline(true);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
-  if (!offline) return null;
-  return <div className="bg-amber-100 text-amber-900 text-sm px-4 py-2 text-center">{t("offline.banner")}</div>;
+  // Read any registration recorded before this component mounted (e.g. install finished
+  // during the initial page load, ahead of Shell's first render) as well as subscribing
+  // for one that arrives later.
+  const [reg, setReg] = useState<ServiceWorkerRegistration | null>(() => getUpdateReady());
+  useEffect(() => onUpdateReady(setReg), []);
+  if (!reg) return null;
+  return (
+    <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
+      <span>{t("app.updateReady")}</span>
+      <button
+        className="border border-emerald-700 rounded-lg px-2 py-0.5 bg-white"
+        onClick={() => {
+          navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
+          reg.waiting?.postMessage("skip-waiting");
+        }}
+      >
+        {t("app.reload")}
+      </button>
+    </div>
+  );
 }
 
 export function Shell({ role, vendorName, name, children }:
@@ -48,9 +61,16 @@ export function Shell({ role, vendorName, name, children }:
   // Admin only: they are the role that restocks. A recorder told about low stock can
   // do nothing but worry about it.
   const lowStock = useLowStock(role === "admin");
+  const session = useSession();
+  const online = useOnline();
+  const routeOffline = useRouteOffline();
+  const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
+  useSnapshotRefresh(session.kind === "ready" ? session.vendorId : null,
+                     session.kind === "ready" && !!session.fromCache);
   return (
     <div className="min-h-screen">
-      <OfflineBanner />
+      <UpdateBanner />
+      <OfflineChip online={online} waiting={waiting} attention={attention} />
       <UnclosedBanner role={role} />
       <header className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
@@ -69,7 +89,7 @@ export function Shell({ role, vendorName, name, children }:
       </header>
       <nav className="bg-white border-b border-slate-200 px-4 overflow-x-auto">
         <div className="max-w-3xl mx-auto flex gap-1">
-          {routesForRole(role).map((r) => (
+          {routesForRole(role, { offline: routeOffline }).map((r) => (
             <NavLink key={r.path} to={r.path}
                      className={({ isActive }) =>
                        `px-3 py-2 text-sm whitespace-nowrap border-b-2 min-h-[44px] flex items-center ${

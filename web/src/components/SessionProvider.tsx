@@ -2,6 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { supabase } from "../supabase";
 import { sessionFromOwnerRow, sessionFromRow, type AppUserRow, type SessionState } from "../session";
 import { describeError } from "../errors";
+import { isNetworkError } from "../offline/outbox";
+import { forgetSession, hasStoredAuthToken, recallSession, rememberSession } from "../offline/sessionCache";
+
+/** A session rebuilt from this device's cache, flagged so routing stays offline until a
+ *  live read replaces it. */
+function cachedState(c: { userId: string; email: string; row: AppUserRow }): SessionState {
+  const st = sessionFromRow(c.userId, c.email, c.row);
+  return st.kind === "ready" ? { ...st, fromCache: true } : st;
+}
 
 const Ctx = createContext<SessionState>({ kind: "loading" });
 // A no-op default so a caller outside SessionProvider fails silently rather than crashing;
@@ -45,6 +54,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // does not have to match issue order, so a request id lets a response that lands late
     // discard itself instead of overwriting a newer one -- issue order is what must win.
     let requestId = 0;
+    // Mirrors whether the current state came from the cache, for the "online" listener.
+    let openedFromCache = false;
+    const apply = (st: SessionState) => {
+      openedFromCache = st.kind === "ready" && !!st.fromCache;
+      setState(st);
+    };
+
+    // No session came back. Offline (or on a network failure), a device that still holds
+    // a Supabase auth token reopens as the last person signed in; anything else is signed out.
+    function noSession(error: { message?: string; code?: string } | null) {
+      const c = hasStoredAuthToken() && (!navigator.onLine || isNetworkError(error)) ? recallSession() : null;
+      apply(c ? cachedState(c) : { kind: "signedOut" });
+    }
 
     async function load(userId: string, email: string) {
       const id = ++requestId;
@@ -57,8 +79,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // An error here is not the same as "no row": treat only a clean null as unmapped,
       // so a transient failure does not tell a real admin they are not staff.
       if (error) {
+        // No network: open as the last person signed in on this device, if it is this user.
+        if (isNetworkError(error)) {
+          const c = recallSession();
+          if (c && c.userId === userId) { apply(cachedState(c)); return; }
+        }
         const described = describeError(error);
-        setState({ kind: "error", detail: described?.detail ?? error.message ?? "" });
+        apply({ kind: "error", detail: described?.detail ?? error.message ?? "" });
         return;
       }
       if (!data) {
@@ -72,27 +99,39 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (cancelled || id !== requestId) return;
         if (ownerError) {
           const described = describeError(ownerError);
-          setState({ kind: "error", detail: described?.detail ?? ownerError.message ?? "" });
+          apply({ kind: "error", detail: described?.detail ?? ownerError.message ?? "" });
           return;
         }
-        setState(sessionFromOwnerRow(userId, email, (ownerRow as { name: string } | null) ?? null));
+        apply(sessionFromOwnerRow(userId, email, (ownerRow as { name: string } | null) ?? null));
         return;
       }
-      setState(sessionFromRow(userId, email, data as unknown as AppUserRow));
+      rememberSession(userId, email, data as unknown as AppUserRow);
+      apply(sessionFromRow(userId, email, data as unknown as AppUserRow));
     }
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(({ data, error }) => {
       const s = data.session;
       if (cancelled) return;
-      if (!s) setState({ kind: "signedOut" });
+      if (!s) noSession(error);
       else void load(s.user.id, s.user.email ?? "");
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (cancelled) return;
-      if (!s) setState({ kind: "signedOut" });
+      // An explicit sign-out forgets who was here; the outbox is deliberately left alone.
+      if (event === "SIGNED_OUT") {
+        forgetSession();
+        apply({ kind: "signedOut" });
+        return;
+      }
+      // Any other null session (INITIAL_SESSION above all, which auth-js emits to every new
+      // subscriber) goes through the same fallback as getSession, so it cannot clobber a
+      // session getSession just opened from the cache.
+      // Already opened from the cache: leave it; the "online" re-check resolves it. A null
+      // event carries no network signal, so it must not overrule getSession's fetch failure.
+      if (!s) { if (!openedFromCache) noSession(null); }
       else {
-        setState({ kind: "loading" });
+        apply({ kind: "loading" });
         void load(s.user.id, s.user.email ?? "");
       }
     });
@@ -108,8 +147,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    // Back online after opening from the cache: re-run the normal load so the server decides
+    // again. No session now means signed out; a session means a fresh row replaces the cache.
+    const onOnline = () => {
+      if (cancelled || !openedFromCache) return;
+      void supabase.auth.getSession().then(({ data, error }) => {
+        if (cancelled) return;
+        const s = data.session;
+        if (!s) {
+          if (!isNetworkError(error)) apply({ kind: "signedOut" });
+        } else void load(s.user.id, s.user.email ?? "");
+      });
+    };
+    window.addEventListener("online", onOnline);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onOnline);
       sub.subscription.unsubscribe();
     };
   }, []);

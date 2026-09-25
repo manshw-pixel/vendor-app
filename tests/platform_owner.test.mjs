@@ -12,9 +12,9 @@ async function world() {
   return { ...w, owner, outsider };
 }
 const getW = once(world);
-// The local harness (tests/client.mjs) unwraps a non-setof function's single row to an
-// object keyed by the return column (real PostgREST returns the bare scalar for a
-// scalar-returning function); pull the value out either way.
+// tests/client.mjs's rpc shim already unwraps a scalar-returning function's result, same
+// as real PostgREST; this is a no-op passthrough kept only so call sites read the same
+// either way.
 const scalarOf = (data) =>
   data !== null && typeof data === "object" ? data[Object.keys(data)[0]] : data;
 const roleOf = async (client) => scalarOf((await client.rpc("current_user_role")).data);

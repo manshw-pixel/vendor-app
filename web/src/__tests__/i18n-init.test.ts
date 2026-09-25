@@ -34,7 +34,7 @@ describe("i18n initialises on import", () => {
       "app.name", "app.signIn", "app.signOut", "app.email", "app.password",
       "app.signingIn", "app.language", "nav.bill", "nav.pending", "nav.items",
       "nav.customers", "nav.staff", "nav.dashboards", "session.unmappedTitle",
-      "offline.banner", "soon.body",
+      "offline.noCache", "soon.body",
       "staff.email", "staff.password", "staff.passwordHint", "staff.badEmail",
       "staff.badPassword", "staff.adminCreates",
       "changePw.title", "changePw.body", "changePw.new", "changePw.confirm",
