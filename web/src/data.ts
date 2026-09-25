@@ -233,4 +233,9 @@ export async function billDraftLines(billId: string) {
   return { data, error: null };
 }
 
+/** Every customer's unexpired points and current due in one call, for the offline cache. */
+export async function offlineBalances() {
+  return supabase.rpc("offline_balances");
+}
+
 export type { Customer, Draft };
