@@ -66,6 +66,9 @@ export async function flush(
     let reply: Reply;
     try { reply = await send(b); }
     catch (e) { reply = { data: null, error: { message: String((e as Error)?.message ?? e) } }; }
+    // A sender that resolves with nothing (e.g. a test double with no return value) is
+    // not a success -- treat it the same as any other refusal, not a crash.
+    if (!reply) reply = { data: null, error: { message: "no reply" } };
     if (!reply.error) { await kv.del(billKey(vendorId, b.clientId)); r.sent++; continue; }
     // A resend of the same clientId racing another can come back as Postgres 23505
     // (unique_violation) instead of the RPC's own idempotent success; pause the run like a

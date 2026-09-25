@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-vi.mock("../data", () => ({ recordOfflineBill: vi.fn() }));
+vi.mock("../data", () => ({ recordOfflineBill: vi.fn(async () => ({ data: null, error: null })) }));
 vi.mock("../components/SessionProvider", () => ({
   useSession: () => ({ kind: "ready", userId: "u1", vendorId: "v1", vendorName: "V", name: "R", role: "recorder" }),
 }));
@@ -22,6 +22,7 @@ describe("outbox screen", () => {
     expect(await screen.findByText(/Offline #1/)).toBeTruthy();
     expect(screen.getByText(/day is closed/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-    await waitFor(async () => expect((await ob.listOutbox("v1"))[0]?.state ?? "gone").not.toBe("attention"));
+    await waitFor(async () => expect(await ob.listOutbox("v1")).toHaveLength(0));
+    await waitFor(() => expect(screen.queryByText(/Offline #1/)).toBeNull());
   });
 });

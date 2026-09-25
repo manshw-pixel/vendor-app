@@ -69,6 +69,15 @@ describe("outbox", () => {
     expect((await ob.listOutbox("v1")).every((b) => b.state === "waiting")).toBe(true);
   });
 
+  it("treats a sender that resolves with no reply as attention, not a crash", async () => {
+    const a = await ob.enqueue(base());
+    const send = vi.fn(async () => undefined as any);
+    const r = await ob.flush("v1", send);
+    expect(r).toEqual({ sent: 0, attention: 1, stoppedOffline: false });
+    const left = await ob.listOutbox("v1");
+    expect(left).toMatchObject([{ clientId: a.clientId, state: "attention" }]);
+  });
+
   it("isNetworkError itself does not treat 23505 as a network error", () => {
     expect(ob.isNetworkError({ code: "23505", message: "duplicate key" })).toBe(false);
   });

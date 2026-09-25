@@ -11,10 +11,9 @@ import { rupees } from "../money";
  * This device's queue: every offline bill still waiting to sync, and every one that
  * needs a look because the server refused it. Same list/empty layout as Dues.tsx.
  *
- * Retry only clears the row's own attention state -- it does not itself resend the bill.
- * The next sync (online, focus, or the periodic retry in useOutbox) picks up a "waiting"
- * row on its own; going through that shared path here, rather than calling flush
- * directly, keeps this screen from racing the background sync over the same bill.
+ * Retry clears the row's own attention state, then asks useOutbox's shared flush to
+ * resend it right away (rather than waiting for the next scheduled attempt), and reloads
+ * once that settles.
  */
 export default function Outbox() {
   const { t } = useTranslation();
@@ -39,6 +38,7 @@ export default function Outbox() {
   async function onRetry(clientId: string) {
     if (!vendorId) return;
     await retry(vendorId, clientId);
+    await flushNow();
     await load();
   }
 

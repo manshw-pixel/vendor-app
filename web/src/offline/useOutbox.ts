@@ -47,5 +47,5 @@ export function useOutbox(vendorId: string | null) {
     };
   }, [run]);
 
-  return { ...counts, flushNow: () => void run() };
+  return { ...counts, flushNow: () => run() };
 }
