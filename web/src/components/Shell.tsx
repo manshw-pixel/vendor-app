@@ -13,6 +13,7 @@ import { useOnline } from "../offline/useOnline";
 import { useRouteOffline } from "../offline/useRouteOffline";
 import { OfflineChip } from "./OfflineChip";
 import { useOutbox } from "../offline/useOutbox";
+import { getUpdateReady, onUpdateReady } from "../offline/updateReady";
 
 export function LangSwitch() {
   const { i18n, t } = useTranslation();
@@ -29,14 +30,13 @@ export function LangSwitch() {
 
 /** Shown when a new service worker has installed alongside the current one. Reloading is
  *  always the person's choice: an unattended reload could wipe an in-progress bill. */
-function UpdateBanner() {
+export function UpdateBanner() {
   const { t } = useTranslation();
-  const [reg, setReg] = useState<ServiceWorkerRegistration | null>(null);
-  useEffect(() => {
-    const onReady = (e: Event) => setReg((e as CustomEvent<ServiceWorkerRegistration>).detail);
-    window.addEventListener("app-update-ready", onReady);
-    return () => window.removeEventListener("app-update-ready", onReady);
-  }, []);
+  // Read any registration recorded before this component mounted (e.g. install finished
+  // during the initial page load, ahead of Shell's first render) as well as subscribing
+  // for one that arrives later.
+  const [reg, setReg] = useState<ServiceWorkerRegistration | null>(() => getUpdateReady());
+  useEffect(() => onUpdateReady(setReg), []);
   if (!reg) return null;
   return (
     <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
