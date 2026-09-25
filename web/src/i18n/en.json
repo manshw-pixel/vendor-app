@@ -1,5 +1,5 @@
 {
-  "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language" },
+  "app": { "name": "Vendor App", "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "signingIn": "Signing in…", "language": "Language", "updateReady": "A new version is ready.", "reload": "Reload" },
   "nav": { "bill": "New bill", "pending": "Pending", "items": "Items", "customers": "Customers", "staff": "Staff", "settings": "Settings", "dashboards": "Dashboards", "completed": "Completed", "requests": "Requests", "stock": "Stock in/out", "close": "Close day", "dues": "Dues", "outbox": "Waiting to sync", "syncIssues": "Sync issues" },
   "outbox": { "empty": "Nothing waiting. Every bill is synced.", "syncNow": "Sync now", "retry": "Retry", "waiting": "Waiting", "attention": "Needs attention" },
   "syncIssues": {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
 import { supabase } from "../supabase";
@@ -27,6 +27,33 @@ export function LangSwitch() {
   );
 }
 
+/** Shown when a new service worker has installed alongside the current one. Reloading is
+ *  always the person's choice: an unattended reload could wipe an in-progress bill. */
+function UpdateBanner() {
+  const { t } = useTranslation();
+  const [reg, setReg] = useState<ServiceWorkerRegistration | null>(null);
+  useEffect(() => {
+    const onReady = (e: Event) => setReg((e as CustomEvent<ServiceWorkerRegistration>).detail);
+    window.addEventListener("app-update-ready", onReady);
+    return () => window.removeEventListener("app-update-ready", onReady);
+  }, []);
+  if (!reg) return null;
+  return (
+    <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
+      <span>{t("app.updateReady")}</span>
+      <button
+        className="border border-emerald-700 rounded-lg px-2 py-0.5 bg-white"
+        onClick={() => {
+          navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
+          reg.waiting?.postMessage("skip-waiting");
+        }}
+      >
+        {t("app.reload")}
+      </button>
+    </div>
+  );
+}
+
 export function Shell({ role, vendorName, name, children }:
   { role: Role; vendorName: string; name: string; children: ReactNode }) {
   const { t } = useTranslation();
@@ -39,6 +66,7 @@ export function Shell({ role, vendorName, name, children }:
   const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
   return (
     <div className="min-h-screen">
+      <UpdateBanner />
       <OfflineChip online={online} waiting={waiting} attention={attention} />
       <UnclosedBanner role={role} />
       <header className="bg-white border-b border-slate-200 px-4 py-3">

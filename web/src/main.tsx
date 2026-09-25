@@ -13,3 +13,16 @@ createRoot(el).render(
     <App />
   </StrictMode>,
 );
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").then((reg) => {
+    reg.addEventListener("updatefound", () => {
+      const w = reg.installing;
+      w?.addEventListener("statechange", () => {
+        if (w.state === "installed" && navigator.serviceWorker.controller) {
+          window.dispatchEvent(new CustomEvent("app-update-ready", { detail: reg }));
+        }
+      });
+    });
+  });
+}

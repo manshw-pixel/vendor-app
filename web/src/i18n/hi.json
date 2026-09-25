@@ -1,5 +1,5 @@
 {
-  "app": { "name": "वेंडर ऐप", "signIn": "साइन इन", "signOut": "साइन आउट", "email": "ईमेल", "password": "पासवर्ड", "signingIn": "साइन इन हो रहा है…", "language": "भाषा" },
+  "app": { "name": "वेंडर ऐप", "signIn": "साइन इन", "signOut": "साइन आउट", "email": "ईमेल", "password": "पासवर्ड", "signingIn": "साइन इन हो रहा है…", "language": "भाषा", "updateReady": "एक नया संस्करण तैयार है।", "reload": "रीलोड करें" },
   "nav": { "bill": "नया बिल", "pending": "बाकी", "items": "सामान", "customers": "ग्राहक", "staff": "स्टाफ", "settings": "सेटिंग", "dashboards": "डैशबोर्ड", "completed": "पूरे हुए", "requests": "अनुरोध", "stock": "स्टॉक आवक/जावक", "close": "दिन बंद करें", "dues": "उधार खाता", "outbox": "सिंक होना बाकी", "syncIssues": "सिंक समस्याएं" },
   "outbox": { "empty": "कुछ भी बाकी नहीं। हर बिल सिंक हो चुका है।", "syncNow": "अभी सिंक करें", "retry": "फिर कोशिश करें", "waiting": "प्रतीक्षा में", "attention": "ध्यान देने योग्य" },
   "syncIssues": {
