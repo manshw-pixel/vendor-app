@@ -25,6 +25,7 @@ describe("routesForRole", () => {
       "/settings",
       "/dashboards",
       "/close",
+      "/sync-issues",
     ]);
   });
 
@@ -130,5 +131,23 @@ describe("the dues screens", () => {
     expect(canAccess("recorder", "/dues")).toBe(false);
     expect(canAccess("recorder", "/dues/c1")).toBe(false);
     expect(canAccess("biller", "/dues/c1/x")).toBe(false);
+  });
+
+});
+
+describe("offline routes", () => {
+  it("offline, every role gets Bill and the outbox and nothing else", () => {
+    for (const role of ["admin", "recorder", "biller"] as const) {
+      expect(routesForRole(role, { offline: true }).map((r) => r.path)).toEqual(["/bill", "/outbox"]);
+      expect(canAccess(role, "/bill", { offline: true })).toBe(true);
+      expect(canAccess(role, "/dues", { offline: true })).toBe(false);
+      expect(homeFor(role, { offline: true })).toBe("/bill");
+    }
+  });
+  it("online, only admin reaches sync issues; everyone reaches the outbox", () => {
+    expect(canAccess("admin", "/sync-issues")).toBe(true);
+    expect(canAccess("biller", "/sync-issues")).toBe(false);
+    expect(canAccess("biller", "/outbox")).toBe(true);
+    expect(canAccess("biller", "/bill")).toBe(false);
   });
 });

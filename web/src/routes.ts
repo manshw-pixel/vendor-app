@@ -8,6 +8,9 @@ export type RouteDef = { path: string; labelKey: string };
  * Hiding /items from a biller is politeness; what actually stops a biller changing a
  * price is items_admin_write in supabase/migrations/0002_rls.sql. Never treat a passing
  * check here as protection, and never move an authorization decision into this file.
+ *
+ * The offline routes are UX too: what decides who may record an offline bill is
+ * record_offline_bill in the database, when the queue is sent.
  */
 const BY_ROLE: Record<Role, RouteDef[]> = {
   recorder: [
@@ -34,8 +37,17 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
     { path: "/settings", labelKey: "nav.settings" },
     { path: "/dashboards", labelKey: "nav.dashboards" },
     { path: "/close", labelKey: "nav.close" },
+    { path: "/sync-issues", labelKey: "nav.syncIssues" },
   ],
 };
+
+/** Offline, every role gets the counter and the queue, and nothing that needs a server. */
+const OFFLINE: RouteDef[] = [
+  { path: "/bill", labelKey: "nav.bill" },
+  { path: "/outbox", labelKey: "nav.outbox" },
+];
+
+type Opts = { offline?: boolean };
 
 /**
  * Paths reachable but never listed. BY_ROLE is the nav; these are screens reached from
@@ -57,17 +69,20 @@ const matchesUnlisted = (prefix: string, path: string): boolean => {
   return rest.length > 0 && !rest.includes("/");
 };
 
-export function routesForRole(role: Role): RouteDef[] {
-  return BY_ROLE[role];
+export function routesForRole(role: Role, opts: Opts = {}): RouteDef[] {
+  return opts.offline ? OFFLINE : BY_ROLE[role];
 }
 
-export function canAccess(role: Role, path: string): boolean {
+export function canAccess(role: Role, path: string, opts: Opts = {}): boolean {
+  if (opts.offline) return OFFLINE.some((r) => r.path === path);
+  // Every role can open this device's queue; online it is reached from the sync chip.
+  if (path === "/outbox") return true;
   if (BY_ROLE[role].some((r) => r.path === path)) return true;
   return UNLISTED[role].some((prefix) => matchesUnlisted(prefix, path));
 }
 
-export function homeFor(role: Role): string {
-  const first = BY_ROLE[role][0];
+export function homeFor(role: Role, opts: Opts = {}): string {
+  const first = routesForRole(role, opts)[0];
   if (!first) throw new Error(`role ${role} has no routes`);
   return first.path;
 }

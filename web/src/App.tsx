@@ -121,7 +121,7 @@ function Suspended({ vendorName, email }: { vendorName: string; email: string })
 }
 
 /**
- * Everything BUT the receipt, wrapped in the app chrome (header, nav, offline banner).
+ * Everything BUT the receipt, wrapped in the app chrome (header, nav, sync chip).
  *
  * Split out of Inner so /receipt/:billId can be routed OUTSIDE Shell entirely: the slip
  * is printed with window.print(), and nothing above it -- the shell's header, nav and

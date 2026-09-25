@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { supabase } from "../supabase";
 import { sessionFromOwnerRow, sessionFromRow, type AppUserRow, type SessionState } from "../session";
 import { describeError } from "../errors";
+import { isNetworkError } from "../offline/outbox";
+import { forgetSession, recallSession, rememberSession } from "../offline/sessionCache";
 
 const Ctx = createContext<SessionState>({ kind: "loading" });
 // A no-op default so a caller outside SessionProvider fails silently rather than crashing;
@@ -57,6 +59,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // An error here is not the same as "no row": treat only a clean null as unmapped,
       // so a transient failure does not tell a real admin they are not staff.
       if (error) {
+        // No network: open as the last person signed in on this device, if it is this user.
+        if (isNetworkError(error)) {
+          const c = recallSession();
+          if (c && c.userId === userId) { setState(sessionFromRow(c.userId, c.email, c.row)); return; }
+        }
         const described = describeError(error);
         setState({ kind: "error", detail: described?.detail ?? error.message ?? "" });
         return;
@@ -78,18 +85,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setState(sessionFromOwnerRow(userId, email, (ownerRow as { name: string } | null) ?? null));
         return;
       }
+      rememberSession(userId, email, data as unknown as AppUserRow);
       setState(sessionFromRow(userId, email, data as unknown as AppUserRow));
     }
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(({ data, error }) => {
       const s = data.session;
       if (cancelled) return;
-      if (!s) setState({ kind: "signedOut" });
+      if (!s) {
+        const c = !navigator.onLine || isNetworkError(error) ? recallSession() : null;
+        if (c) setState(sessionFromRow(c.userId, c.email, c.row));
+        else setState({ kind: "signedOut" });
+      }
       else void load(s.user.id, s.user.email ?? "");
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (cancelled) return;
+      // An explicit sign-out forgets who was here; the outbox is deliberately left alone.
+      if (event === "SIGNED_OUT") forgetSession();
       if (!s) setState({ kind: "signedOut" });
       else {
         setState({ kind: "loading" });

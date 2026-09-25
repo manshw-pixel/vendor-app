@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { SessionProvider, useSession } from "../components/SessionProvider";
+import { recallSession, rememberSession } from "../offline/sessionCache";
+import type { AppUserRow } from "../session";
 
 const { getSession, onAuthStateChange, maybeSingle, ownerMaybeSingle } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -28,6 +30,7 @@ function Probe() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe("SessionProvider", () => {
@@ -95,5 +98,58 @@ describe("SessionProvider", () => {
     render(<SessionProvider><Probe /></SessionProvider>);
 
     await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("error"));
+  });
+
+  const cachedRow = {
+    name: "Rita", role: "recorder", vendor_id: "v1",
+    vendors: { name: "My Kirana", suspended_at: null }, must_change_password: false,
+  } as unknown as AppUserRow;
+
+  it("opens from the cached session when getSession fails on the network", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    getSession.mockResolvedValue({ data: { session: null }, error: { message: "Failed to fetch" } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("ready"));
+  });
+
+  it("opens from the cached session when the app_users read fails on the network", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "r@b.test" } } } });
+    maybeSingle.mockResolvedValue({ data: null, error: { message: "Failed to fetch", code: undefined } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("ready"));
+  });
+
+  it("does not use a cached session belonging to another user", async () => {
+    rememberSession("someone-else", "x@b.test", cachedRow);
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "r@b.test" } } } });
+    maybeSingle.mockResolvedValue({ data: null, error: { message: "Failed to fetch", code: undefined } });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("error"));
+  });
+
+  it("stays signed out with no session and no network error", async () => {
+    rememberSession("u1", "r@b.test", cachedRow);
+    getSession.mockResolvedValue({ data: { session: null }, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("signedOut"));
+  });
+
+  it("remembers the row after a successful online read", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", email: "r@b.test" } } } });
+    maybeSingle.mockResolvedValue({ data: cachedRow, error: null });
+
+    render(<SessionProvider><Probe /></SessionProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("probe").textContent).toBe("ready"));
+    expect(recallSession()).toEqual({ userId: "u1", email: "r@b.test", row: cachedRow });
   });
 });

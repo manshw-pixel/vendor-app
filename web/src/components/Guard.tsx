@@ -2,6 +2,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { canAccess, homeFor } from "../routes";
 import type { Role } from "../config";
 import type { ReactNode } from "react";
+import { useOnline } from "../offline/useOnline";
 
 /**
  * UX only. A biller who types /items into the address bar is redirected as a courtesy;
@@ -10,6 +11,7 @@ import type { ReactNode } from "react";
  */
 export function Guard({ role, children }: { role: Role; children: ReactNode }) {
   const { pathname } = useLocation();
-  if (!canAccess(role, pathname)) return <Navigate to={homeFor(role)} replace />;
+  const opts = { offline: !useOnline() };
+  if (!canAccess(role, pathname, opts)) return <Navigate to={homeFor(role, opts)} replace />;
   return <>{children}</>;
 }
