@@ -55,4 +55,35 @@ describe("offline bill", () => {
     render(<MemoryRouter><Bill /></MemoryRouter>);
     expect(await screen.findByText(/needs a connection/i)).toBeTruthy();
   });
+  it("shows the amount to take -- less points, plus the old due -- and queues the gross total", async () => {
+    render(<MemoryRouter><Bill /></MemoryRouter>);
+    await addOnionLine();
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.change(await screen.findByLabelText(/redeem points/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/collect old due/i), { target: { value: "50" } });
+    expect(screen.getByText(/Offline sale · ₹120\.00/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /record sale/i }));
+    expect(await screen.findByText(/Offline #1/)).toBeTruthy();
+    expect(screen.getByText("₹120.00")).toBeTruthy();
+    const q = await listOutbox("v1");
+    expect(q[0]).toMatchObject({ total: 80, redeemPoints: 10, collectDue: 50 });
+  });
+
+  it("a double tap on Record sale queues one sale", async () => {
+    render(<MemoryRouter><Bill /></MemoryRouter>);
+    await addOnionLine();
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    const record = await screen.findByRole("button", { name: /record sale/i });
+    fireEvent.click(record);
+    fireEvent.click(record);
+    expect(await screen.findByText(/Offline #1/)).toBeTruthy();
+    expect(await listOutbox("v1")).toHaveLength(1);
+  });
 });
+
+async function addOnionLine() {
+  fireEvent.click(await screen.findByText("Asha"));
+  fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+  fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+  fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+}

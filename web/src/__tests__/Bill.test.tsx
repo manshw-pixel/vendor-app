@@ -308,6 +308,29 @@ describe("the bill screen", () => {
     expect(data.issueToken).not.toHaveBeenCalled();
   });
 
+  it("the network fallback checks redeem and due against the device's saved balances", async () => {
+    const { memoryKV, setKV } = await import("../offline/kv");
+    const { saveSnapshot } = await import("../offline/catalogue");
+    setKV(memoryKV());
+    await saveSnapshot({ vendorId: "v1", cachedAt: Date.now(), items: [], customers: [],
+      balances: { c1: { points: 10, due: 50 } } });
+    // The refresh fails too, so the saved snapshot is what the fallback must load.
+    (data.offlineBalances as unknown as Mock).mockResolvedValueOnce({ data: null, error: { message: "Failed to fetch" } });
+    (data.createBill as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { message: "TypeError: Failed to fetch" },
+    });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save as offline sale/i }));
+    expect(screen.getByLabelText(/redeem points \(up to 10\)/i)).toBeTruthy();
+    expect(screen.getByLabelText(/collect old due/i)).toBeTruthy();
+  });
+
   it("does not offer to save offline for a non-network createBill failure", async () => {
     (data.createBill as unknown as Mock).mockResolvedValueOnce({
       data: null, error: { code: "42501", message: "permission denied" },

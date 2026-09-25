@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 // i18next initialises as a side effect of this import, exactly as Shell does. The screen
@@ -22,7 +22,7 @@ import { CustomerStep } from "./bill/CustomerStep";
 import { ItemGrid } from "./bill/ItemGrid";
 import { Basket } from "./bill/Basket";
 import { TokenResult } from "./bill/TokenResult";
-import { OfflineCheckout } from "./bill/OfflineCheckout";
+import { OfflineCheckout, amountToTake } from "./bill/OfflineCheckout";
 import { OfflineResult } from "./bill/OfflineResult";
 import { useRouteOffline } from "../offline/useRouteOffline";
 import { isStale, loadSnapshot, refreshSnapshot, type Snapshot } from "../offline/catalogue";
@@ -95,6 +95,9 @@ export default function Bill() {
   const [offlineDone, setOfflineDone] = useState<{ seq: number; total: number } | null>(null);
   // The online createBill failed on the network, so nothing reached the server.
   const [networkFailed, setNetworkFailed] = useState(false);
+  // A ref as well as state: two taps in one frame both see the state still false.
+  const [savingOffline, setSavingOffline] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (!vendorIdForLoad) return;
@@ -118,7 +121,10 @@ export default function Bill() {
       if (bad) setFailure(bad);
       setItems((itemsRes.data ?? []) as Item[]);
       setCustomers((customersRes.data ?? []) as Customer[]);
-      void refreshSnapshot(vendorIdForLoad);
+      // Kept, so an online bill that falls back to offline has balances to check against.
+      void refreshSnapshot(vendorIdForLoad).then((snap) => {
+        if (live && snap) setSnapshot(snap);
+      });
     })();
     return () => {
       live = false;
@@ -147,7 +153,15 @@ export default function Bill() {
     if (billId === null) {
       const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
       if (billError || !bill) {
-        setNetworkFailed(isNetworkError(billError));
+        if (isNetworkError(billError)) {
+          if (!snapshot) {
+            const snap = await loadSnapshot(vendorId);
+            if (snap) setSnapshot(snap);
+          }
+          setNetworkFailed(true);
+        } else {
+          setNetworkFailed(false);
+        }
         return fail(describeError(billError));
       }
       billId = bill.id as string;
@@ -215,18 +229,29 @@ export default function Bill() {
   }
 
   async function recordOffline(mode: PaymentMode, redeemPoints: number, collectDue: number) {
-    if (!customer) return;
+    if (!customer || savingRef.current) return;
+    savingRef.current = true;
+    setSavingOffline(true);
+    // Gross total is what the outbox records; the result screen shows what to take.
     const total = runningTotal(lines);
-    const saved = await enqueue({
-      vendorId, customerId: customer.id, customerLabel: `${customer.name} · ${customer.flat_no}`,
-      lines, mode, redeemPoints, collectDue, total,
-    });
-    window.dispatchEvent(new Event("outbox-changed"));
-    setOfflineCheckout(false);
-    setFailure(null);
-    setNetworkFailed(false);
-    setOfflineDone({ seq: saved.seq, total });
-    setPhase("done");
+    try {
+      const saved = await enqueue({
+        vendorId, customerId: customer.id, customerLabel: `${customer.name} · ${customer.flat_no}`,
+        lines, mode, redeemPoints, collectDue, total,
+      });
+      window.dispatchEvent(new Event("outbox-changed"));
+      setOfflineCheckout(false);
+      setFailure(null);
+      setNetworkFailed(false);
+      setOfflineDone({ seq: saved.seq, total: amountToTake(total, redeemPoints, collectDue) });
+      setPhase("done");
+    } catch (e) {
+      setOfflineCheckout(false);
+      setFailure({ key: "error.unknown", detail: e instanceof Error ? e.message : "" });
+    } finally {
+      savingRef.current = false;
+      setSavingOffline(false);
+    }
   }
 
   function startNew() {
@@ -339,6 +364,7 @@ export default function Bill() {
           total={runningTotal(lines)}
           balance={snapshot?.balances[customer.id]}
           onConfirm={(mode, redeem, collect) => void recordOffline(mode, redeem, collect)}
+          saving={savingOffline}
           onCancel={() => setOfflineCheckout(false)}
         />
       )}
