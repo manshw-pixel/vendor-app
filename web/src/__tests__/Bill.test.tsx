@@ -11,6 +11,8 @@ vi.mock("../data", () => ({
   replaceBillLines: vi.fn(async () => ({ data: null, error: null })),
   issueToken: vi.fn(async () => ({ data: 7, error: null })),
   billToken: vi.fn(async () => ({ data: null, error: null })),
+  offlineBalances: vi.fn(async () => ({ data: [], error: null })),
+  recordOfflineBill: vi.fn(),
 }));
 
 vi.mock("../components/SessionProvider", () => ({
@@ -267,20 +269,59 @@ describe("the bill screen", () => {
     expect(screen.getByRole("button", { name: /done/i })).toHaveProperty("disabled", false);
   });
 
-  it("will not issue a token while offline -- a token cannot be promised without the server", async () => {
+  it("never reaches the token flow while offline -- a token cannot be promised without the server", async () => {
+    // Offline, Done no longer waits for the network: it goes to the offline checkout,
+    // which reads the device cache. With no cache the screen refuses to open at all.
+    const { memoryKV, setKV } = await import("../offline/kv");
+    setKV(memoryKV());
     Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
     try {
       renderBill();
-      fireEvent.click(await screen.findByText("Asha"));
-      fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
-      fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
-      fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
-
-      await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
-      expect(screen.getByRole("button", { name: /done/i })).toHaveProperty("disabled", true);
+      expect(await screen.findByText(/connect once/i)).toBeTruthy();
+      expect(data.listItems).not.toHaveBeenCalled();
+      expect(data.createBill).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
     }
+  });
+
+  it("offers to save offline when createBill fails on the network, and enqueues without a server bill", async () => {
+    const { memoryKV, setKV } = await import("../offline/kv");
+    const { listOutbox } = await import("../offline/outbox");
+    setKV(memoryKV());
+    (data.createBill as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { message: "TypeError: Failed to fetch" },
+    });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /save as offline sale/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record sale/i }));
+    expect(await screen.findByText(/Offline #1/)).toBeTruthy();
+    expect(await listOutbox("v1")).toHaveLength(1);
+    expect(data.replaceBillLines).not.toHaveBeenCalled();
+    expect(data.issueToken).not.toHaveBeenCalled();
+  });
+
+  it("does not offer to save offline for a non-network createBill failure", async () => {
+    (data.createBill as unknown as Mock).mockResolvedValueOnce({
+      data: null, error: { code: "42501", message: "permission denied" },
+    });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    await waitFor(() => expect(data.createBill).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("button", { name: /save as offline sale/i })).toBeNull();
   });
 
   it("surfaces a failed token, and the retry resumes rather than creating a second bill", async () => {

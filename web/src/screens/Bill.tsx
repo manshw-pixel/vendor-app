@@ -5,7 +5,7 @@ import { useLocation } from "react-router-dom";
 // is rendered directly (by tests, and by the router) without going through main.tsx.
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
-import { type Draft } from "../billing";
+import { runningTotal, type Draft } from "../billing";
 import type { Customer } from "../customers";
 import {
   billToken,
@@ -22,7 +22,12 @@ import { CustomerStep } from "./bill/CustomerStep";
 import { ItemGrid } from "./bill/ItemGrid";
 import { Basket } from "./bill/Basket";
 import { TokenResult } from "./bill/TokenResult";
-import { useOnline } from "../offline/useOnline";
+import { OfflineCheckout } from "./bill/OfflineCheckout";
+import { OfflineResult } from "./bill/OfflineResult";
+import { useRouteOffline } from "../offline/useRouteOffline";
+import { isStale, loadSnapshot, refreshSnapshot, type Snapshot } from "../offline/catalogue";
+import { enqueue, isNetworkError } from "../offline/outbox";
+import type { PaymentMode } from "../payments";
 
 type Phase = "customer" | "items" | "done";
 
@@ -38,11 +43,18 @@ const asLang = (tag: string | undefined): Lang =>
  * bill becomes real. It is also a one-way door: once the bill is `billed` the policies
  * refuse further edits, so the confirm comes BEFORE it and there is no undo after -- one
  * could not be honoured.
+ *
+ * Offline (no network, or a session opened from the device cache) the screen reads the
+ * cached snapshot instead, and Done ends in OfflineCheckout -> enqueue: the sale waits in
+ * the outbox and gets its token when it syncs. The online flow above is unchanged; an
+ * online createBill that fails on the network (before anything reached the server) may
+ * also be saved offline.
  */
 export default function Bill() {
   const { t, i18n } = useTranslation();
   const session = useSession();
-  const online = useOnline();
+  const offline = useRouteOffline();
+  const vendorIdForLoad = session.kind === "ready" ? session.vendorId : null;
 
   // Handed over by Completed.tsx after it voids a bill being corrected: the replacement
   // starts from the voided bill's basket so the recorder retypes only what was wrong.
@@ -77,10 +89,27 @@ export default function Bill() {
   // whether the bill billed. Rendered alongside the failure banner, never in place of it
   // -- see the read-back handling in confirm() below.
   const [tokenUnknown, setTokenUnknown] = useState(false);
+  // undefined = not loaded yet (or online, where it is not used); null = no cache on device.
+  const [snapshot, setSnapshot] = useState<Snapshot | null | undefined>(undefined);
+  const [offlineCheckout, setOfflineCheckout] = useState(false);
+  const [offlineDone, setOfflineDone] = useState<{ seq: number; total: number } | null>(null);
+  // The online createBill failed on the network, so nothing reached the server.
+  const [networkFailed, setNetworkFailed] = useState(false);
 
   useEffect(() => {
+    if (!vendorIdForLoad) return;
     let live = true;
     void (async () => {
+      if (offline) {
+        const snap = (await loadSnapshot(vendorIdForLoad)) ?? null;
+        if (!live) return;
+        setSnapshot(snap);
+        if (snap) {
+          setItems(snap.items);
+          setCustomers(snap.customers);
+        }
+        return;
+      }
       const [itemsRes, customersRes] = await Promise.all([listItems(), listCustomers()]);
       if (!live) return;
       // A policy-filtered read arrives as zero rows, not an error -- an empty list is
@@ -89,16 +118,18 @@ export default function Bill() {
       if (bad) setFailure(bad);
       setItems((itemsRes.data ?? []) as Item[]);
       setCustomers((customersRes.data ?? []) as Customer[]);
+      void refreshSnapshot(vendorIdForLoad);
     })();
     return () => {
       live = false;
     };
-  }, []);
+  }, [offline, vendorIdForLoad]);
 
   if (session.kind !== "ready") return null;
   const { vendorId, userId } = session;
 
-  const canFinish = lines.length > 0 && online && !issuing;
+  const canFinish = lines.length > 0 && !issuing;
+  const useOfflinePath = offline || (networkFailed && written === null);
 
   function pick(c: Customer) {
     setCustomer(c);
@@ -110,11 +141,13 @@ export default function Bill() {
     setIssuing(true);
     setFailure(null);
     setTokenUnknown(false);
+    setNetworkFailed(false);
 
     let billId = written?.billId ?? null;
     if (billId === null) {
       const { data: bill, error: billError } = await createBill(vendorId, customer.id, userId);
       if (billError || !bill) {
+        setNetworkFailed(isNetworkError(billError));
         return fail(describeError(billError));
       }
       billId = bill.id as string;
@@ -181,8 +214,25 @@ export default function Bill() {
     setConfirming(false);
   }
 
+  async function recordOffline(mode: PaymentMode, redeemPoints: number, collectDue: number) {
+    if (!customer) return;
+    const total = runningTotal(lines);
+    const saved = await enqueue({
+      vendorId, customerId: customer.id, customerLabel: `${customer.name} · ${customer.flat_no}`,
+      lines, mode, redeemPoints, collectDue, total,
+    });
+    window.dispatchEvent(new Event("outbox-changed"));
+    setOfflineCheckout(false);
+    setFailure(null);
+    setNetworkFailed(false);
+    setOfflineDone({ seq: saved.seq, total });
+    setPhase("done");
+  }
+
   function startNew() {
     setPhase("customer");
+    setOfflineDone(null);
+    setNetworkFailed(false);
     setWritten(null);
     setCustomer(null);
     setLines([]);
@@ -190,12 +240,29 @@ export default function Bill() {
     setFailure(null);
   }
 
+  if (offline && snapshot === null) {
+    return <p className="text-sm text-amber-700">{t("offline.noCache")}</p>;
+  }
+
   return (
     <div className="space-y-4">
+      {offline && snapshot && isStale(snapshot) && (
+        <p className="text-sm text-amber-700">{t("offline.stale")}</p>
+      )}
+
       {failure && (
         <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
           {t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span>
         </p>
+      )}
+
+      {failure && networkFailed && written === null && phase === "items" && (
+        <button
+          onClick={() => setOfflineCheckout(true)}
+          className="w-full rounded-xl px-3 py-2 min-h-[44px] border border-amber-400 bg-amber-50 text-amber-800 font-semibold"
+        >
+          {t("offline.saveOffline")}
+        </button>
       )}
 
       {failure && tokenUnknown && <p className="text-xs text-amber-700">{t("bill.tokenUnknown")}</p>}
@@ -204,6 +271,7 @@ export default function Bill() {
         <CustomerStep
           customers={customers}
           vendorId={vendorId}
+          allowCreate={!offline}
           onPick={pick}
           onCreated={(c) => {
             setCustomers((prev) => [...prev, c]);
@@ -234,10 +302,8 @@ export default function Bill() {
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
           />
 
-          {!online && <p className="text-sm text-amber-700">{t("offline.banner")}</p>}
-
           <button
-            onClick={() => setConfirming(true)}
+            onClick={() => (useOfflinePath ? setOfflineCheckout(true) : setConfirming(true))}
             disabled={!canFinish}
             className="w-full rounded-xl px-3 py-3 min-h-[44px] bg-emerald-600 text-white text-lg font-semibold disabled:opacity-40"
           >
@@ -266,6 +332,19 @@ export default function Bill() {
             </button>
           </div>
         </div>
+      )}
+
+      {offlineCheckout && customer && (
+        <OfflineCheckout
+          total={runningTotal(lines)}
+          balance={snapshot?.balances[customer.id]}
+          onConfirm={(mode, redeem, collect) => void recordOffline(mode, redeem, collect)}
+          onCancel={() => setOfflineCheckout(false)}
+        />
+      )}
+
+      {phase === "done" && offlineDone !== null && (
+        <OfflineResult seq={offlineDone.seq} total={offlineDone.total} onStartNew={startNew} />
       )}
 
       {phase === "done" && token !== null && <TokenResult token={token} onStartNew={startNew} />}
