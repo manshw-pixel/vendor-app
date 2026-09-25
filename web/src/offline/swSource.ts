@@ -51,7 +51,7 @@ self.addEventListener("fetch", (e) => {
       const hit = await cache.match(req);
       if (hit) return hit;
       const res = await fetch(req);
-      await cache.put(req, res.clone());
+      if (res.ok) await cache.put(req, res.clone());
       return res;
     })());
   }

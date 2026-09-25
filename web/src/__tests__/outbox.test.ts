@@ -87,3 +87,23 @@ describe("outbox", () => {
     expect([a.seq, b.seq].sort()).toEqual([1, 2]);
   });
 });
+
+describe("outbox discard and take", () => {
+  it("keeps an optional amount to take alongside the gross total", async () => {
+    const a = await ob.enqueue({ ...base(), take: 60 });
+    const b = (await ob.listOutbox("v1"))[0]!;
+    expect(b.clientId).toBe(a.clientId);
+    expect(b.total).toBe(80);
+    expect(b.take).toBe(60);
+  });
+
+  it("discard removes only that bill and signals outbox-changed", async () => {
+    const a = await ob.enqueue(base()); const b = await ob.enqueue(base());
+    const seen = vi.fn();
+    window.addEventListener("outbox-changed", seen);
+    await ob.discard("v1", a.clientId);
+    window.removeEventListener("outbox-changed", seen);
+    expect((await ob.listOutbox("v1")).map((x) => x.clientId)).toEqual([b.clientId]);
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+});

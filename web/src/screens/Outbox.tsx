@@ -4,7 +4,8 @@ import "../i18n";
 import { useSession } from "../components/SessionProvider";
 import { useOnline } from "../offline/useOnline";
 import { useOutbox } from "../offline/useOutbox";
-import { listOutbox, retry, type OfflineBill } from "../offline/outbox";
+import { discard, listOutbox, retry, type OfflineBill } from "../offline/outbox";
+import { friendlyOutboxError } from "../offline/outboxErrors";
 import { rupees } from "../money";
 
 /**
@@ -22,6 +23,7 @@ export default function Outbox() {
   const online = useOnline();
   const { flushNow } = useOutbox(vendorId);
   const [bills, setBills] = useState<OfflineBill[] | null>(null);
+  const [discarding, setDiscarding] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!vendorId) return;
@@ -40,6 +42,12 @@ export default function Outbox() {
     await retry(vendorId, clientId);
     await flushNow();
     await load();
+  }
+
+  async function onDiscard(clientId: string) {
+    if (!vendorId) return;
+    setDiscarding(null);
+    await discard(vendorId, clientId);
   }
 
   if (session.kind !== "ready") return null;
@@ -68,7 +76,7 @@ export default function Outbox() {
               <span className="font-medium text-slate-800">
                 {t("offline.label", { seq: b.seq })} · {b.customerLabel}
               </span>
-              <span className="text-slate-800">{rupees(b.total)}</span>
+              <span className="text-slate-800">{rupees(b.take ?? b.total)}</span>
             </div>
             <p className="text-xs text-slate-500">
               {new Date(b.occurredAt).toLocaleString()} ·{" "}
@@ -76,18 +84,51 @@ export default function Outbox() {
             </p>
             {b.state === "attention" && (
               <div className="space-y-2">
-                {b.error && <p className="text-sm text-red-700">{b.error}</p>}
+                {b.error && <p className="text-sm text-red-700">{friendlyOutboxError(b.error, t)}</p>}
                 <button
                   onClick={() => void onRetry(b.clientId)}
                   className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]"
                 >
                   {t("outbox.retry")}
+                </button>{" "}
+                <button
+                  onClick={() => setDiscarding(b.clientId)}
+                  className="border border-red-300 text-red-700 rounded-lg px-3 py-2 bg-white min-h-[44px]"
+                >
+                  {t("outbox.discard")}
                 </button>
               </div>
             )}
           </li>
         ))}
       </ul>
+
+      {discarding && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="outbox-discard-title"
+          className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
+            <p id="outbox-discard-title" className="text-slate-800">{t("outbox.discardConfirm")}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDiscarding(null)}
+                className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]"
+              >
+                {t("outbox.cancel")}
+              </button>
+              <button
+                onClick={() => void onDiscard(discarding)}
+                className="rounded-lg px-3 py-2 bg-red-700 text-white min-h-[44px]"
+              >
+                {t("outbox.discard")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

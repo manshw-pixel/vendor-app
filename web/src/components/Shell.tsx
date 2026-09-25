@@ -13,6 +13,7 @@ import { useOnline } from "../offline/useOnline";
 import { useRouteOffline } from "../offline/useRouteOffline";
 import { OfflineChip } from "./OfflineChip";
 import { useOutbox } from "../offline/useOutbox";
+import { useSnapshotRefresh } from "../offline/useSnapshotRefresh";
 import { getUpdateReady, onUpdateReady } from "../offline/updateReady";
 
 export function LangSwitch() {
@@ -64,6 +65,8 @@ export function Shell({ role, vendorName, name, children }:
   const online = useOnline();
   const routeOffline = useRouteOffline();
   const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
+  useSnapshotRefresh(session.kind === "ready" ? session.vendorId : null,
+                     session.kind === "ready" && !!session.fromCache);
   return (
     <div className="min-h-screen">
       <UpdateBanner />

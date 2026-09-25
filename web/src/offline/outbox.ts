@@ -6,7 +6,11 @@ import { getKV } from "./kv";
 export type OfflineBill = {
   clientId: string; vendorId: string; seq: number; occurredAt: string;
   customerId: string; customerLabel: string; lines: Draft[]; mode: PaymentMode;
-  redeemPoints: number; collectDue: number; total: number;
+  redeemPoints: number; collectDue: number;
+  /** Gross bill total, before points and any old due collected. */
+  total: number;
+  /** What the biller was told to take (total - points + due). Older bills lack it. */
+  take?: number;
   state: "waiting" | "attention"; error?: string;
 };
 type Reply = { data: unknown; error: { message?: string; code?: string } | null };
@@ -51,6 +55,12 @@ export async function retry(vendorId: string, clientId: string) {
   const kv = getKV();
   const b = await kv.get<OfflineBill>(billKey(vendorId, clientId));
   if (b) await kv.set(billKey(vendorId, clientId), { ...b, state: "waiting", error: undefined });
+}
+
+/** Drops a bill from this device for good. Only offered for bills the server refused. */
+export async function discard(vendorId: string, clientId: string) {
+  await getKV().del(billKey(vendorId, clientId));
+  window.dispatchEvent(new Event("outbox-changed"));
 }
 
 /** One at a time and in order, so tokens come out in the order the sales happened. A

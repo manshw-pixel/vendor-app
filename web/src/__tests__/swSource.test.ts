@@ -21,3 +21,10 @@ describe("buildServiceWorker", () => {
     expect(buildServiceWorker("v1", files)).not.toBe(buildServiceWorker("v2", files));
   });
 });
+
+describe("asset caching", () => {
+  it("only stores an asset response that came back ok", () => {
+    const src = buildServiceWorker("v1", []);
+    expect(src).toMatch(/if \(res\.ok\) await cache\.put\(req, res\.clone\(\)\)/);
+  });
+});

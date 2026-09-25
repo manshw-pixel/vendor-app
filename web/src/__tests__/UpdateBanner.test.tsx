@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import i18n from "../i18n";
 import { UpdateBanner } from "../components/Shell";
-import { setUpdateReady } from "../offline/updateReady";
+import { resetUpdateReadyForTests, setUpdateReady } from "../offline/updateReady";
 
 function fakeRegistration(): ServiceWorkerRegistration {
   const waiting = { postMessage: vi.fn() };
   return { waiting } as unknown as ServiceWorkerRegistration;
 }
 
-beforeEach(async () => { await i18n.changeLanguage("en"); });
+beforeEach(async () => { resetUpdateReadyForTests(); await i18n.changeLanguage("en"); });
 afterEach(cleanup);
 
 describe("UpdateBanner", () => {

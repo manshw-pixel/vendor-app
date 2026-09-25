@@ -238,12 +238,13 @@ export default function Bill() {
       const saved = await enqueue({
         vendorId, customerId: customer.id, customerLabel: `${customer.name} · ${customer.flat_no}`,
         lines, mode, redeemPoints, collectDue, total,
+        take: amountToTake(total, redeemPoints, collectDue),
       });
       window.dispatchEvent(new Event("outbox-changed"));
       setOfflineCheckout(false);
       setFailure(null);
       setNetworkFailed(false);
-      setOfflineDone({ seq: saved.seq, total: amountToTake(total, redeemPoints, collectDue) });
+      setOfflineDone({ seq: saved.seq, total: saved.take ?? total });
       setPhase("done");
     } catch (e) {
       setOfflineCheckout(false);

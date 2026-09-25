@@ -18,3 +18,9 @@ export function onUpdateReady(cb: (reg: ServiceWorkerRegistration) => void): () 
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
+
+/** Test-only: forget any recorded registration and listeners between tests. */
+export function resetUpdateReadyForTests(): void {
+  pending = null;
+  listeners.clear();
+}
