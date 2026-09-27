@@ -68,11 +68,9 @@ begin
     raise exception 'only an admin or biller may delete a pending bill' using errcode = '42501';
   end if;
 
-  -- The counter lock first, the same row issue_token updates, so a token cannot be
-  -- issued between reading last_token and rolling it back.
-  select last_token into v_last from vendor_counters
-   where vendor_id = current_vendor_id() for update;
-
+  -- Same order as issue_token: bill, then counter. issue_token locks the bill first and
+  -- the counter second; taking them in the other order here could deadlock against a
+  -- concurrent issue_token on the same bill.
   select * into v_bill from bills
    where id = p_bill_id and vendor_id = current_vendor_id() for update;
   if not found then
@@ -82,6 +80,9 @@ begin
     raise exception 'bill % is %, only a pending bill may be deleted', p_bill_id, v_bill.status
       using errcode = '22023';
   end if;
+
+  select last_token into v_last from vendor_counters
+   where vendor_id = current_vendor_id() for update;
 
   delete from bills where id = p_bill_id;
 

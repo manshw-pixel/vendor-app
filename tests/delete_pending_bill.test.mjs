@@ -58,8 +58,10 @@ test("two latest deletes in a row roll back to the highest surviving token", asy
   const keep = await billed(w.a);
   const mid = await billed(w.a);
   const top = await billed(w.a);
-  await del(w.a.clients.biller, mid);   // gap; counter stays at top
-  await del(w.a.clients.biller, top);   // latest; counter drops past the gap
+  const r1 = await del(w.a.clients.biller, mid);   // gap; counter stays at top
+  assert(!r1.error, r1.error?.message);
+  const r2 = await del(w.a.clients.biller, top);   // latest; counter drops past the gap
+  assert(!r2.error, r2.error?.message);
   assertEqual(await lastToken(w.a), await tokenOf(keep), "counter at highest surviving token");
 });
 
