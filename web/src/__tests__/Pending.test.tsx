@@ -20,12 +20,15 @@ const customerBalance = vi.fn(async (..._a: unknown[]): Promise<{
   data: { balance: number; days_left: number | null }[] | null;
   error: null;
 }> => ({ data: [{ balance: 100, days_left: 12 }], error: null }));
+const deletePendingBill = vi.fn(async (..._a: unknown[]): Promise<{ error: { message?: string; code?: string } | null }> =>
+  ({ error: null }));
 vi.mock("../data", () => ({
   listPending: (...a: unknown[]) => listPending(...a),
   completeBill: (...a: unknown[]) => completeBill(...a),
   pointsForBill: (...a: unknown[]) => pointsForBill(...a),
   customerBalance: (...a: unknown[]) => customerBalance(...a),
   billToken: (...a: unknown[]) => billToken(...a),
+  deletePendingBill: (...a: unknown[]) => deletePendingBill(...a),
 }));
 
 const loadCustomerDue = vi.fn(async (..._a: unknown[]): Promise<{ data: number | null; error: null }> =>
@@ -390,15 +393,32 @@ describe("collecting a previous due with the bill", () => {
   });
 });
 
+describe("confirm re-reads the queue", () => {
+  it("shows the current total after a reprice, not the stale list's", async () => {
+    const bill = (total: number) => ({
+      data: [{ id: "b1", token_no: 7, total, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } }],
+      error: null,
+    });
+    listPending.mockResolvedValueOnce(bill(500)).mockResolvedValueOnce(bill(600));
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
+    await waitFor(() => expect((screen.getByTestId("redeem-summary").textContent ?? "")).toMatch(/560/));
+    expect(listPending).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("dues on the confirm: review fixes", () => {
   it("a slow due read for one bill never lands on another bill's dialog", async () => {
-    listPending.mockResolvedValueOnce({
+    const two: { data: PendingBill[]; error: null } = {
       data: [
         { id: "b1", token_no: 7, total: 500, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } },
         { id: "b2", token_no: 8, total: 120, customer_id: null, customers: null },
       ],
       error: null,
-    });
+    };
+    // Initial load plus the queue re-read each confirm opening does.
+    listPending.mockResolvedValueOnce(two).mockResolvedValueOnce(two).mockResolvedValueOnce(two);
     let releaseDue: (v: { data: number | null; error: null }) => void = () => {};
     loadCustomerDue.mockImplementationOnce(() => new Promise((r) => { releaseDue = r; }));
     renderPending({ role: "biller" });
@@ -439,5 +459,37 @@ describe("dues on the confirm: review fixes", () => {
     fireEvent.change(screen.getByTestId("pending-collect-amount"), { target: { value: "" } });
     expect(screen.getByTestId("pending-confirm-b1")).toHaveProperty("disabled", true);
     expect(screen.getByText(/Enter an amount more than zero/)).toBeTruthy();
+  });
+});
+
+describe("deleting a pending bill", () => {
+  it("a biller deletes after confirming, and the list refreshes", async () => {
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-delete-b1"));
+    expect(deletePendingBill).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("pending-delete-confirm"));
+    await waitFor(() => expect(deletePendingBill).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(listPending).toHaveBeenCalledTimes(2));
+  });
+
+  it("cancel does not delete", async () => {
+    renderPending({ role: "admin" });
+    fireEvent.click(await screen.findByTestId("pending-delete-b1"));
+    fireEvent.click(screen.getByTestId("pending-delete-cancel"));
+    expect(deletePendingBill).not.toHaveBeenCalled();
+  });
+
+  it("a recorder sees no delete button", async () => {
+    renderPending({ role: "recorder" });
+    await screen.findByText(/Asha/);
+    expect(screen.queryByTestId("pending-delete-b1")).toBeNull();
+  });
+
+  it("a refused delete shows the failure", async () => {
+    deletePendingBill.mockResolvedValueOnce({ error: { message: "nope", code: "42501" } });
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-delete-b1"));
+    fireEvent.click(screen.getByTestId("pending-delete-confirm"));
+    await screen.findByText(/nope/);
   });
 });

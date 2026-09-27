@@ -499,6 +499,26 @@ verify History, the real tokens, and Sync issues. Also check `idbKV` in a real b
 Application/Storage panel — the cache and queue are IndexedDB, and Vitest's mocked
 `indexedDB` cannot stand in for that.
 
+## Pending bill repricing and deletion
+
+Migration `0025` adds automatic repricing when an item's cost or selling price changes.
+Any bill in `recording` or `billed` status has all of its lines repriced — cost-based
+lines use the new cost, sale lines use the new price — and its total and unsent token
+message (if any) are recalculated immediately. This means price edits apply retroactively to
+bills still pending, so a recorder sees the true margin before completing the bill and a biller
+sees the true amount due after a last-second correction.
+
+`delete_pending_bill` is an admin and biller RPC that removes a bill in `recording` or
+`billed` status from the queue and rolls the token counter back **only when it was the
+latest token** to be issued. This prevents gaps in the token sequence and makes it safe to
+cancel a mis-billed transaction. If the bill is not the latest, the delete succeeds but the
+token is left orphaned — the next bill issued gets the next number, and the skipped token
+does not reappear.
+
+The Bill and Edit Bill screens add an **item search box** that finds items by name in any
+of the three enabled languages (English, Hindi, Marathi). The search folds case and matches
+any word in the name; a name with multiple words may be found by any one of them.
+
 ## Not in this slice
 
 `whatsapp-webhook` (the inbound bot: points queries, item suggestions, history on

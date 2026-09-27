@@ -691,4 +691,16 @@ describe("the bill screen", () => {
     // would hide from the recorder that this is a fresh sale with its own token.
     expect(await screen.findByText(/choose a customer/i)).toBeTruthy();
   });
+
+  it("filters the item list by the search box and keeps a selection addable", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    const select = (await screen.findByTestId("item-select")) as HTMLSelectElement;
+    const allOptions = select.options.length;
+    fireEvent.change(screen.getByTestId("item-search"), { target: { value: "zzz-no-such-item" } });
+    expect(select.options.length).toBe(1); // only the placeholder option
+    expect(screen.getByTestId("item-no-match")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("item-search"), { target: { value: "" } });
+    expect(select.options.length).toBe(allOptions);
+  });
 });

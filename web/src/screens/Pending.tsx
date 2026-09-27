@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 // main.tsx.
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
-import { billToken, completeBill, customerBalance, listPending, pointsForBill, type PendingBill } from "../data";
+import { billToken, completeBill, customerBalance, deletePendingBill, listPending, pointsForBill, type PendingBill } from "../data";
 import { loadCustomerDue } from "../dues";
 import { parseAmount } from "../duesRules";
 import { describeError } from "../errors";
@@ -55,6 +55,8 @@ export default function Pending() {
   const [redeemInput, setRedeemInput] = useState("");
   // Never preselected: a forgotten tap must not quietly become cash in the day's count.
   const [mode, setMode] = useState<PaymentMode | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false);
   // The bill whose confirm is open, for the customer reads in openConfirm: a slow read for
   // one bill must never land on another bill's dialog (the Dashboards `wanted` idiom).
   const opening = useRef<string | null>(null);
@@ -85,8 +87,18 @@ export default function Pending() {
     setOwes(null);
     setCollect(false);
     setCollectInput("");
-    if (!bill.customer_id) return;
-    const [points, due] = await Promise.all([customerBalance(bill.customer_id), loadCustomerDue(bill.customer_id)]);
+    // Re-read the queue: an item reprice may have changed this bill's total since the
+    // list loaded, and the dialog (bills.find by id) must show what will be collected.
+    const fresh = refresh();
+    if (!bill.customer_id) {
+      await fresh;
+      return;
+    }
+    const [points, due] = await Promise.all([
+      customerBalance(bill.customer_id),
+      loadCustomerDue(bill.customer_id),
+      fresh,
+    ]);
     // Another bill was opened, or this one cancelled or confirmed, while the reads ran.
     if (opening.current !== bill.id) return;
     // customerBalance resolves to an array of one row, as PostgREST renders a
@@ -162,6 +174,20 @@ export default function Pending() {
     await refresh();
   }
 
+  async function confirmDelete(id: string) {
+    setDeletingId(null);
+    setDeleted(false);
+    const { error } = await deletePendingBill(id);
+    if (error) {
+      // Refresh first (it resets the failure from the list read), then show the refusal.
+      await refresh();
+      setFailure(describeError(error));
+      return;
+    }
+    setDeleted(true);
+    await refresh();
+  }
+
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-800">{t("pending.title")}</h1>
@@ -200,6 +226,12 @@ export default function Pending() {
         <p className="text-xs text-amber-700">{t("pending.pointsUnknown")}</p>
       )}
 
+      {deleted && (
+        <p className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+          {t("pending.deleted")}
+        </p>
+      )}
+
       {bills !== null && bills.length === 0 && !failure && (
         <p className="text-slate-500 text-sm">{t("pending.empty")}</p>
       )}
@@ -227,6 +259,16 @@ export default function Pending() {
                   {t("pending.edit")}
                 </Link>
               )}
+              {(session.role === "admin" || session.role === "biller") && (
+                <button
+                  data-testid={`pending-delete-${bill.id}`}
+                  onClick={() => setDeletingId(bill.id)}
+                  disabled={completingId === bill.id}
+                  className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+                >
+                  {t("pending.delete")}
+                </button>
+              )}
               <button
                 data-testid={`pending-complete-${bill.id}`}
                 onClick={() => void openConfirm(bill)}
@@ -239,6 +281,32 @@ export default function Pending() {
           </li>
         ))}
       </ul>
+
+      {deletingId && (() => {
+        const bill = bills?.find((b) => b.id === deletingId);
+        if (!bill) return null;
+        return (
+          <div role="dialog" aria-modal="true" aria-labelledby="pending-delete-title"
+               className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4">
+            <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
+              <h2 id="pending-delete-title" className="font-semibold text-slate-800">
+                {t("pending.deleteTitle", { n: bill.token_no })}
+              </h2>
+              <p className="text-slate-700">{t("pending.deleteBody")}</p>
+              <div className="flex gap-2 justify-end">
+                <button data-testid="pending-delete-cancel" onClick={() => setDeletingId(null)}
+                        className="border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]">
+                  {t("bill.cancel")}
+                </button>
+                <button data-testid="pending-delete-confirm" onClick={() => void confirmDelete(bill.id)}
+                        className="rounded-lg px-4 py-2 min-h-[44px] bg-red-600 text-white font-semibold">
+                  {t("pending.deleteAccept")}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {confirmingId && (() => {
         const bill = bills?.find((b) => b.id === confirmingId);
