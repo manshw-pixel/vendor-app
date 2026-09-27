@@ -149,4 +149,10 @@ describe("offline routes", () => {
     expect(canAccess("biller", "/outbox")).toBe(true);
     expect(canAccess("biller", "/bill")).toBe(false);
   });
+
+  it("lets an admin, and only an admin, open the rate-list screen from Items", () => {
+    expect(canAccess("admin", "/items/rate-list")).toBe(true);
+    expect(canAccess("recorder", "/items/rate-list")).toBe(false);
+    expect(canAccess("biller", "/items/rate-list")).toBe(false);
+  });
 });

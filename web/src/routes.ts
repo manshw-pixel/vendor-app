@@ -60,7 +60,8 @@ type Opts = { offline?: boolean };
 const UNLISTED: Record<Role, readonly string[]> = {
   recorder: ["/amend"],
   biller: ["/receipt", "/dues"],
-  admin: ["/receipt", "/amend", "/dues"],
+  // "/items" for /items/rate-list, opened from the Items screen.
+  admin: ["/receipt", "/amend", "/dues", "/items"],
 };
 
 const matchesUnlisted = (prefix: string, path: string): boolean => {
