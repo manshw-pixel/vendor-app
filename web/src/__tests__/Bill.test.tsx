@@ -22,6 +22,13 @@ vi.mock("../components/SessionProvider", () => ({
 const { default: Bill } = await import("../screens/Bill");
 const data = await import("../data");
 
+
+/** Opens the item combobox and taps an option -- the one way a line's item is chosen. */
+async function pickItem(id: string) {
+  fireEvent.focus(await screen.findByTestId("item-combobox"));
+  fireEvent.mouseDown(screen.getByTestId(`item-option-${id}`));
+  fireEvent.click(screen.getByTestId(`item-option-${id}`));
+}
 beforeEach(() => vi.clearAllMocks());
 
 /** Bill.tsx reads router state (for a prefilled basket handed over by Completed.tsx), so
@@ -35,24 +42,44 @@ function renderBill(options?: { state?: unknown }) {
 }
 
 describe("the bill screen", () => {
-  it("offers the items in one dropdown, not a row or tile per item", async () => {
-    // The vendor asked for a dropdown. The rows are the thing being replaced, so this
-    // asserts their absence as well as the select's presence.
+  it("offers the items in one typeable combobox, not a row or tile per item", async () => {
+    // The vendor asked for one searchable picker. The rows are the thing being replaced,
+    // so this asserts their absence as well as the combobox's presence.
     const { container } = renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    const select = await screen.findByTestId("item-select");
-    expect(select.tagName).toBe("SELECT");
+    const box = await screen.findByTestId("item-combobox");
+    expect(box.getAttribute("role")).toBe("combobox");
     expect(container.querySelector(".grid-cols-2")).toBeNull();
     expect(container.querySelectorAll("[data-testid^='item-row-']").length).toBe(0);
   });
 
-  it("names the price and stock on the option itself", async () => {
-    // An <option> cannot be styled, so the figures a recorder chooses on have to be in
-    // its text or they are not on screen until after the pick.
+  it("reopening after a pick lists every item and selects the text, so typing replaces it", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [
+        { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true, unit: "kg", low_stock_at: 10 },
+        { id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 },
+      ],
+      error: null,
+    });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    const option = (await screen.findByTestId("item-select"))
-      .querySelector("option[value='i1']") as HTMLOptionElement;
+    await pickItem("i1");
+    const box = screen.getByTestId("item-combobox") as HTMLInputElement;
+    fireEvent.blur(box);
+    const select = vi.spyOn(box, "select");
+    fireEvent.focus(box);
+    expect(select).toHaveBeenCalled();
+    expect(screen.getByTestId("item-option-i1")).toBeTruthy();
+    expect(screen.getByTestId("item-option-i2")).toBeTruthy();
+  });
+
+  it("names the price and stock on the option itself", async () => {
+    // The figures a recorder chooses on have to be on the option or they are not on
+    // screen until after the pick.
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    fireEvent.focus(await screen.findByTestId("item-combobox"));
+    const option = screen.getByTestId("item-option-i1");
     expect(option.textContent ?? "").toMatch(/Onion|कांदा|प्याज/);
     expect(option.textContent ?? "").toMatch(/40/);
     expect(option.textContent ?? "").toMatch(/100/);
@@ -63,7 +90,7 @@ describe("the bill screen", () => {
     // never picked -- the row layout had no such default.
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    await screen.findByTestId("item-select");
+    await screen.findByTestId("item-combobox");
     expect(screen.queryByTestId("weight-input")).toBeNull();
   });
 
@@ -74,7 +101,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     const detail = await screen.findByTestId("item-detail");
     expect(detail.querySelector(".text-red-600")).toBeTruthy();
   });
@@ -83,7 +110,7 @@ describe("the bill screen", () => {
     // Scales report 1.35. The layout changed; the keypad must not.
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     const input = screen.getByTestId("weight-input") as HTMLInputElement;
     expect(input.getAttribute("inputmode")).toBe("decimal");
     fireEvent.change(input, { target: { value: "1.35" } });
@@ -97,7 +124,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    await pickItem("i2");
     expect(screen.queryByTestId("weight-input")).toBeNull();
     const input = screen.getByTestId("qty-input") as HTMLInputElement;
     expect(input.getAttribute("inputmode")).toBe("numeric");
@@ -125,7 +152,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    await pickItem("i2");
     fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "1.5" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     expect(await screen.findByText(/whole numbers only|केवल पूर्ण संख्या|फक्त पूर्ण संख्या/i)).toBeTruthy();
@@ -139,7 +166,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i2" } });
+    await pickItem("i2");
     fireEvent.change(screen.getByTestId("qty-input"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -154,11 +181,11 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    const option = (await screen.findByTestId("item-select"))
-      .querySelector("option[value='i1']") as HTMLOptionElement;
+    fireEvent.focus(await screen.findByTestId("item-combobox"));
+    const option = screen.getByTestId("item-option-i1");
     expect(option.textContent ?? "").toMatch(/12\.5 kg in stock/);
 
-    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     const detail = await screen.findByTestId("item-detail");
     expect(detail.textContent ?? "").toMatch(/12\.5 kg in stock/);
   });
@@ -170,7 +197,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     const detail = await screen.findByTestId("item-detail");
     expect(detail.querySelector(".text-amber-600")).toBeTruthy();
   });
@@ -182,7 +209,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     const detail = await screen.findByTestId("item-detail");
     expect(detail.querySelector(".text-amber-600")).toBeNull();
   });
@@ -194,7 +221,7 @@ describe("the bill screen", () => {
     fireEvent.click(await screen.findByText("Asha"));
 
     // 2. add a line
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -224,7 +251,7 @@ describe("the bill screen", () => {
   it("rejects a weight with more precision than the column stores", async () => {
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1.234" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     expect(await screen.findByText(/two decimal places|दोन|दो/i)).toBeTruthy();
@@ -236,7 +263,7 @@ describe("the bill screen", () => {
   it("creates no bill until the confirm is accepted -- an abandoned basket leaves no row", async () => {
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -257,11 +284,10 @@ describe("the bill screen", () => {
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
 
-    const option = (await screen.findByTestId("item-select"))
-      .querySelector("option[value='i1']") as HTMLOptionElement;
-    expect(option.disabled).toBe(false);
+    fireEvent.focus(await screen.findByTestId("item-combobox"));
+    expect(screen.getByTestId("item-option-i1").getAttribute("aria-disabled")).toBeNull();
 
-    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -294,7 +320,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -321,7 +347,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -337,7 +363,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -354,7 +380,7 @@ describe("the bill screen", () => {
     });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -397,7 +423,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -423,7 +449,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -448,7 +474,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -478,7 +504,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -487,10 +513,10 @@ describe("the bill screen", () => {
     expect(await screen.findByText(/something went wrong/i)).toBeTruthy();
 
     // The picker must still be there -- the write never landed, so nothing is frozen.
-    expect(await screen.findByTestId("item-select")).toBeTruthy();
+    expect(await screen.findByTestId("item-combobox")).toBeTruthy();
 
     // Fix the mistake: add a second line before retrying.
-    fireEvent.change(screen.getByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
@@ -525,7 +551,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -567,7 +593,7 @@ describe("the bill screen", () => {
 
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -584,7 +610,7 @@ describe("the bill screen", () => {
     // silently, so assert it is genuinely gone rather than merely covered.
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -692,15 +718,62 @@ describe("the bill screen", () => {
     expect(await screen.findByText(/choose a customer/i)).toBeTruthy();
   });
 
-  it("filters the item list by the search box and keeps a selection addable", async () => {
+  it("filters the combobox options as the recorder types", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [
+        { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true, unit: "kg", low_stock_at: 10 },
+        { id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 },
+      ],
+      error: null,
+    });
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));
-    const select = (await screen.findByTestId("item-select")) as HTMLSelectElement;
-    const allOptions = select.options.length;
-    fireEvent.change(screen.getByTestId("item-search"), { target: { value: "zzz-no-such-item" } });
-    expect(select.options.length).toBe(1); // only the placeholder option
+    const box = await screen.findByTestId("item-combobox");
+    fireEvent.focus(box);
+    expect(screen.getByTestId("item-option-i1")).toBeTruthy();
+    expect(screen.getByTestId("item-option-i2")).toBeTruthy();
+    fireEvent.change(box, { target: { value: "ban" } });
+    expect(screen.queryByTestId("item-option-i1")).toBeNull();
+    expect(screen.getByTestId("item-option-i2")).toBeTruthy();
+    // Hindi and Marathi names match whatever the UI language.
+    fireEvent.change(box, { target: { value: "प्याज" } });
+    expect(screen.getByTestId("item-option-i1")).toBeTruthy();
+    expect(screen.queryByTestId("item-option-i2")).toBeNull();
+    fireEvent.change(box, { target: { value: "केळी" } });
+    expect(screen.getByTestId("item-option-i2")).toBeTruthy();
+    expect(screen.queryByTestId("item-option-i1")).toBeNull();
+  });
+
+  it("says so when nothing matches", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    const box = await screen.findByTestId("item-combobox");
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: "zzz-no-such-item" } });
     expect(screen.getByTestId("item-no-match")).toBeTruthy();
-    fireEvent.change(screen.getByTestId("item-search"), { target: { value: "" } });
-    expect(select.options.length).toBe(allOptions);
+    expect(screen.queryByTestId("item-option-i1")).toBeNull();
+  });
+
+  it("selecting an option shows the detail, closes the list and names the item", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    expect(await screen.findByTestId("item-detail")).toBeTruthy();
+    expect(screen.queryByRole("listbox")).toBeNull();
+    const box = screen.getByTestId("item-combobox") as HTMLInputElement;
+    expect(box.value).toMatch(/Onion|कांदा|प्याज/);
+    expect(box.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("picks the active option with the arrow keys and Enter, and Escape closes", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    const box = await screen.findByTestId("item-combobox");
+    fireEvent.focus(box);
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(await screen.findByTestId("item-detail")).toBeTruthy();
   });
 });
