@@ -519,6 +519,23 @@ The Bill and Edit Bill screens add an **item search box** that finds items by na
 of the three enabled languages (English, Hindi, Marathi). The search folds case and matches
 any word in the name; a name with multiple words may be found by any one of them.
 
+## Update prices from a rate-list photo
+
+Migration `0026` and Edge Function `read-rate-list` let an admin photo a printed or digital
+rate list (WhatsApp forward, screenshot, handwritten) and update item prices and add new
+items in bulk. The image goes to Google Gemini; rows are extracted, matched against the
+shop's items, shown for manual review, and applied in one transaction.
+
+**Owner rules:** New items cost the extracted price, stock 30 with low-stock threshold 10.
+"Sold by" unit conversions (kg, piece, bunch, dozen, grams) apply to both new and existing
+items; mismatches on existing items are flagged for the admin to resolve by unit. Items
+absent from the list are left unchanged. Admin-only; requires network.
+
+**Setup:** `supabase secrets set GEMINI_API_KEY=...`. Optionally `GEMINI_MODEL` (default
+`gemini-2.5-flash`). Deploy: `SUPABASE_ACCESS_TOKEN=... npx supabase functions deploy
+read-rate-list` (pass token inline; see [CLI 401 note](#why-the-supabase-cli-401s-here)).
+Hand-apply `0026` in the SQL editor and insert the tracking row per the migration notes.
+
 ## Not in this slice
 
 `whatsapp-webhook` (the inbound bot: points queries, item suggestions, history on
