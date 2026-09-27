@@ -46,7 +46,9 @@ test("deleting an older token leaves a gap", async () => {
   const older = await billed(w.a);
   const newer = await billed(w.a);
   const before = await lastToken(w.a);
-  await del(w.a.clients.biller, older);
+  const { error } = await del(w.a.clients.biller, older);
+  assert(!error, error?.message);
+  assert(!(await exists(older)), "older bill still there");
   assertEqual(await lastToken(w.a), before, "counter unchanged");
   assert(await exists(newer), "newer bill kept");
 });
