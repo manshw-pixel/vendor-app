@@ -32,7 +32,11 @@ vi.mock("../components/SessionProvider", () => ({
 
 const { default: Items } = await import("../screens/Items");
 
-beforeEach(() => vi.clearAllMocks());
+// jsdom has no scrollTo; the edit/add handlers call it to bring the form into view.
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+});
 
 describe("the items screen", () => {
   it("lists inactive items too", async () => {
@@ -87,6 +91,12 @@ describe("the items screen", () => {
     await waitFor(() => expect(updateItem)
       .toHaveBeenCalledWith("i1", expect.objectContaining({ stock_kg: 20 })));
     expect(createItem).not.toHaveBeenCalled();
+  });
+
+  it("scrolls to the form at the top when an item's edit is tapped", async () => {
+    render(<Items />);
+    fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
   });
 
   it("hides an item rather than deleting it", async () => {

@@ -78,12 +78,16 @@ export default function Items() {
     setProblem(describeError(error));
   }
 
+  // The form renders at the top of the list, so a tap far down the page would open it
+  // off screen.
+  const toForm = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-slate-800">{t("items.title")}</h2>
         <button
-          onClick={() => { setErrors({}); setEditing({ id: null, input: BLANK, sold: false }); }}
+          onClick={() => { setErrors({}); setEditing({ id: null, input: BLANK, sold: false }); toForm(); }}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
         >
           {t("items.add")}
@@ -272,7 +276,7 @@ export default function Items() {
                 </div>
                 <button
                   data-testid={`item-edit-${it.id}`}
-                  onClick={() => { setErrors({}); setEditing({ id: it.id, input: toInput(it), sold: it.sold }); }}
+                  onClick={() => { setErrors({}); setEditing({ id: it.id, input: toInput(it), sold: it.sold }); toForm(); }}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
                 >
                   {t("items.edit")}
