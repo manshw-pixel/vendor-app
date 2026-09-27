@@ -38,7 +38,7 @@ For an **existing item**: if the normalised unit equals the item's unit → pric
 2. Client downscales each image (longest side ≤ 1600 px, JPEG) and calls Edge Function `read-rate-list`.
 3. Function checks the caller is an authenticated admin of an active shop, sends the images to Claude (`claude-sonnet-5`) with a tool/JSON schema, returns rows. Images are not stored. Nothing is written to the DB.
 4. Client loads items + aliases, normalises units, matches rows, and shows the review screen.
-5. Admin adjusts rows, taps **Apply** → RPC `apply_price_list(p_rows jsonb)` → result summary ("32 prices updated, 3 items added").
+5. Admin adjusts rows, taps **Apply** → RPC `apply_price_list(p_rows jsonb)` → **result screen** (below).
 
 ## Extraction (Edge Function `read-rate-list`)
 
@@ -68,15 +68,24 @@ Duplicate rows for the same matched item: last one wins, the earlier shown as "d
 
 Apply is disabled while any ticked row is invalid (price ≤ 0 or not a number, a new item missing a name). Linking a row to an item saves `name_as_written` as an alias on Apply.
 
+## Result screen (after Apply)
+
+- Header: "32 prices changed · 3 items added".
+- **Prices changed** list: item name (UI language), unit, old → new price, up/down marker.
+- **Items added** list: item name, unit, price, "stock 30 · cost = price" note.
+- Counts of unchanged and skipped rows.
+- Buttons: **Done** (back to Items, list refreshed) and **Update another list**.
+- Built from the RPC's return value, so it shows what the database saved, not what was sent.
+
 ## Database (0026)
 
 - `item_aliases (id, vendor_id, item_id → items on delete cascade, alias text, created_at, unique (vendor_id, lower(alias)))`, RLS: read by the shop's staff; writes only via the RPC.
-- `price_changes (id, vendor_id, item_id, old_price, new_price, source text check in ('rate_list'), changed_by, changed_at)` — audit log, read by admin.
+- `price_changes (id, vendor_id, item_id, old_price, new_price, source text check (source in ('rate_list')), changed_by, changed_at)` — audit log, read by admin.
 - `apply_price_list(p_rows jsonb) returns jsonb`, security definer, admin of `current_vendor_id()` only (42501 otherwise). Rows:
   - `{ kind: "update", item_id, price, alias? }` → item must be in the shop; `update items set price` (the 0025 trigger reprices pending bills); log `price_changes` when the price differs; upsert alias if given.
   - `{ kind: "create", names: {en,hi,mr}, unit, price, alias }` → create via the same rules as `create_item_with_cost` with cost = price, stock 30, low_stock_at 10 (whole-unit check from 0018 passes for 30/10); save `alias` (the name as written) for the new item.
   - One transaction; any invalid row raises (22023) and nothing is applied.
-  - Returns `{ updated, created, unchanged }`.
+  - Returns `{ updated: [{item_id, name_en, old_price, new_price, unit}], created: [{item_id, name_en, price, unit}], unchanged: n }` — built from what was actually written, not echoed from the input.
 
 ## Out of scope
 
@@ -90,7 +99,7 @@ Apply is disabled while any ticked row is invalid (price ≤ 0 or not a number, 
 - DB: `apply_price_list` — updates + log, unchanged not logged, create with defaults and cost = price, alias saved and unique, cross-shop item refused, non-admin refused, bad row rolls back everything, pending bill repriced via trigger.
 - Unit (web): sold-by normaliser (every rule row, grams maths, unknown → kg), matcher (names, aliases, LLM names, near-match suggestion, duplicates).
 - Edge Function: auth refusal, schema-shaped response from a mocked Claude reply, zero rows.
-- UI: review states, Apply disabled on invalid rows, apply summary.
+- UI: review states, Apply disabled on invalid rows; result screen lists changed (old → new) and added items from the RPC response.
 - Manual: one real run on 2–3 owner sample images before merge.
 
 ## Rollout
