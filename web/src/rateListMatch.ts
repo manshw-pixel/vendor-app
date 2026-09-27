@@ -115,7 +115,6 @@ export function toApplyRows(review: ReviewRow[]): ApplyRow[] {
       out.push({ kind: "create", names: { ...r.names }, unit: r.unit, price, ...(alias ? { alias } : {}) });
       continue;
     }
-    if (r.kind === "mismatch") continue;
     if (Math.abs(price - r.item.price) < 0.005) continue;
     const alias = aliasFor(r.row, r.item);
     out.push({ kind: "update", item_id: r.item.id, price, ...(alias ? { alias } : {}) });

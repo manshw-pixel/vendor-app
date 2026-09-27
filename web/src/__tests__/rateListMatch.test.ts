@@ -102,6 +102,13 @@ describe("linkRow, rowError and toApplyRows", () => {
     ]);
   });
 
+  it("sends a ticked mismatch row as an update with the typed price", () => {
+    const r = first(buildReview([row({ name_as_written: "Banana", sold_by_as_written: "1 pc", price: 6 })], items, []));
+    if (r.kind !== "mismatch") throw new Error("expected mismatch");
+    const ticked = { ...r, include: true, price: "7" };
+    expect(toApplyRows([ticked])).toEqual([{ kind: "update", item_id: "banana", price: 7 }]);
+  });
+
   it("reports invalid ticked rows", () => {
     const r = first(buildReview([row({ name_as_written: "Kiwi", name_en: "Kiwi", name_hi: "", name_mr: "किवी", price: 120 })], items, []));
     expect(rowError(r)).toBe("rateList.needNames");
