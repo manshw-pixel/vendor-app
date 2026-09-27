@@ -47,6 +47,27 @@ describe("the items screen", () => {
     expect(screen.getByText(/Beet|बीट/)).toBeTruthy();
   });
 
+  it("filters the list by the search box in any of the three names", async () => {
+    render(<Items />);
+    await screen.findByTestId("item-edit-i1");
+    const box = screen.getByTestId("items-search");
+    fireEvent.change(box, { target: { value: "बीट" } });
+    expect(screen.queryByTestId("item-edit-i1")).toBeNull();
+    expect(screen.getByTestId("item-edit-i2")).toBeTruthy();
+    fireEvent.change(box, { target: { value: "oni" } });
+    expect(screen.getByTestId("item-edit-i1")).toBeTruthy();
+    expect(screen.queryByTestId("item-edit-i2")).toBeNull();
+    fireEvent.change(box, { target: { value: "" } });
+    expect(screen.getByTestId("item-edit-i2")).toBeTruthy();
+  });
+
+  it("says so when nothing matches the search", async () => {
+    render(<Items />);
+    await screen.findByTestId("item-edit-i1");
+    fireEvent.change(screen.getByTestId("items-search"), { target: { value: "mango" } });
+    expect(screen.getByTestId("items-no-match")).toBeTruthy();
+  });
+
   it("shows the price through rupees()", async () => {
     render(<Items />);
     expect(await screen.findByText(/₹40\.00/)).toBeTruthy();
