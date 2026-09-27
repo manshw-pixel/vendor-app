@@ -23,13 +23,15 @@ describe("geminiRequest / geminiUrl", () => {
   it("asks for JSON with a schema and inlines every image", () => {
     const body = geminiRequest([img, img]) as {
       contents: { parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> }[];
-      generationConfig: { responseMimeType: string; responseSchema: unknown; temperature: number };
+      generationConfig: { responseMimeType: string; responseSchema: unknown; temperature: number; thinkingConfig: { thinkingBudget: number } };
     };
     const parts = body.contents[0]!.parts;
     expect(parts.filter((p) => p.inline_data).length).toBe(2);
     expect(parts[0]!.text).toMatch(/rate list/i);
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     expect(body.generationConfig.temperature).toBe(0);
+    // Reading a list needs no reasoning; thinking made one photo take 36 s.
+    expect(body.generationConfig.thinkingConfig.thinkingBudget).toBe(0);
     expect(JSON.stringify(body.generationConfig.responseSchema)).toContain("sold_by_as_written");
   });
   it("puts the model in the path and no key in the URL", () => {

@@ -51,7 +51,12 @@ const SCHEMA = {
 export function geminiRequest(images: RateImage[]): unknown {
   return {
     contents: [{ parts: [{ text: PROMPT }, ...images.map((i) => ({ inline_data: { mime_type: i.media_type, data: i.data } }))] }],
-    generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0 },
+    // thinkingBudget 0: transcribing a list needs no reasoning, and 2.5 Flash's default
+    // thinking made a single photo take ~36 s.
+    generationConfig: {
+      responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   };
 }
 
