@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { AdminItem } from "../admin";
 
 const rows: AdminItem[] = [
@@ -42,13 +43,13 @@ describe("the items screen", () => {
   it("lists inactive items too", async () => {
     // listItems() hides them from the bill grid; an admin who cannot see a hidden item
     // cannot bring it back.
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     expect(await screen.findByText(/Onion|कांदा/)).toBeTruthy();
     expect(screen.getByText(/Beet|बीट/)).toBeTruthy();
   });
 
   it("filters the list by the search box in any of the three names", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     await screen.findByTestId("item-edit-i1");
     const box = screen.getByTestId("items-search");
     fireEvent.change(box, { target: { value: "बीट" } });
@@ -62,24 +63,24 @@ describe("the items screen", () => {
   });
 
   it("says so when nothing matches the search", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     await screen.findByTestId("item-edit-i1");
     fireEvent.change(screen.getByTestId("items-search"), { target: { value: "mango" } });
     expect(screen.getByTestId("items-no-match")).toBeTruthy();
   });
 
   it("shows the price through rupees()", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     expect(await screen.findByText(/₹40\.00/)).toBeTruthy();
   });
 
   it("marks a zero-stock item out of stock", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     expect(await screen.findByText(/out of stock|साठा संपला|स्टॉक खत्म/i)).toBeTruthy();
   });
 
   it("refuses to save an item missing its Marathi name", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Carrot" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "गाजर" } });
@@ -90,7 +91,7 @@ describe("the items screen", () => {
   });
 
   it("creates a complete item with the vendor id", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Carrot" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "गाजर" } });
@@ -105,7 +106,7 @@ describe("the items screen", () => {
   });
 
   it("edits an existing item by id, not by insert", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
     fireEvent.change(screen.getByLabelText(/^stock|^साठा|^स्टॉक/i), { target: { value: "20" } });
     fireEvent.click(screen.getByTestId("item-save"));
@@ -115,19 +116,19 @@ describe("the items screen", () => {
   });
 
   it("scrolls to the form at the top when an item's edit is tapped", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
   });
 
   it("hides an item rather than deleting it", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-toggle-/))[0]!);
     await waitFor(() => expect(setItemActive).toHaveBeenCalledWith("i1", false));
   });
 
   it("reloads after a change so the list matches the server", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     await screen.findAllByTestId(/^item-toggle-/);
     expect(listAllItems).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getAllByTestId(/^item-toggle-/)[0]!);
@@ -137,12 +138,12 @@ describe("the items screen", () => {
   it("says nothing yet, not not allowed, on an empty list", async () => {
     // A policy-filtered read is zero rows, not an error. See errors.ts.
     listAllItems.mockResolvedValueOnce({ data: [], error: null });
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     expect(await screen.findByText(/no items yet|अजून माल नाही|कोई सामान नहीं/i)).toBeTruthy();
   });
 
   it("shows the last purchase cost, or says there is none", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     expect((await screen.findByTestId("item-cost-i1")).textContent).toContain("₹31.25");
     expect((await screen.findByTestId("item-cost-i2")).textContent).toContain("No cost yet");
   });
@@ -153,13 +154,13 @@ describe("the items screen", () => {
     setItemActive.mockResolvedValueOnce({
       error: { code: "42501", message: "new row violates row-level security policy" },
     });
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-toggle-/))[0]!);
     expect(await screen.findByText(/does not allow|परवानगी नाही|अनुमति नहीं/i)).toBeTruthy();
   });
 
   it("shows a unit select defaulting to kg for a new item", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     const select = screen.getByTestId("item-unit") as HTMLSelectElement;
     expect(select.value).toBe("kg");
@@ -167,7 +168,7 @@ describe("the items screen", () => {
   });
 
   it("relabels price and stock when the unit changes to piece", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "piece" } });
     expect(screen.getByText("Price per piece")).toBeTruthy();
@@ -175,7 +176,7 @@ describe("the items screen", () => {
   });
 
   it("refuses a fractional stock for a piece item", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Coconut" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "नारियल" } });
@@ -189,7 +190,7 @@ describe("the items screen", () => {
   });
 
   it("sends the chosen unit and low-stock threshold to createItem", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Coconut" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "नारियल" } });
@@ -210,7 +211,7 @@ describe("the items screen", () => {
       data: [{ ...rows[0]!, sold: true }],
       error: null,
     });
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
     const select = screen.getByTestId("item-unit") as HTMLSelectElement;
     expect(select.disabled).toBe(true);
@@ -225,7 +226,7 @@ describe("the items screen", () => {
       ],
       error: null,
     });
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     const dozenText = await screen.findByText((_, el) => el?.textContent === "4 dozen — Low stock");
     expect(dozenText.className).toContain("amber");
     const kgRow = screen.getByTestId(/^item-cost-i5$/).closest("li")!;
@@ -233,7 +234,7 @@ describe("the items screen", () => {
   });
 
   it("refuses to save a new item with no cost", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByLabelText(/english|इंग्रजी|अंग्रेज़ी/i), { target: { value: "Beet" } });
     fireEvent.change(screen.getByLabelText(/hindi|हिंदी/i), { target: { value: "चुकंदर" } });
@@ -246,14 +247,14 @@ describe("the items screen", () => {
   });
 
   it("the cost label follows the unit selector", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /add item|माल जोडा|सामान जोड़ें/i }));
     fireEvent.change(screen.getByTestId("item-unit"), { target: { value: "dozen" } });
     expect(screen.getByText("Cost per dozen")).toBeTruthy();
   });
 
   it("an existing item may be saved with the cost left blank", async () => {
-    render(<Items />);
+    render(<MemoryRouter><Items /></MemoryRouter>);
     fireEvent.click((await screen.findAllByTestId(/^item-edit-/))[0]!);
     fireEvent.change(screen.getByTestId("item-cost"), { target: { value: "" } });
     fireEvent.click(screen.getByTestId("item-save"));
