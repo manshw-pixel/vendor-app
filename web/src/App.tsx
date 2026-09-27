@@ -9,6 +9,7 @@ import { ChangePassword } from "./components/ChangePassword";
 import Bill from "./screens/Bill";
 import Pending from "./screens/Pending";
 import Items from "./screens/Items";
+import RateList from "./screens/RateList";
 import Customers from "./screens/Customers";
 import Requests from "./screens/Requests";
 import Stock from "./screens/Stock";
@@ -140,6 +141,7 @@ function ShellRoutes({ role, vendorName, name }:
         <Route path="/pending" element={<Pending />} />
         <Route path="/amend/:billId" element={<AmendBill />} />
         <Route path="/items" element={<Items />} />
+        <Route path="/items/rate-list" element={<RateList />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/requests" element={<Requests />} />
         <Route path="/stock" element={<Stock />} />
