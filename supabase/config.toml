@@ -44,6 +44,11 @@ verify_jwt = true
 [functions.owner-suspend-vendor]
 verify_jwt = true
 
+# Reads a rate-list photo with Gemini for an admin. verify_jwt proves a signed-in user;
+# the function's own app_users read under the caller's JWT is the admin check.
+[functions.read-rate-list]
+verify_jwt = true
+
 # verify_jwt = false ON PURPOSE, and it is not a hole. The caller is pg_cron over pg_net
 # (kick_send_notification(), 0011), which holds no user JWT and never will -- with
 # verify_jwt on, every tick would be rejected at the edge and the queue would never
