@@ -31,14 +31,14 @@ describe("normaliseSoldBy", () => {
     expect(normaliseSoldBy("120 pc", 5).unit).toBe("piece");
   });
 
-  it.each([["2 kg", "kg"], ["6 pc", "piece"], ["3 box", "piece"], ["½ kg", "kg"], ["1/2 kg", "kg"], ["0.5 kg", "kg"], ["5 kg", "kg"]])(
+  it.each([["2 kg", "kg"], ["6 pc", "piece"], ["3 box", "piece"], ["½ kg", "kg"], ["1/2 kg", "kg"], ["0.5 kg", "kg"], ["5 kg", "kg"], ["2 dozen", "dozen"], ["3 dz", "dozen"], ["2 bunch", "bunch"], ["½ dozen", "dozen"]])(
     "%s is flagged unclear (a quantity other than one), unit best-guess %s", (soldBy, unit) => {
       const r = normaliseSoldBy(soldBy, 30);
       expect(r.unclear).toBe(true);
       expect(r.unit).toBe(unit);
     });
 
-  it.each(["1 kg", "1 pc", "12 pc", "12 nos", "250 g", "", "1 box", "per bag"])("%s is not unclear", (soldBy) => {
+  it.each(["1 kg", "1 pc", "12 pc", "12 nos", "250 g", "", "1 box", "per bag", "1 dozen", "dozen", "bunch", "1 bunch"])("%s is not unclear", (soldBy) => {
     expect(normaliseSoldBy(soldBy, 30).unclear).toBe(false);
   });
 });
