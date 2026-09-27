@@ -136,6 +136,12 @@ export async function listPending() {
     .order("token_no", { ascending: false });
 }
 
+/** Deletes a bill that has not been completed (0025). Its token is reused only if it was
+ *  the latest; the database decides that, and refuses a done bill or another shop's. */
+export async function deletePendingBill(billId: string) {
+  return supabase.rpc("delete_pending_bill", { p_bill_id: billId });
+}
+
 /**
  * Completes a sale with how it was paid, optionally spending some of the customer's points
  * and/or collecting an old due in the same transaction.
