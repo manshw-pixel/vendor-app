@@ -38,7 +38,8 @@ For an **existing item**: if the normalised unit equals the item's unit → pric
 2. Client downscales each image (longest side ≤ 1600 px, JPEG) and calls Edge Function `read-rate-list`.
 3. Function checks the caller is an authenticated admin of an active shop, sends the images to the Gemini API (`generateContent`, model from secret `GEMINI_MODEL`, default `gemini-2.5-flash`) with `responseMimeType: application/json` and a `responseSchema`, returns rows. Images are not stored. Nothing is written to the DB.
 4. Client loads items + aliases, normalises units, matches rows, and shows the review screen.
-5. Admin adjusts rows, taps **Apply** → RPC `apply_price_list(p_rows jsonb)` → **result screen** (below).
+5. Admin adjusts rows, taps **Review changes** → **confirm screen**: the exact list of what will happen (each price change old → new, each new item with unit and price, counts of unchanged/skipped). **Back** returns to the review with edits kept; **Confirm and apply** calls RPC `apply_price_list(p_rows jsonb)`.
+6. After the RPC succeeds → **result screen** ("Changes completed", below).
 
 ## Extraction (Edge Function `read-rate-list`)
 
@@ -68,7 +69,9 @@ Duplicate rows for the same matched item: last one wins, the earlier shown as "d
 
 Apply is disabled while any ticked row is invalid (price ≤ 0 or not a number, a new item missing a name). Linking a row to an item saves `name_as_written` as an alias on Apply.
 
-## Result screen (after Apply)
+## Result screen (after Confirm)
+
+- Title: "Changes completed".
 
 - Header: "32 prices changed · 3 items added".
 - **Prices changed** list: item name (UI language), unit, old → new price, up/down marker.
