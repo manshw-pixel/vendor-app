@@ -87,8 +87,18 @@ export default function Pending() {
     setOwes(null);
     setCollect(false);
     setCollectInput("");
-    if (!bill.customer_id) return;
-    const [points, due] = await Promise.all([customerBalance(bill.customer_id), loadCustomerDue(bill.customer_id)]);
+    // Re-read the queue: an item reprice may have changed this bill's total since the
+    // list loaded, and the dialog (bills.find by id) must show what will be collected.
+    const fresh = refresh();
+    if (!bill.customer_id) {
+      await fresh;
+      return;
+    }
+    const [points, due] = await Promise.all([
+      customerBalance(bill.customer_id),
+      loadCustomerDue(bill.customer_id),
+      fresh,
+    ]);
     // Another bill was opened, or this one cancelled or confirmed, while the reads ran.
     if (opening.current !== bill.id) return;
     // customerBalance resolves to an array of one row, as PostgREST renders a
@@ -169,6 +179,8 @@ export default function Pending() {
     setDeleted(false);
     const { error } = await deletePendingBill(id);
     if (error) {
+      // Refresh first (it resets the failure from the list read), then show the refusal.
+      await refresh();
       setFailure(describeError(error));
       return;
     }

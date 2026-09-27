@@ -12,24 +12,39 @@ create function reprice_pending_lines() returns trigger
 declare
   v_bills uuid[];
 begin
-  with touched as (
+  -- Lock order: bills row before its bill_items, in bill id order -- the same
+  -- order complete_bill / issue_token / amend and replace_bill_lines use, so
+  -- this trigger cannot deadlock with them or reprice a bill completed under it.
+  perform 1
+     from bills b
+    where b.vendor_id = new.vendor_id
+      and b.status in ('recording', 'billed')
+      and exists (select 1 from bill_items bi
+                   where bi.bill_id = b.id and bi.item_id = new.id)
+    order by b.id
+      for update;
+
+  -- Re-filter after locking: a bill may have completed while we waited.
+  select array_agg(b.id) into v_bills
+    from bills b
+   where b.vendor_id = new.vendor_id
+     and b.status in ('recording', 'billed')
+     and exists (select 1 from bill_items bi
+                  where bi.bill_id = b.id and bi.item_id = new.id);
+
+  if v_bills is not null then
     update bill_items bi
        set unit_price = new.price,
            line_total = round(bi.qty_kg * new.price, 2)
-      from bills b
-     where bi.item_id = new.id
-       and bi.vendor_id = new.vendor_id
-       and b.id = bi.bill_id
-       and b.status in ('recording', 'billed')
-    returning bi.bill_id
-  )
-  select array_agg(distinct bill_id) into v_bills from touched;
+     where bi.bill_id = any(v_bills)
+       and bi.item_id = new.id;
+  end if;
 
   if v_bills is null then
     return new;
   end if;
 
-  -- A recording bill's total is set by issue_token; only billed totals are live.
+  -- Totals/messages filter status='billed': a recording bill's total is set by issue_token.
   update bills b
      set total = (select coalesce(sum(line_total), 0) from bill_items where bill_id = b.id)
    where b.id = any(v_bills) and b.status = 'billed';

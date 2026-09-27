@@ -393,15 +393,32 @@ describe("collecting a previous due with the bill", () => {
   });
 });
 
+describe("confirm re-reads the queue", () => {
+  it("shows the current total after a reprice, not the stale list's", async () => {
+    const bill = (total: number) => ({
+      data: [{ id: "b1", token_no: 7, total, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } }],
+      error: null,
+    });
+    listPending.mockResolvedValueOnce(bill(500)).mockResolvedValueOnce(bill(600));
+    renderPending({ role: "biller" });
+    fireEvent.click(await screen.findByTestId("pending-complete-b1"));
+    fireEvent.change(await screen.findByTestId("redeem-input"), { target: { value: "40" } });
+    await waitFor(() => expect((screen.getByTestId("redeem-summary").textContent ?? "")).toMatch(/560/));
+    expect(listPending).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("dues on the confirm: review fixes", () => {
   it("a slow due read for one bill never lands on another bill's dialog", async () => {
-    listPending.mockResolvedValueOnce({
+    const two: { data: PendingBill[]; error: null } = {
       data: [
         { id: "b1", token_no: 7, total: 500, customer_id: "c1", customers: { name: "Asha", flat_no: "A-1" } },
         { id: "b2", token_no: 8, total: 120, customer_id: null, customers: null },
       ],
       error: null,
-    });
+    };
+    // Initial load plus the queue re-read each confirm opening does.
+    listPending.mockResolvedValueOnce(two).mockResolvedValueOnce(two).mockResolvedValueOnce(two);
     let releaseDue: (v: { data: number | null; error: null }) => void = () => {};
     loadCustomerDue.mockImplementationOnce(() => new Promise((r) => { releaseDue = r; }));
     renderPending({ role: "biller" });
