@@ -61,7 +61,7 @@ export async function applyPriceList(rows: ApplyRow[]): Promise<{ data: ApplyRes
  * 1600px (dense detail, or a phone's default JPEG quality) needs another pass, not a failure.
  */
 export async function downscale(file: File, maxSide = 1600): Promise<RateImage> {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   try {
     for (const side of [maxSide, 1200, 900]) {
       const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
