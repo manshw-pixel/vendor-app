@@ -53,6 +53,26 @@ describe("the bill screen", () => {
     expect(container.querySelectorAll("[data-testid^='item-row-']").length).toBe(0);
   });
 
+  it("reopening after a pick lists every item and selects the text, so typing replaces it", async () => {
+    (data.listItems as Mock).mockResolvedValueOnce({
+      data: [
+        { id: "i1", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, stock_kg: 100, is_active: true, unit: "kg", low_stock_at: 10 },
+        { id: "i2", name_en: "Banana", name_hi: "केला", name_mr: "केळी", price: 30, stock_kg: 4, is_active: true, unit: "piece", low_stock_at: 5 },
+      ],
+      error: null,
+    });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    const box = screen.getByTestId("item-combobox") as HTMLInputElement;
+    fireEvent.blur(box);
+    const select = vi.spyOn(box, "select");
+    fireEvent.focus(box);
+    expect(select).toHaveBeenCalled();
+    expect(screen.getByTestId("item-option-i1")).toBeTruthy();
+    expect(screen.getByTestId("item-option-i2")).toBeTruthy();
+  });
+
   it("names the price and stock on the option itself", async () => {
     // The figures a recorder chooses on have to be on the option or they are not on
     // screen until after the pick.

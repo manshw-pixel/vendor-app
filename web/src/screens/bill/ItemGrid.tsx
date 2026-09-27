@@ -48,7 +48,10 @@ export function ItemGrid({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const listId = useId();
-  const shown = filterItems(items, query);
+  // While the text is just the picked item's name, list everything: reopening the field
+  // to change the item should not show only the item already chosen.
+  const showingPick = selected !== null && query === itemName(selected, lang);
+  const shown = filterItems(items, showingPick ? "" : query);
 
   function choose(item: Item) {
     setSelected(item);
@@ -123,7 +126,11 @@ export function ItemGrid({
           aria-activedescendant={open && shown[active] ? `${listId}-${shown[active].id}` : undefined}
           placeholder={t("bill.chooseItem")}
           value={query}
-          onFocus={() => setOpen(true)}
+          onFocus={(e) => {
+            setOpen(true);
+            // Typing then replaces the picked name instead of appending to it.
+            if (showingPick) e.target.select();
+          }}
           onClick={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
