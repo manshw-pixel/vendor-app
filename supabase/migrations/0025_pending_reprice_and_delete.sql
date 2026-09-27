@@ -12,9 +12,12 @@ create function reprice_pending_lines() returns trigger
 declare
   v_bills uuid[];
 begin
-  -- Lock order: bills row before its bill_items, in bill id order -- the same
-  -- order complete_bill / issue_token / amend and replace_bill_lines use, so
-  -- this trigger cannot deadlock with them or reprice a bill completed under it.
+  -- Lock the pending bills (id order) before their bill_items, and re-filter below, so a
+  -- bill completed while we waited is never repriced. Known residual: this runs with the
+  -- item row already locked by the price UPDATE, while complete_bill / void / amend lock
+  -- the bill and then update items (stock). A price edit racing one of those on the same
+  -- item can deadlock; Postgres aborts one side with 40P01, data stays consistent, and a
+  -- retry succeeds. Accepted as rare (owner-facing note in the PR).
   perform 1
      from bills b
     where b.vendor_id = new.vendor_id
