@@ -35,6 +35,7 @@ import "./dues.test.mjs";
 import "./dues_collect.test.mjs";
 import "./offline_billing.test.mjs";
 import "./pending_reprice.test.mjs";
+import "./delete_pending_bill.test.mjs";
 
 try {
   await bootstrap();

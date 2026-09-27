@@ -49,3 +49,49 @@ create trigger items_reprice_pending
   for each row
   when (new.price is distinct from old.price)
   execute function reprice_pending_lines();
+
+-- --------------------------------------------------------------------------
+-- Part 2: deleting a bill before it is completed.
+-- A delete, not a status: nothing has happened yet (no stock, points or payment moves
+-- before complete_bill), so there is nothing to keep on record. bill_items and
+-- outbound_messages (bill_id, 0020) cascade.
+-- The token comes back only when it was the latest one; renumbering later tokens
+-- would confuse customers already holding them.
+-- --------------------------------------------------------------------------
+create function delete_pending_bill(p_bill_id uuid) returns void
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_bill bills%rowtype;
+  v_last integer;
+begin
+  if current_vendor_id() is null or current_user_role() not in ('admin', 'biller') then
+    raise exception 'only an admin or biller may delete a pending bill' using errcode = '42501';
+  end if;
+
+  -- The counter lock first, the same row issue_token updates, so a token cannot be
+  -- issued between reading last_token and rolling it back.
+  select last_token into v_last from vendor_counters
+   where vendor_id = current_vendor_id() for update;
+
+  select * into v_bill from bills
+   where id = p_bill_id and vendor_id = current_vendor_id() for update;
+  if not found then
+    raise exception 'bill % is not in your shop', p_bill_id using errcode = '42501';
+  end if;
+  if v_bill.status not in ('recording', 'billed') then
+    raise exception 'bill % is %, only a pending bill may be deleted', p_bill_id, v_bill.status
+      using errcode = '22023';
+  end if;
+
+  delete from bills where id = p_bill_id;
+
+  if v_bill.token_no is not null and v_bill.token_no = v_last then
+    update vendor_counters
+       set last_token = coalesce(
+             (select max(token_no) from bills where vendor_id = v_bill.vendor_id), 0)
+     where vendor_id = v_bill.vendor_id;
+  end if;
+end $$;
+
+revoke all on function delete_pending_bill(uuid) from public, anon;
+grant execute on function delete_pending_bill(uuid) to authenticated;
