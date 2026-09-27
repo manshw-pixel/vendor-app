@@ -8,7 +8,7 @@ The vendor gets a daily rate list as an image (printed, handwritten, WhatsApp fo
 
 ## Decisions (owner-confirmed)
 
-- Image formats vary → vision LLM (Claude) + mandatory human review before anything is saved.
+- Image formats vary → vision LLM (Google Gemini, owner's choice) + mandatory human review before anything is saved.
 - The list's figure is the **selling price** (`items.price`). Existing items' cost is not touched.
 - Unmatched list lines become **proposed new items** (not only link/skip).
 - New items: cost = stored price; stock 30 and low-stock threshold 10, in the item's unit.
@@ -36,16 +36,16 @@ For an **existing item**: if the normalised unit equals the item's unit → pric
 
 1. Items page → **Update prices from photo** (admin). Take or pick one or more images (multi-page lists).
 2. Client downscales each image (longest side ≤ 1600 px, JPEG) and calls Edge Function `read-rate-list`.
-3. Function checks the caller is an authenticated admin of an active shop, sends the images to Claude (`claude-sonnet-5`) with a tool/JSON schema, returns rows. Images are not stored. Nothing is written to the DB.
+3. Function checks the caller is an authenticated admin of an active shop, sends the images to the Gemini API (`generateContent`, model from secret `GEMINI_MODEL`, default `gemini-2.5-flash`) with `responseMimeType: application/json` and a `responseSchema`, returns rows. Images are not stored. Nothing is written to the DB.
 4. Client loads items + aliases, normalises units, matches rows, and shows the review screen.
 5. Admin adjusts rows, taps **Apply** → RPC `apply_price_list(p_rows jsonb)` → **result screen** (below).
 
 ## Extraction (Edge Function `read-rate-list`)
 
 - Input: `{ images: [{ media_type, data(base64) }] }` (≤ 5 images, each ≤ 1.5 MB after downscale).
-- Secret: `ANTHROPIC_API_KEY` (Supabase function secret).
-- Output rows: `{ name_as_written, sold_by_as_written, price, name_en, name_hi, name_mr, confidence: "high"|"low" }`. `name_*` are Claude's transliteration/translation for creating new items. `price` is the number exactly as written (no conversion).
-- Errors: non-admin → 403; Claude failure/timeout → 502 with a message key; zero rows → 200 with `[]` (UI says "No prices found in this image").
+- Secrets: `GEMINI_API_KEY` (required), `GEMINI_MODEL` (optional override). The key is sent as the `x-goog-api-key` header, never in the URL, so it cannot leak into logs.
+- Output rows: `{ name_as_written, sold_by_as_written, price, name_en, name_hi, name_mr, confidence: "high"|"low" }`. `name_*` are Gemini's transliteration/translation for creating new items. `price` is the number exactly as written (no conversion).
+- Errors: non-admin → 403; Gemini failure/timeout/blocked response → 502 with a message key; zero rows → 200 with `[]` (UI says "No prices found in this image").
 
 ## Matching (client, pure module)
 
@@ -98,10 +98,10 @@ Apply is disabled while any ticked row is invalid (price ≤ 0 or not a number, 
 
 - DB: `apply_price_list` — updates + log, unchanged not logged, create with defaults and cost = price, alias saved and unique, cross-shop item refused, non-admin refused, bad row rolls back everything, pending bill repriced via trigger.
 - Unit (web): sold-by normaliser (every rule row, grams maths, unknown → kg), matcher (names, aliases, LLM names, near-match suggestion, duplicates).
-- Edge Function: auth refusal, schema-shaped response from a mocked Claude reply, zero rows.
+- Edge Function: auth refusal, schema-shaped response from a mocked Gemini reply, zero rows.
 - UI: review states, Apply disabled on invalid rows; result screen lists changed (old → new) and added items from the RPC response.
 - Manual: one real run on 2–3 owner sample images before merge.
 
 ## Rollout
 
-Needs from owner: Anthropic API key (set as function secret), 2–3 sample images. Deploy order: set secret → deploy function → hand-apply 0026 + tracking row → merge.
+Needs from owner: Gemini API key from Google AI Studio (set as function secret `GEMINI_API_KEY`), 2–3 sample images. Deploy order: set secret → deploy function → hand-apply 0026 + tracking row → merge.
