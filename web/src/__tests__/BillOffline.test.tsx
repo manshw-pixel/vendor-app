@@ -18,6 +18,13 @@ const { listOutbox } = await import("../offline/outbox");
 const { default: Bill } = await import("../screens/Bill");
 const data = await import("../data");
 
+
+/** Opens the item combobox and taps an option -- the one way a line's item is chosen. */
+async function pickItem(id: string) {
+  fireEvent.focus(await screen.findByTestId("item-combobox"));
+  fireEvent.mouseDown(screen.getByTestId(`item-option-${id}`));
+  fireEvent.click(screen.getByTestId(`item-option-${id}`));
+}
 beforeEach(async () => {
   setKV(memoryKV());
   await saveSnapshot({ vendorId: "v1", cachedAt: Date.now(),
@@ -31,7 +38,7 @@ describe("offline bill", () => {
     render(<MemoryRouter><Bill /></MemoryRouter>);
     fireEvent.click(await screen.findByText("Asha"));
     // The same line-adding interaction Bill.test.tsx uses.
-    fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+    await pickItem("i1");
     fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
@@ -83,7 +90,7 @@ describe("offline bill", () => {
 
 async function addOnionLine() {
   fireEvent.click(await screen.findByText("Asha"));
-  fireEvent.change(await screen.findByTestId("item-select"), { target: { value: "i1" } });
+  await pickItem("i1");
   fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
   fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 }

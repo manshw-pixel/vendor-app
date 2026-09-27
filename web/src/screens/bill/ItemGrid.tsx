@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 type T = ReturnType<typeof useTranslation>["t"];
@@ -45,7 +45,35 @@ export function ItemGrid({
   const [qty, setQty] = useState("");
   const [reason, setReason] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const listId = useId();
   const shown = filterItems(items, query);
+
+  function choose(item: Item) {
+    setSelected(item);
+    setQty("");
+    setReason(null);
+    setQuery(itemName(item, lang));
+    setOpen(false);
+    setActive(-1);
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      setActive(-1);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setOpen(true);
+      if (shown.length === 0) return;
+      const d = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => (a + d + shown.length) % shown.length);
+    } else if (e.key === "Enter" && open && shown[active]) {
+      e.preventDefault();
+      choose(shown[active]);
+    }
+  }
 
   function add() {
     if (!selected) return;
@@ -77,46 +105,74 @@ export function ItemGrid({
     <div className="space-y-3">
       <h2 className="font-semibold text-slate-800">{t("bill.addItem")}</h2>
 
-      <input
-        type="search"
-        data-testid="item-search"
-        aria-label={t("bill.searchItem")}
-        placeholder={t("bill.searchItem")}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
-      />
-      {shown.length === 0 && (
-        <p data-testid="item-no-match" className="text-sm text-slate-500">{t("bill.noItemMatch")}</p>
-      )}
-
-      <label className="block text-sm text-slate-600" htmlFor="item-select">
+      {/* One typeable field: tap to see every item, type to narrow by any of the three
+          names. Options are plain elements, not <option>s, so they can carry the stock
+          colour. mouseDown is prevented so a tap lands before the input's blur closes
+          the list. */}
+      <label className="block text-sm text-slate-600" htmlFor={`${listId}-input`}>
         {t("bill.chooseItem")}
-        <select
-          id="item-select"
-          data-testid="item-select"
-          value={selected?.id ?? ""}
+        <input
+          id={`${listId}-input`}
+          type="text"
+          role="combobox"
+          autoComplete="off"
+          data-testid="item-combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={open && shown[active] ? `${listId}-${shown[active].id}` : undefined}
+          placeholder={t("bill.chooseItem")}
+          value={query}
+          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onKeyDown={onKeyDown}
           onChange={(e) => {
-            setSelected(items.find((i) => i.id === e.target.value) ?? null);
-            setQty("");
-            setReason(null);
+            setQuery(e.target.value);
+            setSelected(null);
+            setOpen(true);
+            setActive(-1);
           }}
           className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
-        >
-          <option value="">{t("bill.chooseItem")}</option>
-          {shown.map((item) => (
-            <option key={item.id} value={item.id}>
-              {`${itemName(item, lang)} — ${rupees(item.price)} · ${stockText(item.stock_kg, item.unit, t)}`}
-            </option>
-          ))}
-        </select>
+        />
       </label>
+      {open && (
+        <div
+          id={listId}
+          role="listbox"
+          className="max-h-64 overflow-y-auto border border-slate-300 rounded-lg bg-white divide-y divide-slate-100"
+        >
+          {shown.length === 0 ? (
+            <p data-testid="item-no-match" className="px-3 py-2 text-sm text-slate-500">{t("bill.noItemMatch")}</p>
+          ) : (
+            shown.map((item, idx) => (
+              <div
+                key={item.id}
+                id={`${listId}-${item.id}`}
+                role="option"
+                aria-selected={idx === active}
+                data-testid={`item-option-${item.id}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(item)}
+                className={`flex items-center justify-between gap-2 px-3 py-2 min-h-[44px] cursor-pointer text-slate-800 ${idx === active ? "bg-slate-100" : ""}`}
+              >
+                <span>{itemName(item, lang)}</span>
+                <span className="text-right text-sm">
+                  {rupees(item.price)}
+                  <span className={`ml-2 text-xs ${stockClass(item.stock_kg, item.low_stock_at)}`}>
+                    {stockText(item.stock_kg, item.unit, t)}
+                  </span>
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {selected && (
         <div className="space-y-2 border border-slate-200 rounded-xl bg-white p-3">
-          {/* <option> cannot carry stockClass's colour, so the warning that the shop is
-              low or out is repeated here, where it can be styled, for the one item the
-              recorder actually picked. */}
+          {/* The stock warning is repeated here, next to the qty field, for the one item
+              the recorder actually picked. */}
           <p data-testid="item-detail" className="text-sm text-slate-700">
             {rupees(selected.price)}
             <span className={`ml-2 text-xs ${stockClass(selected.stock_kg, selected.low_stock_at)}`}>
