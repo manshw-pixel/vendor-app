@@ -9,6 +9,7 @@ import { useSession } from "../components/SessionProvider";
 import { itemName, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
 import { describeError } from "../errors";
+import { filterItems } from "../itemSearch";
 
 const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", cost: "", stock_kg: "",
   unit: "kg", low_stock_at: "10" };
@@ -37,6 +38,7 @@ export default function Items() {
     useState<{ id: string | null; input: ItemInput; sold: boolean } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<ItemField, string>>>({});
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     const { data, error } = await listAllItems();
@@ -48,6 +50,8 @@ export default function Items() {
 
   if (session.kind !== "ready") return null;
   const { vendorId } = session;
+  // Same matching as the billing picker: any of the three names, whatever the UI language.
+  const shown = filterItems(rows, query);
   const lang = i18n.language as Lang;
 
   async function save() {
@@ -240,11 +244,25 @@ export default function Items() {
         </form>
       )}
 
+      {rows.length > 0 && (
+        <input
+          type="search"
+          data-testid="items-search"
+          aria-label={t("items.search")}
+          placeholder={t("items.search")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
+        />
+      )}
+
       {rows.length === 0 ? (
         <p className="text-sm text-slate-500">{t("items.empty")}</p>
+      ) : shown.length === 0 ? (
+        <p data-testid="items-no-match" className="text-sm text-slate-500">{t("bill.noItemMatch")}</p>
       ) : (
         <ul className="space-y-2">
-          {rows.map((it) => {
+          {shown.map((it) => {
             const level = stockLevel(Number(it.stock_kg), Number(it.low_stock_at));
             return (
               <li
