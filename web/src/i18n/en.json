@@ -78,7 +78,7 @@
     "pick": "Take or choose photos of today's rate list (up to 5).",
     "tooMany": "Only the first 5 photos will be read.",
     "read": "Read prices",
-    "reading": "Reading the list…",
+    "reading": "Reading the list… this can take up to a minute. Keep this screen open.",
     "readFailed": "The photo could not be read. Try a clearer photo.",
     "notConfigured": "Photo reading is not set up yet.",
     "noRows": "No prices found in this photo.",
