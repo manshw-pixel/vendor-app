@@ -28,7 +28,7 @@ Date: 2026-09-27. Migration: `0025_pending_reprice_and_delete.sql`.
 - `delete_pending_bill(p_bill_id uuid) returns void`, `security definer`.
 - Refuses unless `current_vendor_id()` is non-null and role is `admin` or `biller` (errcode 42501); bill must belong to caller's shop (42501); status must be `recording` or `billed` (errcode 22023 otherwise).
 - Locks `vendor_counters` row for the shop (`for update`) before touching the bill, the same lock `issue_token` takes, so a concurrent token issue cannot interleave.
-- Deletes pending `outbound_messages` of kind `token_issued` for this bill's token (status `pending` only), then deletes the bill (bill_items cascade).
+- Deletes `outbound_messages` rows with `template_key = 'token_issued'`, same vendor, `payload->>'token_no'` = this token, status `pending` only, then deletes the bill (bill_items cascade).
 - If `token_no = last_token`, sets `last_token = coalesce(max(token_no) of remaining bills in shop, 0)`.
 - No stock or points effects: neither moves before completion.
 - UI: Delete button per row on `Pending.tsx`, with a confirm; refreshes the list after.
