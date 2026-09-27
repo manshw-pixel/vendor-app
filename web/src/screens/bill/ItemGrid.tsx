@@ -5,6 +5,7 @@ type T = ReturnType<typeof useTranslation>["t"];
 import { type Draft } from "../../billing";
 import type { Item } from "../../data";
 import { itemName, type Lang } from "../../i18n/locales";
+import { filterItems } from "../../itemSearch";
 import { rupees } from "../../money";
 import { stockLevel } from "../../adminRules";
 import { isWholeUnit, qtyText, validateQty } from "../../units";
@@ -43,6 +44,8 @@ export function ItemGrid({
   const [selected, setSelected] = useState<Item | null>(null);
   const [qty, setQty] = useState("");
   const [reason, setReason] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const shown = filterItems(items, query);
 
   function add() {
     if (!selected) return;
@@ -60,6 +63,7 @@ export function ItemGrid({
     });
     setSelected(null);
     setQty("");
+    setQuery("");
     setReason(null);
   }
 
@@ -72,6 +76,19 @@ export function ItemGrid({
   return (
     <div className="space-y-3">
       <h2 className="font-semibold text-slate-800">{t("bill.addItem")}</h2>
+
+      <input
+        type="search"
+        data-testid="item-search"
+        aria-label={t("bill.searchItem")}
+        placeholder={t("bill.searchItem")}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
+      />
+      {shown.length === 0 && (
+        <p data-testid="item-no-match" className="text-sm text-slate-500">{t("bill.noItemMatch")}</p>
+      )}
 
       <label className="block text-sm text-slate-600" htmlFor="item-select">
         {t("bill.chooseItem")}
@@ -87,7 +104,7 @@ export function ItemGrid({
           className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
         >
           <option value="">{t("bill.chooseItem")}</option>
-          {items.map((item) => (
+          {shown.map((item) => (
             <option key={item.id} value={item.id}>
               {`${itemName(item, lang)} — ${rupees(item.price)} · ${stockText(item.stock_kg, item.unit, t)}`}
             </option>
