@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 // i18next initialises as a side effect of this import, exactly as Pending.tsx does.
@@ -6,7 +6,7 @@ import "../i18n";
 import { listAllItems } from "../admin";
 import { readRateList, listAliases, applyPriceList, downscale, type ApplyResult } from "../rateListApi";
 import {
-  buildReview, linkRow, rowError, toApplyRows, type MatchItem, type ReviewRow,
+  buildReview, relinkReview, rowError, toApplyRows, type MatchItem, type ReviewRow,
 } from "../rateListMatch";
 import { UNITS, perUnit, type Unit } from "../units";
 import { useSession } from "../components/SessionProvider";
@@ -36,6 +36,7 @@ export default function RateList() {
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [result, setResult] = useState<ApplyResult | null>(null);
+  const applying = useRef(false);
 
   if (session.kind !== "ready" || session.role !== "admin") return null;
   const lang = i18n.language as Lang;
@@ -77,14 +78,26 @@ export default function RateList() {
 
   const put = (r: ReviewRow) => setReview((all) => all.map((x) => (x.key === r.key ? r : x)));
 
+  const relink = (key: number, item: MatchItem) => setReview((all) => relinkReview(all, key, item));
+
   async function apply() {
+    // A second tap before the re-render disables the button must not send the list twice.
+    if (applying.current) return;
+    applying.current = true;
     setProblem(null);
     setStep("applying");
-    const { data, error } = await applyPriceList(toApplyRows(review));
-    const described = describeError(error as { message?: string } | null);
-    if (described || !data) { setProblem(described ?? { key: "error.unknown", detail: "" }); setStep("confirm"); return; }
-    setResult(data);
-    setStep("done");
+    try {
+      const { data, error } = await applyPriceList(toApplyRows(review));
+      const described = describeError(error as { message?: string } | null);
+      if (described || !data) { setProblem(described ?? { key: "error.unknown", detail: "" }); setStep("confirm"); return; }
+      setResult(data);
+      setStep("done");
+    } catch (e) {
+      setProblem({ key: "error.unknown", detail: e instanceof Error ? e.message : String(e) });
+      setStep("confirm");
+    } finally {
+      applying.current = false;
+    }
   }
 
   function reset() {
@@ -140,7 +153,7 @@ export default function RateList() {
         )}
         <ul className="space-y-3">
           {visible.map((r) => (
-            <RowView key={r.key} r={r} items={items} put={put} />
+            <RowView key={r.key} r={r} items={items} put={put} relink={relink} />
           ))}
         </ul>
         <button data-testid="rate-review" disabled={applyRows.length === 0 || anyError}
@@ -247,7 +260,9 @@ export default function RateList() {
   );
 }
 
-function RowView({ r, items, put }: { r: ReviewRow; items: MatchItem[]; put: (r: ReviewRow) => void }) {
+function RowView({ r, items, put, relink }: {
+  r: ReviewRow; items: MatchItem[]; put: (r: ReviewRow) => void; relink: (key: number, item: MatchItem) => void;
+}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language as Lang;
   const err = rowError(r);
@@ -256,7 +271,7 @@ function RowView({ r, items, put }: { r: ReviewRow; items: MatchItem[]; put: (r:
       <input data-testid={`rate-price-${rr.key}`} inputMode="decimal" value={rr.price}
         onChange={(e) => {
           const price = e.target.value;
-          put({ ...rr, price, include: rr.kind === "mismatch" && validPrice(price) ? true : rr.include } as ReviewRow);
+          put({ ...rr, price, include: (rr.kind === "mismatch" || (rr.kind === "new" && rr.quantity)) && validPrice(price) ? true : rr.include } as ReviewRow);
         }}
         className={`${INPUT} w-24`} />
       <span className="text-sm text-slate-500">{perUnit(unit, t)}</span>
@@ -299,7 +314,9 @@ function RowView({ r, items, put }: { r: ReviewRow; items: MatchItem[]; put: (r:
       {r.kind === "mismatch" && (
         <div className="text-sm text-slate-700 space-y-1">
           <p className="text-amber-700">
-            {t("rateList.mismatch", { listUnit: t(`unit.name.${r.listUnit}`), unit: t(`unit.name.${r.item.unit}`) })}
+            {r.reason === "quantity"
+              ? t("rateList.quantity", { soldBy: r.row.sold_by_as_written, unit: t(`unit.name.${r.item.unit}`) })
+              : t("rateList.mismatch", { listUnit: t(`unit.name.${r.listUnit}`), unit: t(`unit.name.${r.item.unit}`) })}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <span>{itemName(r.item, lang)} — {rupees(r.item.price)} →</span>
@@ -311,6 +328,11 @@ function RowView({ r, items, put }: { r: ReviewRow; items: MatchItem[]; put: (r:
       {r.kind === "new" && (
         <div className="text-sm space-y-2">
           <span className="text-xs bg-sky-100 text-sky-800 rounded px-1">{t("rateList.newItem")}</span>
+          {r.quantity && (
+            <p className="text-amber-700">
+              {t("rateList.quantity", { soldBy: r.row.sold_by_as_written, unit: t(`unit.name.${r.unit}`) })}
+            </p>
+          )}
           {(["name_en", "name_hi", "name_mr"] as const).map((f) => (
             <input key={f} data-testid={`rate-name-${f.slice(5)}-${r.key}`} value={r.names[f]}
               aria-label={t(`items.name${f.slice(5, 6).toUpperCase()}${f.slice(6)}`)}
@@ -325,11 +347,11 @@ function RowView({ r, items, put }: { r: ReviewRow; items: MatchItem[]; put: (r:
             {priceInput(r, r.unit)}
           </div>
           {r.suggestion && (
-            <button data-testid={`rate-suggest-${r.key}`} onClick={() => put(linkRow(r, r.suggestion!))}
+            <button data-testid={`rate-suggest-${r.key}`} onClick={() => relink(r.key, r.suggestion!)}
               className={BTN}>{t("rateList.didYouMean", { name: itemName(r.suggestion, lang) })}</button>
           )}
           <select data-testid={`rate-link-${r.key}`} value="" aria-label={t("rateList.linkTo")}
-            onChange={(e) => { const it = items.find((i) => i.id === e.target.value); if (it) put(linkRow(r, it)); }}
+            onChange={(e) => { const it = items.find((i) => i.id === e.target.value); if (it) relink(r.key, it); }}
             className={`${INPUT} w-full`}>
             <option value="">{t("rateList.linkTo")}</option>
             {items.map((i) => <option key={i.id} value={i.id}>{itemName(i, lang)}</option>)}

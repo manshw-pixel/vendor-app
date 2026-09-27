@@ -86,6 +86,7 @@
     "showUnchanged": "Show unchanged ({{n}})",
     "lowConfidence": "Hard to read — check",
     "converted": "{{grams}} g ₹{{listPrice}} → ₹{{price}}/kg",
+    "quantity": "List says {{soldBy}} — enter the price per {{unit}}",
     "mismatch": "List says {{listUnit}}, sold here by {{unit}} — enter the price per {{unit}}",
     "newItem": "New item",
     "didYouMean": "Did you mean {{name}}?",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildReview, linkRow, rowError, toApplyRows, type ExtractedRow, type MatchItem } from "../rateListMatch";
+import { buildReview, linkRow, relinkReview, rowError, toApplyRows, type ExtractedRow, type MatchItem } from "../rateListMatch";
 
 const items: MatchItem[] = [
   { id: "onion", name_en: "Onion", name_hi: "प्याज", name_mr: "कांदा", price: 40, unit: "kg" },
@@ -53,6 +53,21 @@ describe("buildReview", () => {
     expect(r.kind).toBe("mismatch");
     if (r.kind !== "mismatch") return;
     expect(r.listUnit).toBe("piece"); expect(r.include).toBe(false); expect(r.price).toBe("");
+    expect(r.reason).toBe("unit");
+  });
+
+  it("flags a multi-quantity line on an existing item of the same unit, unticked with no price", () => {
+    const r = first(buildReview([row({ name_as_written: "Onion", sold_by_as_written: "5 kg", price: 200 })], items, []));
+    expect(r.kind).toBe("mismatch");
+    if (r.kind !== "mismatch") return;
+    expect(r.reason).toBe("quantity"); expect(r.include).toBe(false); expect(r.price).toBe("");
+  });
+
+  it("starts an unclear new line unticked with no price", () => {
+    const r = first(buildReview([row({ name_as_written: "Kiwi", name_en: "Kiwi", sold_by_as_written: "6 pc", price: 30 })], items, []));
+    expect(r.kind).toBe("new");
+    if (r.kind !== "new") return;
+    expect(r.quantity).toBe(true); expect(r.include).toBe(false); expect(r.price).toBe("");
   });
 
   it("proposes an unknown line as a new item with the model's names and the rule's unit", () => {
@@ -115,5 +130,18 @@ describe("linkRow, rowError and toApplyRows", () => {
     expect(rowError({ ...r, include: false } as typeof r)).toBeNull();
     const u = first(buildReview([row({ name_as_written: "Onion", price: 44 })], items, []));
     expect(rowError({ ...u, price: "0" } as typeof u)).toBe("rateList.badPrice");
+  });
+
+  it("relinking a new row to an item another row targets makes the earlier one a duplicate", () => {
+    const rs = buildReview([
+      row({ name_as_written: "Onion", price: 41 }),
+      row({ name_as_written: "Pyaz Lal", price: 43 }),
+    ], items, []);
+    const out = relinkReview(rs, 1, items[0]!);
+    expect(out[0]!.kind).toBe("duplicate");
+    expect(out[1]!.kind === "update" && out[1]!.item.id).toBe("onion");
+    const back = relinkReview(rs.slice().reverse().map((r, i) => ({ ...r, key: i })) as typeof rs, 0, items[0]!);
+    expect(back[0]!.kind).toBe("duplicate");
+    expect(back[1]!.kind).toBe("update");
   });
 });

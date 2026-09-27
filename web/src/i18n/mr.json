@@ -86,6 +86,7 @@
     "showUnchanged": "न बदललेले दाखवा ({{n}})",
     "lowConfidence": "वाचायला कठीण — तपासा",
     "converted": "{{grams}} ग्रॅम ₹{{listPrice}} → ₹{{price}}/किलो",
+    "quantity": "यादीत {{soldBy}} — प्रति {{unit}} दर टाका",
     "mismatch": "यादीत {{listUnit}}, इथे {{unit}} ने विकले जाते — प्रति {{unit}} दर टाका",
     "newItem": "नवीन वस्तू",
     "didYouMean": "तुम्हाला {{name}} म्हणायचे आहे का?",

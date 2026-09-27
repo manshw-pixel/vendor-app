@@ -45,8 +45,8 @@ Deno.serve(async (req) => {
   if (meError || !me || me.role !== "admin") return fail("not_admin", 403);
   // A suspended shop's admin still passes the role check above -- suspension is a separate
   // axis from role, so it needs its own gate. Without this, a suspended shop's admin could
-  // keep minting staff accounts even though the sentinel role and RLS treat the shop as
-  // shut down everywhere else.
+  // keep spending the shop's Gemini quota even though the sentinel role and RLS treat the
+  // shop as shut down everywhere else.
   const vendorRow = Array.isArray(me.vendors) ? me.vendors[0] : me.vendors;
   if (vendorRow?.suspended_at) return fail("not_admin", 403);
 

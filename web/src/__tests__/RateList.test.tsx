@@ -110,6 +110,39 @@ describe("the rate-list screen", () => {
     expect((screen.getByTestId("rate-include-0") as HTMLInputElement).checked).toBe(true);
   });
 
+  it("flags a multi-quantity line with the quantity message; typing a price ticks it", async () => {
+    renderIt();
+    await readWith([row({ sold_by_as_written: "5 kg", price: 200 })]);
+    expect(screen.getByTestId("rate-row-0").textContent).toContain("List says 5 kg — enter the price per Kilogram");
+    expect((screen.getByTestId("rate-include-0") as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(screen.getByTestId("rate-price-0"), { target: { value: "42" } });
+    expect((screen.getByTestId("rate-include-0") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("sends once when Apply is tapped twice", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    applyPriceList.mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderIt();
+    await readWith([onion]);
+    fireEvent.click(screen.getByTestId("rate-review"));
+    const btn = screen.getByTestId("rate-apply");
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    resolve({ data: { updated: [], created: [], unchanged: 0 }, error: null });
+    await screen.findByText(/Prices updated|completed/i).catch(() => null);
+    expect(applyPriceList).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back to confirm with an error when applying throws", async () => {
+    applyPriceList.mockRejectedValue(new Error("boom"));
+    renderIt();
+    await readWith([onion]);
+    fireEvent.click(screen.getByTestId("rate-review"));
+    fireEvent.click(screen.getByTestId("rate-apply"));
+    expect(await screen.findByText("Something went wrong.")).toBeTruthy();
+    expect(screen.getByTestId("rate-apply")).toBeTruthy();
+  });
+
   it("returns to the picker when no rows are read", async () => {
     renderIt();
     readRateList.mockResolvedValue({ rows: [], error: null });

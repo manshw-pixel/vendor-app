@@ -9,8 +9,8 @@ export type MatchItem = { id: string; name_en: string; name_hi: string; name_mr:
 export type Alias = { alias: string; item_id: string };
 export type ReviewRow =
   | { key: number; kind: "update"; row: ExtractedRow; item: MatchItem; price: string; grams: number | null; include: boolean; changed: boolean }
-  | { key: number; kind: "mismatch"; row: ExtractedRow; item: MatchItem; listUnit: Unit; price: string; include: boolean }
-  | { key: number; kind: "new"; row: ExtractedRow; names: { name_en: string; name_hi: string; name_mr: string }; unit: Unit; price: string; grams: number | null; suggestion: MatchItem | null; include: boolean }
+  | { key: number; kind: "mismatch"; reason: "unit" | "quantity"; row: ExtractedRow; item: MatchItem; listUnit: Unit; price: string; include: boolean }
+  | { key: number; kind: "new"; row: ExtractedRow; names: { name_en: string; name_hi: string; name_mr: string }; unit: Unit; price: string; grams: number | null; quantity: boolean; suggestion: MatchItem | null; include: boolean }
   | { key: number; kind: "duplicate"; row: ExtractedRow; item: MatchItem };
 export type ApplyRow =
   | { kind: "update"; item_id: string; price: number; alias?: string }
@@ -57,8 +57,9 @@ const priceText = (n: number) => String(Math.round(n * 100) / 100);
 
 function asUpdateOrMismatch(key: number, row: ExtractedRow, item: MatchItem): ReviewRow {
   const sb = normaliseSoldBy(row.sold_by_as_written, row.price);
-  if (sb.unit !== item.unit) {
-    return { key, kind: "mismatch", row, item, listUnit: sb.unit, price: "", include: false };
+  if (sb.unit !== item.unit || sb.unclear) {
+    return { key, kind: "mismatch", reason: sb.unit !== item.unit ? "unit" : "quantity",
+      row, item, listUnit: sb.unit, price: "", include: false };
   }
   return { key, kind: "update", row, item, price: priceText(sb.price), grams: sb.grams,
     include: true, changed: Math.abs(sb.price - item.price) >= 0.005 };
@@ -79,12 +80,28 @@ export function buildReview(rows: ExtractedRow[], items: MatchItem[], aliases: A
     const sb = normaliseSoldBy(row.sold_by_as_written, row.price);
     return { key, kind: "new", row,
       names: { name_en: row.name_en.trim() || row.name_as_written.trim(), name_hi: row.name_hi.trim(), name_mr: row.name_mr.trim() },
-      unit: sb.unit, price: priceText(sb.price), grams: sb.grams, suggestion: closest(row, items), include: true };
+      unit: sb.unit, price: sb.unclear ? "" : priceText(sb.price), grams: sb.grams, quantity: sb.unclear,
+      suggestion: closest(row, items), include: !sb.unclear };
   });
 }
 
 export function linkRow(r: ReviewRow & { kind: "new" }, item: MatchItem): ReviewRow {
   return asUpdateOrMismatch(r.key, r.row, item);
+}
+
+/** Link row `key` to `item`. If another non-duplicate row already targets that item, the
+ * earlier of the two becomes a duplicate -- the same "last wins" rule as buildReview. */
+export function relinkReview(review: ReviewRow[], key: number, item: MatchItem): ReviewRow[] {
+  const target = review.find((r) => r.key === key);
+  if (!target || target.kind !== "new") return review;
+  const other = review.find((r) => r.key !== key && (r.kind === "update" || r.kind === "mismatch") && r.item.id === item.id);
+  const pos = (k: number) => review.findIndex((r) => r.key === k);
+  const linkedIsEarlier = other !== undefined && pos(key) < pos(other.key);
+  return review.map((r): ReviewRow => {
+    if (r.key === key) return linkedIsEarlier ? { key, kind: "duplicate", row: r.row, item } : linkRow(target, item);
+    if (other && r.key === other.key && !linkedIsEarlier) return { key: r.key, kind: "duplicate", row: r.row, item };
+    return r;
+  });
 }
 
 const validPrice = (p: string) => { const n = Number(p); return p.trim() !== "" && Number.isFinite(n) && n > 0; };

@@ -24,10 +24,21 @@ describe("normaliseSoldBy", () => {
   });
 
   it("does not read the g in kg as grams", () => {
-    expect(normaliseSoldBy("2 kg", 50)).toEqual({ unit: "kg", price: 50, grams: null });
+    expect(normaliseSoldBy("2 kg", 50)).toEqual({ unit: "kg", price: 50, grams: null, unclear: true });
   });
 
   it("does not treat 12 inside a larger number as a dozen", () => {
     expect(normaliseSoldBy("120 pc", 5).unit).toBe("piece");
+  });
+
+  it.each([["2 kg", "kg"], ["6 pc", "piece"], ["3 box", "piece"], ["½ kg", "kg"], ["1/2 kg", "kg"], ["0.5 kg", "kg"], ["5 kg", "kg"]])(
+    "%s is flagged unclear (a quantity other than one), unit best-guess %s", (soldBy, unit) => {
+      const r = normaliseSoldBy(soldBy, 30);
+      expect(r.unclear).toBe(true);
+      expect(r.unit).toBe(unit);
+    });
+
+  it.each(["1 kg", "1 pc", "12 pc", "12 nos", "250 g", "", "1 box", "per bag"])("%s is not unclear", (soldBy) => {
+    expect(normaliseSoldBy(soldBy, 30).unclear).toBe(false);
   });
 });
