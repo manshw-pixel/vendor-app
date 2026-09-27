@@ -1012,7 +1012,7 @@ describe("rateListApi", () => {
 **Interfaces:**
 - Consumes: Tasks 2, 3, 5; `listAllItems` from `web/src/admin.ts` (returns `AdminItem[]`, map to `MatchItem` with `price: Number(it.price)`); `itemName`, `perUnit`, `rupees`, `describeError`, `useSession`.
 
-**Screen states** (`step: "pick" | "reading" | "review" | "applying" | "done"`):
+**Screen states** (`step: "pick" | "reading" | "review" | "confirm" | "applying" | "done"`):
 
 1. **pick** — `<input type="file" accept="image/*" multiple data-testid="rate-list-file">` (max 5; more → show `rateList.tooMany`, keep first 5) and a "Read prices" button `data-testid="rate-list-read"`. Errors from a previous attempt render here.
 2. **reading** — text `rateList.reading`. Runs: `downscale` each file → `readRateList(images)`; in parallel `listAllItems()` and `listAliases()`. On success → `buildReview(rows, items, aliases)` → review. Zero rows → back to pick with `rateList.noRows`. Error → back to pick with the error key.
@@ -1022,9 +1022,10 @@ describe("rateListApi", () => {
    - new: badge `rateList.newItem`; three name inputs (`rate-name-en-${key}` etc.), a unit `<select>` (`rate-unit-${key}`, UNITS), price input; if `suggestion` → button `rate-suggest-${key}` "`rateList.didYouMean` {{name}}" which calls `linkRow(r, suggestion)`; a "Link to item" `<select>` (`rate-link-${key}`) of all items that calls `linkRow` on change.
    - duplicate: muted text `rateList.duplicate`.
    - Any `rowError(r)` → red text under the row with `t(key)`.
-   - Apply button `rate-apply` disabled when `toApplyRows(review).length === 0` or any row has a `rowError`.
-4. **applying** — `applyPriceList(toApplyRows(review))`. Error → stay on review, show `describeError(error)`. Success → done.
-5. **done** — header `rateList.resultTitle` `{{changed}}`/`{{added}}`; list **Prices changed** (`rate-result-updated`) — item name (UI language via `itemName`), `₹old → ₹new / perUnit`, ▲ (text-red-700) if up, ▼ (text-emerald-700) if down; list **Items added** (`rate-result-created`) — name, `₹price / perUnit`, note `rateList.addedNote`; line `rateList.unchangedCount` {{n}} = RPC `unchanged` + client-side unchanged update rows; `rateList.skippedCount` {{n}} = rows not included (excluding duplicates) + duplicates. Buttons: **Done** (`<Link to="/items">`) and **Update another list** (resets to pick).
+   - Button `rate-review` ("Review changes") disabled when `toApplyRows(review).length === 0` or any row has a `rowError`; it goes to confirm.
+4. **confirm** — title `rateList.confirmTitle`; built from `toApplyRows(review)` joined back to the review rows: list **Prices to change** (`rate-confirm-updates`) — item name, `₹old → ₹new / perUnit`; list **Items to add** (`rate-confirm-creates`) — name (UI language from the row's names), `₹price / perUnit`, note `rateList.addedNote`; counts `rateList.unchangedCount` / `rateList.skippedCount`. Buttons: **Back** (`rate-confirm-back`, returns to review with all edits kept) and **Confirm and apply** (`rate-apply`).
+5. **applying** — `applyPriceList(toApplyRows(review))`. Error → back to confirm, show `describeError(error)`. Success → done.
+6. **done** — heading `rateList.completed` ("Changes completed"), then header `rateList.resultTitle` `{{changed}}`/`{{added}}`; list **Prices changed** (`rate-result-updated`) — item name (UI language via `itemName`), `₹old → ₹new / perUnit`, ▲ (text-red-700) if up, ▼ (text-emerald-700) if down; list **Items added** (`rate-result-created`) — name, `₹price / perUnit`, note `rateList.addedNote`; line `rateList.unchangedCount` {{n}} = RPC `unchanged` + client-side unchanged update rows; `rateList.skippedCount` {{n}} = rows not included (excluding duplicates) + duplicates. Buttons: **Done** (`<Link to="/items">`) and **Update another list** (resets to pick).
 
 Admin-only: render `null` unless `session.kind === "ready" && session.role === "admin"`.
 
@@ -1053,7 +1054,13 @@ i18n `rateList` keys (en / hi / mr):
 | include | Include | शामिल करें | समाविष्ट करा |
 | badPrice | Enter a price above zero. | शून्य से ज़्यादा दाम डालें। | शून्यापेक्षा जास्त दर टाका. |
 | needNames | A new item needs all three names. | नए आइटम के तीनों नाम चाहिए। | नवीन वस्तूला तिन्ही नावे हवीत. |
-| apply | Apply | लागू करें | लागू करा |
+| review | Review changes | बदलाव देखें | बदल पाहा |
+| confirmTitle | These changes will be made | ये बदलाव किए जाएँगे | हे बदल केले जातील |
+| toChange | Prices to change | बदलने वाले दाम | बदलणारे दर |
+| toAdd | Items to add | जोड़े जाने वाले आइटम | जोडल्या जाणाऱ्या वस्तू |
+| back | Back | वापस | मागे |
+| apply | Confirm and apply | पुष्टि करें और लागू करें | खात्री करा आणि लागू करा |
+| completed | Changes completed | बदलाव पूरे हुए | बदल पूर्ण झाले |
 | applying | Saving… | सेव हो रहा है… | जतन करत आहे… |
 | resultTitle | {{changed}} prices changed · {{added}} items added | {{changed}} दाम बदले · {{added}} आइटम जोड़े | {{changed}} दर बदलले · {{added}} वस्तू जोडल्या |
 | pricesChanged | Prices changed | बदले गए दाम | बदललेले दर |
@@ -1065,13 +1072,14 @@ i18n `rateList` keys (en / hi / mr):
 | another | Update another list | दूसरी लिस्ट अपडेट करें | दुसरी यादी अपडेट करा |
 
 - [ ] **Step 1: Failing tests** — `web/src/__tests__/RateList.test.tsx`. Mock `../rateListApi` (`readRateList`, `listAliases`, `applyPriceList`, `downscale: async () => ({ media_type: "image/jpeg", data: "QUJD" })`), `../admin` (`listAllItems` returning Onion kg ₹40 and Banana dozen ₹60), and `../components/SessionProvider` (admin). Render inside `MemoryRouter`. Helper `readWith(rows)`: sets `readRateList` to resolve `{ rows, error: null }`, fires `change` on `rate-list-file` with `{ target: { files: [new File(["x"], "a.jpg", { type: "image/jpeg" })] } }`, clicks `rate-list-read`, awaits `rate-row-0`. Tests:
-  1. a changed price shows old → new and Apply sends `[{ kind: "update", item_id: "onion", price: 44 }]` (row `Onion` price 44);
-  2. a new line shows the three prefilled names and Apply sends a `create` row with `unit: "piece"` for `sold_by "1 box"`;
-  3. clearing a new row's Hindi name disables Apply and shows the needNames text;
+  1. a changed price shows old → new and Review changes → Confirm and apply sends `[{ kind: "update", item_id: "onion", price: 44 }]` (row `Onion` price 44);
+  2. a new line shows the three prefilled names and Review changes → Confirm and apply sends a `create` row with `unit: "piece"` for `sold_by "1 box"`;
+  3. clearing a new row's Hindi name disables Review changes and shows the needNames text;
   4. a unit mismatch (Banana `1 pc`) is unticked; typing a price ticks it;
   5. zero rows returns to pick with the noRows text;
-  6. after Apply, the result screen lists the RPC's `updated` (₹40 → ₹44) and `created` names, and "Update another list" returns to the file picker;
-  7. a biller renders nothing.
+  6. Review changes shows the confirm screen listing Onion ₹40 → ₹44 and the new item, and `applyPriceList` is NOT called yet; Back returns to the review with the edited price kept;
+  7. Confirm and apply shows "Changes completed" and the result screen lists the RPC's `updated` (₹40 → ₹44) and `created` names, and "Update another list" returns to the file picker;
+  8. a biller renders nothing.
 - [ ] **Step 2: Run** → FAIL.
 - [ ] **Step 3: Implement** the screen per the states above, i18n keys, route, and Items link. Follow Pending.tsx/Items.tsx styling (Tailwind slate, `min-h-[44px]`, rounded-lg/xl).
 - [ ] **Step 4: Run** — `npx vitest run && npx tsc --noEmit` → green.
