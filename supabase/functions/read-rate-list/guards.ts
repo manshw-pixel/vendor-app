@@ -28,12 +28,14 @@ export function validateReadRequest(body: unknown):
 
 const PROMPT = `You are reading a vegetable and fruit vendor's daily rate list (printed, handwritten, a board, or a phone screenshot; English, Hindi or Marathi).
 Return one entry per item line. For each:
-- name_as_written: the item name exactly as written.
+- name_as_written: the item name exactly as written, leaving out any word or part that is struck out (crossed through). E.g. "Apple Queen Green" with "Queen" struck out is "Apple Green".
 - sold_by_as_written: the quantity/unit the price is for, exactly as written (e.g. "1 kg", "250 g", "12 pc", "1 box", "bunch"), or "" if none is written.
 - price: the price as a number exactly as written, with no conversion.
 - name_en, name_hi, name_mr: the item's common name in English, Hindi (Devanagari) and Marathi (Devanagari).
 - confidence: "low" if any part was hard to read, else "high".
-Skip headings, dates, totals and anything that is not an item with a price.`;
+Skip headings, dates, totals and anything that is not an item with a price.
+Skip an item entirely when its price is a dash ("-", "--", "—"), blank, struck out, or marked NA / not available: it is not available today.
+Base name_en, name_hi and name_mr on the name without its struck-out parts.`;
 
 const SCHEMA = {
   type: "ARRAY",

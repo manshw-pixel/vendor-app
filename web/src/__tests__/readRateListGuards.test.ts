@@ -67,3 +67,16 @@ describe("parseGeminiResponse", () => {
     expect(parseGeminiResponse(j)).toEqual({ ok: false, code: "read_failed" });
   });
 });
+
+describe("struck-out names and unavailable items", () => {
+  const prompt = () => JSON.stringify(geminiRequest([{ media_type: "image/jpeg", data: "x" }]));
+  it("tells the model to drop struck-out words and skip dash-priced items", () => {
+    expect(prompt()).toContain("struck out");
+    expect(prompt()).toContain('\\"-\\"');
+  });
+  it("drops a row whose price came back as a dash or zero", () => {
+    const wrap = (rows: unknown[]) => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(rows) }] } }] });
+    const r = parseGeminiResponse(wrap([{ ...good, price: "-" }, { ...good, price: 0 }, good]));
+    expect(r.ok && r.rows.length).toBe(1);
+  });
+});
