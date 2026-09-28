@@ -117,8 +117,12 @@ export default function RateList() {
         {step === "reading" ? <p className="text-slate-600">{t("rateList.reading")}</p> : (
           <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
             <p className="text-sm text-slate-600">{t("rateList.pick")}</p>
-            <input type="file" accept="image/*" multiple data-testid="rate-list-file"
-              onChange={(e) => pick(e.target.files)} className="block w-full text-sm" />
+            <label className={`${BTN} inline-flex items-center cursor-pointer`}>
+              {t("rateList.choose")}
+              <input type="file" accept="image/*" multiple data-testid="rate-list-file"
+                onChange={(e) => pick(e.target.files)} className="sr-only" />
+            </label>
+            {files.length > 0 && <p className="text-xs text-slate-600">{t("rateList.chosen", { n: files.length })}</p>}
             {tooMany && <p className="text-xs text-amber-700">{t("rateList.tooMany")}</p>}
             <button data-testid="rate-list-read" disabled={files.length === 0}
               onClick={() => void read()} className={BTN}>{t("rateList.read")}</button>
