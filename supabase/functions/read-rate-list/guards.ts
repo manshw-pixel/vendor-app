@@ -29,7 +29,7 @@ export function validateReadRequest(body: unknown):
 const PROMPT = `You are reading a vegetable and fruit vendor's daily rate list (printed, handwritten, a board, or a phone screenshot; English, Hindi or Marathi).
 Return one entry per item line. For each:
 - struck_out: the words of the name that have a line drawn through their letters (struck out / crossed through), exactly as written, or "" if none. Look at every word of the name separately.
-- name_as_written: the item name exactly as written, minus the struck_out words. E.g. "Apple Queen Green" with "Queen" struck out is "Apple Green".
+- name_as_written: the full item name exactly as written, minus the struck_out words. The full name includes every word that belongs to it: words added later, squeezed in above, below or beside it, in the margin, in a smaller size or a different pen, and words in brackets or after a dash (e.g. "Apple (Kashmiri)", "Apple - Shimla"). Keep brackets and dashes as written. E.g. "Apple Queen Green" with "Queen" struck out is "Apple Green".
 - sold_by_as_written: the quantity/unit the price is for, exactly as written (e.g. "1 kg", "250 g", "12 pc", "1 box", "bunch"), or "" if none is written.
 - price: the price as a number exactly as written, with no conversion.
 - name_en, name_hi, name_mr: the item's common name in English, Hindi (Devanagari) and Marathi (Devanagari).
@@ -56,11 +56,11 @@ const SCHEMA = {
 export function geminiRequest(images: RateImage[]): unknown {
   return {
     contents: [{ parts: [{ text: PROMPT }, ...images.map((i) => ({ inline_data: { mime_type: i.media_type, data: i.data } }))] }],
-    // thinkingBudget 0: transcribing a list needs no reasoning, and 2.5 Flash's default
-    // thinking made a single photo take ~36 s.
+    // Capped thinking: with none (budget 0) the model missed struck-out words and added-on
+    // words; the uncapped default made a single photo take ~36 s.
     generationConfig: {
       responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0,
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: { thinkingBudget: 1024 },
     },
   };
 }

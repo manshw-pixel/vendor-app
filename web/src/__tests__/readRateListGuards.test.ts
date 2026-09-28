@@ -31,7 +31,7 @@ describe("geminiRequest / geminiUrl", () => {
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     expect(body.generationConfig.temperature).toBe(0);
     // Reading a list needs no reasoning; thinking made one photo take 36 s.
-    expect(body.generationConfig.thinkingConfig.thinkingBudget).toBe(0);
+    expect(body.generationConfig.thinkingConfig.thinkingBudget).toBe(1024);
     expect(JSON.stringify(body.generationConfig.responseSchema)).toContain("sold_by_as_written");
   });
   it("puts the model in the path and no key in the URL", () => {
@@ -77,6 +77,7 @@ describe("struck-out names and unavailable items", () => {
   it("tells the model to drop struck-out words and skip dash-priced items", () => {
     expect(prompt()).toContain("struck out");
     expect(prompt()).toContain("different colour");
+    expect(prompt()).toContain("in brackets or after a dash");
     expect(prompt()).toContain('\\"-\\"');
   });
   it("drops a row whose price came back as a dash or zero", () => {
