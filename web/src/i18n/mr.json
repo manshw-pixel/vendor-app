@@ -86,7 +86,7 @@
     "noRows": "या फोटोत एकही दर सापडला नाही.",
     "summary": "{{changed}} बदलले · {{added}} नवीन · {{attention}} तपासा",
     "showUnchanged": "न बदललेले दाखवा ({{n}})",
-    "lowConfidence": "वाचायला कठीण — तपासा",
+    "lowConfidence": "दर नीट वाचता आला नाही — हे अपडेट करायचे का? समाविष्ट करण्यासाठी टिक करा.",
     "converted": "{{grams}} ग्रॅम ₹{{listPrice}} → ₹{{price}}/किलो",
     "quantity": "यादीत {{soldBy}} — प्रति {{unit}} दर टाका",
     "mismatch": "यादीत {{listUnit}}, इथे {{unit}} ने विकले जाते — प्रति {{unit}} दर टाका",
