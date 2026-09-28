@@ -62,7 +62,7 @@ function asUpdateOrMismatch(key: number, row: ExtractedRow, item: MatchItem): Re
       row, item, listUnit: sb.unit, price: "", include: false };
   }
   return { key, kind: "update", row, item, price: priceText(sb.price), grams: sb.grams,
-    include: true, changed: Math.abs(sb.price - item.price) >= 0.005 };
+    include: row.confidence !== "low", changed: Math.abs(sb.price - item.price) >= 0.005 };
 }
 
 export function buildReview(rows: ExtractedRow[], items: MatchItem[], aliases: Alias[]): ReviewRow[] {
@@ -81,7 +81,7 @@ export function buildReview(rows: ExtractedRow[], items: MatchItem[], aliases: A
     return { key, kind: "new", row,
       names: { name_en: row.name_en.trim() || row.name_as_written.trim(), name_hi: row.name_hi.trim(), name_mr: row.name_mr.trim() },
       unit: sb.unit, price: sb.unclear ? "" : priceText(sb.price), grams: sb.grams, quantity: sb.unclear,
-      suggestion: closest(row, items), include: !sb.unclear };
+      suggestion: closest(row, items), include: !sb.unclear && row.confidence !== "low" };
   });
 }
 

@@ -145,3 +145,16 @@ describe("linkRow, rowError and toApplyRows", () => {
     expect(back[1]!.kind).toBe("update");
   });
 });
+
+describe("low-confidence rows", () => {
+  it("start unticked so the admin must choose to update them", () => {
+    const items = [{ id: "1", name_en: "Onion", name_hi: "", name_mr: "", unit: "kg", price: 30 }] as never;
+    const [u, n] = buildReview([
+      row({ name_as_written: "Onion", name_en: "Onion", sold_by_as_written: "1 kg", price: 40, confidence: "low" }),
+      row({ name_as_written: "Kiwi", name_en: "Kiwi", sold_by_as_written: "1 kg", price: 90, confidence: "low" }),
+    ], items, []);
+    expect([u!.kind, n!.kind]).toEqual(["update", "new"]);
+    expect(u!.kind === "update" && u!.include).toBe(false);
+    expect(n!.kind === "new" && n!.include).toBe(false);
+  });
+});

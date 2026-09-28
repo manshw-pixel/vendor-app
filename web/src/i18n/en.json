@@ -86,7 +86,7 @@
     "noRows": "No prices found in this photo.",
     "summary": "{{changed}} changed · {{added}} new · {{attention}} need a look",
     "showUnchanged": "Show unchanged ({{n}})",
-    "lowConfidence": "Hard to read — check",
+    "lowConfidence": "Price hard to read — update this item? Tick to include.",
     "converted": "{{grams}} g ₹{{listPrice}} → ₹{{price}}/kg",
     "quantity": "List says {{soldBy}} — enter the price per {{unit}}",
     "mismatch": "List says {{listUnit}}, sold here by {{unit}} — enter the price per {{unit}}",
