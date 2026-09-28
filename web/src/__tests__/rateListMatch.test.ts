@@ -158,3 +158,16 @@ describe("low-confidence rows", () => {
     expect(n!.kind === "new" && n!.include).toBe(false);
   });
 });
+
+describe("similar names", () => {
+  const items = [{ id: "1", name_en: "Cauliflower", name_hi: "", name_mr: "", unit: "kg", price: 30 }] as never;
+  it("a name 80%+ similar matches the item instead of being new, unticked", () => {
+    const [r] = buildReview([row({ name_as_written: "Cauliflowr", name_en: "Cauliflowr", sold_by_as_written: "1 kg", price: 40 })], items, []);
+    expect(r!.kind).toBe("update");
+    expect(r!.kind === "update" && [r!.item.id, r!.include, r!.similar]).toEqual(["1", false, true]);
+  });
+  it("a name under 80% similar stays new", () => {
+    const [r] = buildReview([row({ name_as_written: "Cabbage", name_en: "Cabbage", sold_by_as_written: "1 kg", price: 40 })], items, []);
+    expect(r!.kind).toBe("new");
+  });
+});
