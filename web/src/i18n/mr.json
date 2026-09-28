@@ -87,6 +87,7 @@
     "summary": "{{changed}} बदलले · {{added}} नवीन · {{attention}} तपासा",
     "showUnchanged": "न बदललेले दाखवा ({{n}})",
     "similar": "मिळतेजुळते नाव — हे {{name}} आहे का? अपडेट करण्यासाठी टिक करा.",
+    "struckOut": "खोडलेले, वगळले: {{words}}",
     "lowConfidence": "दर नीट वाचता आला नाही — हे अपडेट करायचे का? समाविष्ट करण्यासाठी टिक करा.",
     "converted": "{{grams}} ग्रॅम ₹{{listPrice}} → ₹{{price}}/किलो",
     "quantity": "यादीत {{soldBy}} — प्रति {{unit}} दर टाका",

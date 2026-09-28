@@ -5,7 +5,7 @@ export type ErrorCode = "not_admin" | "bad_request" | "read_failed" | "not_confi
 export type RateImage = { media_type: "image/jpeg" | "image/png" | "image/webp"; data: string };
 export type ExtractedRow = {
   name_as_written: string; sold_by_as_written: string; price: number;
-  name_en: string; name_hi: string; name_mr: string; confidence: "high" | "low";
+  name_en: string; name_hi: string; name_mr: string; confidence: "high" | "low"; struck_out: string;
 };
 
 export const MAX_IMAGES = 5;
@@ -28,13 +28,16 @@ export function validateReadRequest(body: unknown):
 
 const PROMPT = `You are reading a vegetable and fruit vendor's daily rate list (printed, handwritten, a board, or a phone screenshot; English, Hindi or Marathi).
 Return one entry per item line. For each:
-- name_as_written: the item name exactly as written, leaving out any word or part that is struck out (crossed through). E.g. "Apple Queen Green" with "Queen" struck out is "Apple Green".
+- struck_out: the words of the name that have a line drawn through their letters (struck out / crossed through), exactly as written, or "" if none. Look at every word of the name separately.
+- name_as_written: the item name exactly as written, minus the struck_out words. E.g. "Apple Queen Green" with "Queen" struck out is "Apple Green".
 - sold_by_as_written: the quantity/unit the price is for, exactly as written (e.g. "1 kg", "250 g", "12 pc", "1 box", "bunch"), or "" if none is written.
 - price: the price as a number exactly as written, with no conversion.
 - name_en, name_hi, name_mr: the item's common name in English, Hindi (Devanagari) and Marathi (Devanagari).
 - confidence: "low" if any part was hard to read, else "high".
 Skip headings, dates, totals and anything that is not an item with a price.
 Skip an item entirely when its price is a dash ("-", "--", "—"), blank, struck out, or marked NA / not available: it is not available today.
+Text in a different colour, highlighted, underlined, bold or smaller is NOT struck out: keep it in the name. Only a line through the letters themselves means struck out.
+If you are not sure whether a word is struck out, keep it in the name and set confidence to "low".
 Base name_en, name_hi and name_mr on the name without its struck-out parts.`;
 
 const SCHEMA = {
@@ -42,11 +45,11 @@ const SCHEMA = {
   items: {
     type: "OBJECT",
     properties: {
-      name_as_written: { type: "STRING" }, sold_by_as_written: { type: "STRING" }, price: { type: "NUMBER" },
+      struck_out: { type: "STRING" }, name_as_written: { type: "STRING" }, sold_by_as_written: { type: "STRING" }, price: { type: "NUMBER" },
       name_en: { type: "STRING" }, name_hi: { type: "STRING" }, name_mr: { type: "STRING" },
       confidence: { type: "STRING", enum: ["high", "low"] },
     },
-    required: ["name_as_written", "sold_by_as_written", "price", "name_en", "name_hi", "name_mr", "confidence"],
+    required: ["struck_out", "name_as_written", "sold_by_as_written", "price", "name_en", "name_hi", "name_mr", "confidence"],
   },
 };
 
@@ -90,7 +93,7 @@ export function parseGeminiResponse(json: unknown):
     rows.push({
       name_as_written: name, sold_by_as_written: str(o.sold_by_as_written), price,
       name_en: str(o.name_en), name_hi: str(o.name_hi), name_mr: str(o.name_mr),
-      confidence: o.confidence === "high" ? "high" : "low",
+      confidence: o.confidence === "high" ? "high" : "low", struck_out: str(o.struck_out).trim(),
     });
   }
   return { ok: true, rows };
