@@ -4,6 +4,8 @@ import { normaliseSoldBy } from "./soldBy";
 export type ExtractedRow = {
   name_as_written: string; sold_by_as_written: string; price: number;
   name_en: string; name_hi: string; name_mr: string; confidence: "high" | "low";
+  /** Words the reader saw crossed out and left out of the name; absent from older function versions. */
+  struck_out?: string;
 };
 export type MatchItem = { id: string; name_en: string; name_hi: string; name_mr: string; price: number; unit: Unit };
 export type Alias = { alias: string; item_id: string };

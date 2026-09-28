@@ -288,6 +288,9 @@ function RowView({ r, items, put, relink }: {
         <div className="text-sm">
           <span className="font-medium text-slate-800">{r.row.name_as_written}</span>{" "}
           <span className="text-slate-500">{r.row.sold_by_as_written}</span>
+          {r.row.struck_out && (
+            <span className="ml-2 text-xs text-slate-500">{t("rateList.struckOut", { words: r.row.struck_out })}</span>
+          )}
           {r.row.confidence === "low" && (
             <span className="ml-2 text-xs bg-amber-100 text-amber-800 rounded px-1">{t("rateList.lowConfidence")}</span>
           )}

@@ -45,7 +45,11 @@ const good = { name_as_written: "Onion", sold_by_as_written: "1 kg", price: 40, 
 
 describe("parseGeminiResponse", () => {
   it("returns rows from the JSON text", () => {
-    expect(parseGeminiResponse(reply(JSON.stringify([good])))).toEqual({ ok: true, rows: [good] });
+    expect(parseGeminiResponse(reply(JSON.stringify([good])))).toEqual({ ok: true, rows: [{ ...good, struck_out: "" }] });
+  });
+  it("keeps the struck-out words the reader reports", () => {
+    const r = parseGeminiResponse(reply(JSON.stringify([{ ...good, name_as_written: "Apple Green", struck_out: " Queen " }])));
+    expect(r.ok && [r.rows[0]!.name_as_written, r.rows[0]!.struck_out]).toEqual(["Apple Green", "Queen"]);
   });
   it("tolerates a markdown fence", () => {
     expect(parseGeminiResponse(reply("```json\n" + JSON.stringify([good]) + "\n```")).ok).toBe(true);
@@ -58,7 +62,7 @@ describe("parseGeminiResponse", () => {
   });
   it("defaults missing optional strings and an unknown confidence to low", () => {
     const r = parseGeminiResponse(reply(JSON.stringify([{ name_as_written: "Kiwi", price: 10 }])));
-    expect(r.ok && r.rows[0]).toEqual({ name_as_written: "Kiwi", sold_by_as_written: "", price: 10, name_en: "", name_hi: "", name_mr: "", confidence: "low" });
+    expect(r.ok && r.rows[0]).toEqual({ name_as_written: "Kiwi", sold_by_as_written: "", price: 10, name_en: "", name_hi: "", name_mr: "", confidence: "low", struck_out: "" });
   });
   it("returns an empty list for []", () => {
     expect(parseGeminiResponse(reply("[]"))).toEqual({ ok: true, rows: [] });
@@ -72,6 +76,7 @@ describe("struck-out names and unavailable items", () => {
   const prompt = () => JSON.stringify(geminiRequest([{ media_type: "image/jpeg", data: "x" }]));
   it("tells the model to drop struck-out words and skip dash-priced items", () => {
     expect(prompt()).toContain("struck out");
+    expect(prompt()).toContain("different colour");
     expect(prompt()).toContain('\\"-\\"');
   });
   it("drops a row whose price came back as a dash or zero", () => {
