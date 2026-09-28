@@ -86,6 +86,7 @@
     "noRows": "No prices found in this photo.",
     "summary": "{{changed}} changed · {{added}} new · {{attention}} need a look",
     "showUnchanged": "Show unchanged ({{n}})",
+    "similar": "Similar name — is this {{name}}? Tick to update.",
     "lowConfidence": "Price hard to read — update this item? Tick to include.",
     "converted": "{{grams}} g ₹{{listPrice}} → ₹{{price}}/kg",
     "quantity": "List says {{soldBy}} — enter the price per {{unit}}",

@@ -307,6 +307,7 @@ function RowView({ r, items, put, relink }: {
             <span>{itemName(r.item, lang)} — {rupees(r.item.price)} →</span>
             {priceInput(r, r.item.unit)}
           </div>
+          {r.similar && <p className="text-xs text-amber-700">{t("rateList.similar", { name: itemName(r.item, lang) })}</p>}
           {r.grams !== null && (
             <p className="text-xs text-slate-500">
               {t("rateList.converted", { grams: r.grams, listPrice: r.row.price, price: r.price })}
