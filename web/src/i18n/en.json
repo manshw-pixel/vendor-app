@@ -76,6 +76,8 @@
     "open": "Update prices from photo",
     "title": "Update prices from a rate list",
     "pick": "Take or choose photos of today's rate list (up to 5).",
+    "choose": "Choose photos",
+    "chosen": "{{n}} photo(s) chosen",
     "tooMany": "Only the first 5 photos will be read.",
     "read": "Read prices",
     "reading": "Reading the list… this can take up to a minute. Keep this screen open.",
