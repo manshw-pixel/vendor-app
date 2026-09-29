@@ -257,7 +257,8 @@ export default function Settings() {
 
       {/* Last on the page and visually separated on purpose: everything above this line is
           reversible, and nothing below it is. */}
-      <Card className="border-red-300 p-4 space-y-3 max-w-md" title={t("danger.title")}>
+      <Card className="border-red-300 p-4 space-y-3 max-w-md"
+        title={<span className="text-red-800">{t("danger.title")}</span>}>
         <p className="text-sm text-slate-600">{t("danger.body")}</p>
         <p className="text-sm text-slate-600">{t("danger.keeps")}</p>
 

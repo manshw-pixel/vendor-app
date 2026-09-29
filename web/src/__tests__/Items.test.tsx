@@ -147,6 +147,7 @@ describe("the items screen", () => {
     listAllItems.mockResolvedValueOnce({ data: [], error: null });
     render(<MemoryRouter><Items /></MemoryRouter>);
     const empty = (await screen.findByText(i18n.t("items.empty"))).parentElement!;
+    expect(within(empty).getAllByRole("link")).toHaveLength(1);
     expect(within(empty).getByRole("link").getAttribute("href")).toMatch(/\/items\/rate-list$/);
   });
 
