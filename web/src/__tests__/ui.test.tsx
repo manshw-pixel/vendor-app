@@ -26,6 +26,11 @@ describe("Button", () => {
     fireEvent.click(b);
     expect(onClick).not.toHaveBeenCalled();
   });
+  it("warn is amber-toned", () => {
+    render(<Button variant="warn">W</Button>);
+    const b = screen.getByRole("button", { name: "W" });
+    expect(b.className).toMatch(/amber/);
+  });
   it("keeps an explicit type", () => {
     render(<Button type="submit">S</Button>);
     expect(screen.getByRole("button").getAttribute("type")).toBe("submit");

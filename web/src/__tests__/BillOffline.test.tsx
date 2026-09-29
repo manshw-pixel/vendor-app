@@ -76,6 +76,26 @@ describe("offline bill", () => {
     expect(q[0]).toMatchObject({ total: 80, redeemPoints: 10, collectDue: 50 });
   });
 
+  it("Escape does not cancel the offline checkout while saving, but does once idle", async () => {
+    render(<MemoryRouter><Bill /></MemoryRouter>);
+    await addOnionLine();
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Not saving yet: Escape closes the dialog.
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Reopen and start a save that never resolves, to observe saving=true.
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    const dialog2 = await screen.findByRole("dialog");
+    const outbox = await import("../offline/outbox");
+    vi.spyOn(outbox, "enqueue").mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: /record sale/i }));
+    fireEvent.keyDown(dialog2, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
   it("a double tap on Record sale queues one sale", async () => {
     render(<MemoryRouter><Bill /></MemoryRouter>);
     await addOnionLine();

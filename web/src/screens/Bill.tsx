@@ -102,6 +102,7 @@ export default function Bill() {
   // A ref as well as state: two taps in one frame both see the state still false.
   const [savingOffline, setSavingOffline] = useState(false);
   const savingRef = useRef(false);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!vendorIdForLoad) return;
@@ -286,9 +287,9 @@ export default function Bill() {
 
       {failure && networkFailed && written === null && phase === "items" && (
         <Button
-          variant="secondary"
+          variant="warn"
           onClick={() => setOfflineCheckout(true)}
-          className="w-full border-amber-400 bg-amber-50 text-amber-800 font-semibold"
+          className="w-full font-semibold"
         >
           {t("offline.saveOffline")}
         </Button>
@@ -343,12 +344,13 @@ export default function Bill() {
       {confirming && (
         // No dismissing while the write is in flight: the result would land on a screen
         // that no longer shows it.
-        <Dialog label={t("bill.confirmTitle")} onClose={() => { if (!issuing) setConfirming(false); }}>
+        <Dialog label={t("bill.confirmTitle")} onClose={() => { if (!issuing) setConfirming(false); }}
+                initialFocusRef={confirmCancelRef}>
           <p className="text-slate-700">{t("bill.confirmBody")}</p>
           <Button size="lg" onClick={() => void confirm()} disabled={issuing} className="w-full">
             {t("bill.confirmTitle")}
           </Button>
-          <Button variant="secondary" onClick={() => setConfirming(false)} className="w-full">
+          <Button ref={confirmCancelRef} variant="secondary" onClick={() => setConfirming(false)} className="w-full">
             {t("bill.cancel")}
           </Button>
         </Dialog>

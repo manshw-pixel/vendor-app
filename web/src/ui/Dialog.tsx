@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -13,14 +13,16 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
  * A caller that must not be dismissed right now (a write in flight) passes an onClose that
  * does nothing.
  */
-export function Dialog({ label, onClose, className = "", children }:
-  { label: string; onClose: () => void; className?: string; children: ReactNode }) {
+export function Dialog({ label, onClose, className = "", children, initialFocusRef }:
+  { label: string; onClose: () => void; className?: string; children: ReactNode;
+    initialFocusRef?: RefObject<HTMLElement | null> }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    (initialFocusRef?.current ?? ref.current?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     return () => previous?.focus?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {

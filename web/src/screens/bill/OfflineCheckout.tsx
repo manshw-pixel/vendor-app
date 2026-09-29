@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PAYMENT_MODES, type PaymentMode } from "../../payments";
 import { rupees } from "../../money";
@@ -33,8 +33,10 @@ export function OfflineCheckout({ total, balance, saving = false, onConfirm, onC
   const [collect, setCollect] = useState(0);
   const { maxRedeem, maxCollect } = checkoutLimits(total, balance, mode);
   const r = Math.min(redeem, maxRedeem), c = Math.min(collect, maxCollect);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   return (
-    <Dialog label={t("offline.checkoutTitle")} onClose={() => { if (!saving) onCancel(); }}>
+    <Dialog label={t("offline.checkoutTitle")} onClose={() => { if (!saving) onCancel(); }}
+            initialFocusRef={cancelRef}>
       <p className="font-semibold">{t("offline.checkoutTitle")} · {rupees(amountToTake(total, r, c))}</p>
       <fieldset className="flex flex-wrap gap-2">
         {PAYMENT_MODES.map((m) => (
@@ -62,7 +64,7 @@ export function OfflineCheckout({ total, balance, saving = false, onConfirm, onC
       <Button size="lg" onClick={() => onConfirm(mode, r, c)} disabled={saving} className="w-full">
         {t("offline.recordSale")}
       </Button>
-      <Button variant="secondary" onClick={onCancel} className="w-full">
+      <Button ref={cancelRef} variant="secondary" onClick={onCancel} className="w-full">
         {t("bill.cancel")}
       </Button>
     </Dialog>

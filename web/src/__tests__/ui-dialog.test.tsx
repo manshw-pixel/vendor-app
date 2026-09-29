@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
@@ -15,6 +15,22 @@ function Harness({ onClose }: { onClose?: () => void }) {
         <Dialog label="Confirm" onClose={() => { onClose?.(); setOpen(false); }}>
           <button>first</button>
           <button>last</button>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function InitialFocusHarness() {
+  const [open, setOpen] = useState(false);
+  const lastRef = useRef<HTMLButtonElement | null>(null);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>open</button>
+      {open && (
+        <Dialog label="Confirm" onClose={() => setOpen(false)} initialFocusRef={lastRef}>
+          <button>first</button>
+          <button ref={lastRef}>last</button>
         </Dialog>
       )}
     </>
@@ -40,6 +56,11 @@ describe("Dialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+  it("focuses initialFocusRef instead of the first focusable when given", () => {
+    render(<InitialFocusHarness />);
+    fireEvent.click(screen.getByText("open"));
+    expect(document.activeElement?.textContent).toBe("last");
   });
   it("traps Tab inside the dialog", () => {
     render(<Harness />);
