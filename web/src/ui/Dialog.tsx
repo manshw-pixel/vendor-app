@@ -32,7 +32,7 @@ export function Dialog({ label, onClose, className = "", children }:
     if (e.key !== "Tab" || !ref.current) return;
     const nodes = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
     if (nodes.length === 0) return;
-    const first = nodes[0], last = nodes[nodes.length - 1];
+    const first = nodes[0]!, last = nodes[nodes.length - 1]!;
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
