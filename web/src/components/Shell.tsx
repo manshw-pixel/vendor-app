@@ -16,6 +16,7 @@ import { useSnapshotRefresh } from "../offline/useSnapshotRefresh";
 import { getUpdateReady, onUpdateReady } from "../offline/updateReady";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { AccountSheet } from "./AccountSheet";
+import { Button } from "../ui/Button";
 
 // Display order, independent of LANGS (which is ordered for default-language resolution,
 // not for how the picker reads left to right).
@@ -46,15 +47,16 @@ export function UpdateBanner() {
   return (
     <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
       <span>{t("app.updateReady")}</span>
-      <button
-        className="border border-emerald-700 rounded-lg px-2 py-0.5 bg-white"
+      <Button
+        variant="secondary" size="md"
+        className="!min-h-0 border-emerald-700 bg-surface px-2 py-0.5"
         onClick={() => {
           navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
           reg.waiting?.postMessage("skip-waiting");
         }}
       >
         {t("app.reload")}
-      </button>
+      </Button>
     </div>
   );
 }

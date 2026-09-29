@@ -4,6 +4,9 @@ import { supabase } from "../supabase";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 import { LangSwitch } from "./Shell";
 import { useSessionReload } from "./SessionProvider";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
 
 /**
  * Shown instead of every route while app_users.must_change_password is set.
@@ -69,15 +72,18 @@ export function ChangePassword({ email }: { email: string }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
-      <form onSubmit={submit} className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-sm shadow-sm space-y-3">
+      <Card className="p-6 w-full max-w-sm shadow-sm">
+      <form onSubmit={submit} className="space-y-3">
         <h1 className="text-lg font-semibold text-slate-800">{t("changePw.title")}</h1>
         <p className="text-sm text-slate-600">{t("changePw.body", { email })}</p>
 
         {error && (
-          <div data-testid="newpw-error" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {t(error.key)}
-            {error.detail && <span className="block text-xs opacity-70 mt-1">{error.detail}</span>}
-          </div>
+          <Banner tone="error">
+            <span data-testid="newpw-error">
+              {t(error.key)}
+              {error.detail && <span className="block text-xs opacity-70 mt-1">{error.detail}</span>}
+            </span>
+          </Banner>
         )}
 
         <div>
@@ -97,19 +103,20 @@ export function ChangePassword({ email }: { email: string }) {
           />
         </div>
 
-        <button
+        <Button
           type="submit" data-testid="newpw-save" disabled={busy}
-          className="w-full bg-green-600 disabled:bg-green-300 text-white rounded-lg font-medium min-h-[44px]"
+          className="w-full"
         >
           {t("changePw.save")}
-        </button>
-        <button
-          type="button" data-testid="newpw-signout" onClick={() => void supabase.auth.signOut()}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+        </Button>
+        <Button
+          type="button" variant="secondary" data-testid="newpw-signout" onClick={() => void supabase.auth.signOut()}
+          className="w-full"
         >
           {t("app.signOut")}
-        </button>
+        </Button>
       </form>
+      </Card>
       <LangSwitch />
     </div>
   );

@@ -5,6 +5,8 @@ import { loadReceipt, type Receipt as ReceiptData } from "../receipt";
 import { itemName, type Lang } from "../i18n/locales";
 import { qtyText } from "../units";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Spinner } from "../ui/Spinner";
 import "../i18n";
 
 /** Plain two-decimal, no currency sign and no digit grouping -- matching the item lines'
@@ -65,9 +67,9 @@ export default function Receipt() {
   }, []);
 
   if (problem) {
-    return <p data-testid="receipt-problem" className="p-4 text-sm text-red-700">{t(problem.key)}</p>;
+    return <p data-testid="receipt-problem" className="p-4 text-sm text-danger">{t(problem.key)}</p>;
   }
-  if (!data) return <p className="p-4 text-slate-400">{t("receipt.loading")}</p>;
+  if (!data) return <Spinner className="p-4" label={t("receipt.loading")} />;
 
   const when = new Date(data.completed_at);
   const rule = <div aria-hidden className="border-t border-dashed border-slate-400 my-1" />;
@@ -75,12 +77,12 @@ export default function Receipt() {
   return (
     <div className="flex flex-col items-center">
       {/* Hidden on paper by the print block: a receipt with a button on it is a bug. */}
-      <button
+      <Button
         data-testid="receipt-print" onClick={() => window.print()}
-        className="receipt-noprint mb-3 rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px]"
+        className="receipt-noprint mb-3"
       >
         {t("receipt.print")}
-      </button>
+      </Button>
 
       <div className="receipt-slip font-mono text-[11px] leading-tight text-black bg-white p-2">
         {data.voided && (

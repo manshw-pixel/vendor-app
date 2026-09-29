@@ -28,6 +28,8 @@ import { homeFor } from "./routes";
 import type { Role } from "./config";
 import { supabase } from "./supabase";
 import { Spinner } from "./ui/Spinner";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
 
 /**
  * The screen a person sees when their sign-in has no linked staff record.
@@ -57,7 +59,7 @@ function Unmapped({ userId, email }: { userId: string; email: string }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white border border-amber-200 rounded-xl p-6 max-w-md space-y-3">
+      <Card className="border-amber-200 p-6 max-w-md space-y-3">
         <h1 className="font-semibold text-slate-800">{t("session.unmappedTitle")}</h1>
         <p className="text-sm text-slate-600">{t("session.unmapped", { email })}</p>
 
@@ -69,14 +71,13 @@ function Unmapped({ userId, email }: { userId: string; email: string }) {
           >
             {userId}
           </p>
-          <button
-            data-testid="session-copy-id" onClick={() => void copy()}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+          <Button
+            variant="secondary" data-testid="session-copy-id" onClick={() => void copy()}
           >
             {copied ? t("session.copied") : t("session.copyId")}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -87,15 +88,14 @@ function SessionError({ detail }: { detail: string }) {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white border border-red-200 rounded-xl p-6 max-w-md">
+      <Card className="border-red-200 p-6 max-w-md">
         <h1 className="font-semibold text-slate-800 mb-2">{t("session.errorTitle")}</h1>
         <p className="text-sm text-slate-600 mb-4">{t("session.error")}</p>
         {detail && <p className="text-xs text-slate-400 mb-4">{detail}</p>}
-        <button onClick={() => window.location.reload()}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]">
+        <Button variant="secondary" onClick={() => window.location.reload()}>
           {t("session.retry")}
-        </button>
-      </div>
+        </Button>
+      </Card>
     </div>
   );
 }
@@ -106,20 +106,20 @@ function Suspended({ vendorName, email }: { vendorName: string; email: string })
   const { t } = useTranslation();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white border border-red-200 rounded-xl p-6 max-w-md space-y-3">
+      <Card className="border-red-200 p-6 max-w-md space-y-3">
         <h1 data-testid="session-suspended" className="font-semibold text-slate-800">
           {t("session.suspendedTitle")}
         </h1>
         <p className="text-sm text-slate-600">
           {t("session.suspended", { vendor: vendorName, email })}
         </p>
-        <button
+        <Button
+          variant="secondary"
           onClick={() => void supabase.auth.signOut()}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
         >
           {t("app.signOut")}
-        </button>
-      </div>
+        </Button>
+      </Card>
     </div>
   );
 }

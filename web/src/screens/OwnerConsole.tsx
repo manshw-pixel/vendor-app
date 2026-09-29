@@ -11,6 +11,11 @@ import {
   setVendorSuspended,
   type VendorSummary,
 } from "../ownerApi";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
+import { Spinner } from "../ui/Spinner";
+import { EmptyState } from "../ui/EmptyState";
 
 const BLANK: NewVendorInput = {
   vendorName: "", address: "", phone: "", adminName: "", email: "", password: "",
@@ -116,13 +121,13 @@ export default function OwnerConsole() {
         </div>
         <div className="flex items-center gap-3">
           <LangSwitch />
-          <button
-            type="button" data-testid="owner-signout"
+          <Button
+            variant="ghost" data-testid="owner-signout"
             onClick={() => void supabase.auth.signOut()}
-            className="text-sm text-slate-700 underline"
+            className="text-sm underline"
           >
             {t("app.signOut")}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -130,102 +135,99 @@ export default function OwnerConsole() {
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-slate-800">{t("owner.vendors")}</h2>
           {!adding && (
-            <button
-              type="button" data-testid="owner-add"
+            <Button
+              data-testid="owner-add"
               onClick={() => { setAdding(true); setCreated(null); setProblem(null); }}
-              className="rounded bg-emerald-600 px-3 py-2 text-sm text-white"
             >
               {t("owner.add")}
-            </button>
+            </Button>
           )}
         </div>
 
         {(problem ?? loadProblem) && (
-          <div data-testid="owner-problem" role="alert"
-            className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-            {t((problem ?? loadProblem) as string)}
-          </div>
+          <Banner tone="error">
+            <span data-testid="owner-problem">{t((problem ?? loadProblem) as string)}</span>
+          </Banner>
         )}
 
         {bansIncomplete && (
-          <div data-testid="owner-bans-incomplete" role="alert"
-            className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-            {t("owner.bansIncomplete")}
-          </div>
+          <Banner tone="warn">
+            <span data-testid="owner-bans-incomplete">{t("owner.bansIncomplete")}</span>
+          </Banner>
         )}
 
         {created && (
-          <p data-testid="owner-created" className="rounded bg-emerald-50 p-3 text-sm text-emerald-800">
-            {t("owner.created", { vendor: created.vendor, email: created.email })}
-          </p>
+          <Banner tone="success">
+            <span data-testid="owner-created">
+              {t("owner.created", { vendor: created.vendor, email: created.email })}
+            </span>
+          </Banner>
         )}
 
         {adding && (
           <form
-            className="space-y-3 rounded border bg-white p-4"
+            className="space-y-3"
             onSubmit={(e) => { e.preventDefault(); void save(); }}
             noValidate
           >
-            {FIELDS.map(({ field, type }) => (
-              <label key={field} className="block text-sm">
-                <span className="text-slate-700">{t(`owner.${field}`)}</span>
-                <input
-                  data-testid={`owner-${field}`} type={type} value={form[field]}
-                  autoComplete="off"
-                  onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-                  className="mt-1 block w-full rounded border px-2 py-1"
-                />
-                {errors[field] && (
-                  <span className="text-xs text-red-700">{t(errors[field] as string)}</span>
-                )}
-              </label>
-            ))}
-            <div className="flex gap-2">
-              <button type="submit" data-testid="owner-save" disabled={saving}
-                className="rounded bg-emerald-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-                {t("owner.save")}
-              </button>
-              <button type="button"
-                onClick={() => { setAdding(false); setForm(BLANK); setErrors({}); }}
-                className="rounded border px-3 py-2 text-sm">
-                {t("owner.cancel")}
-              </button>
-            </div>
+            <Card className="space-y-3 p-4">
+              {FIELDS.map(({ field, type }) => (
+                <label key={field} className="block text-sm">
+                  <span className="text-slate-700">{t(`owner.${field}`)}</span>
+                  <input
+                    data-testid={`owner-${field}`} type={type} value={form[field]}
+                    autoComplete="off"
+                    onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+                    className="mt-1 block w-full rounded border px-2 py-1"
+                  />
+                  {errors[field] && (
+                    <span className="text-xs text-danger">{t(errors[field] as string)}</span>
+                  )}
+                </label>
+              ))}
+              <div className="flex gap-2">
+                <Button type="submit" data-testid="owner-save" disabled={saving}>
+                  {t("owner.save")}
+                </Button>
+                <Button type="button" variant="secondary"
+                  onClick={() => { setAdding(false); setForm(BLANK); setErrors({}); }}>
+                  {t("owner.cancel")}
+                </Button>
+              </div>
+            </Card>
           </form>
         )}
 
         {pending && (
-          <div className="space-y-3 rounded border border-amber-300 bg-amber-50 p-4 text-sm">
+          <Card className="space-y-3 p-4 border-amber-300 bg-amber-50 text-sm">
             <p>
               {pending.action === "suspend"
                 ? t("owner.confirmSuspend", { vendor: pending.name })
                 : t("owner.confirmReinstate", { vendor: pending.name })}
             </p>
             <div className="flex gap-2">
-              <button type="button" data-testid="owner-confirm" disabled={acting}
-                onClick={() => void confirm()}
-                className="rounded bg-slate-800 px-3 py-2 text-white disabled:opacity-50">
+              <Button type="button" data-testid="owner-confirm" disabled={acting}
+                onClick={() => void confirm()}>
                 {t("owner.confirm")}
-              </button>
-              <button type="button" data-testid="owner-cancel" onClick={() => setPending(null)}
-                className="rounded border px-3 py-2">
+              </Button>
+              <Button type="button" variant="secondary" data-testid="owner-cancel" onClick={() => setPending(null)}>
                 {t("owner.cancel")}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {rows === null ? (
-          <p className="text-sm text-slate-600">{t("owner.loading")}</p>
+          <Spinner label={t("owner.loading")} />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-slate-600">{t("owner.empty")}</p>
+          <EmptyState>{t("owner.empty")}</EmptyState>
         ) : (
           <ul className="space-y-2">
             {rows.map((v) => {
               const suspended: boolean = v.suspended_at !== null;
               return (
                 <li key={v.id} data-testid={`owner-vendor-${v.id}`}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded border bg-white p-3">
+                  className="flex flex-wrap items-start justify-between gap-3 rounded border bg-surface p-3">
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800">{v.name}</span>
@@ -247,17 +249,17 @@ export default function OwnerConsole() {
                     </div>
                   </div>
                   {suspended ? (
-                    <button type="button" data-testid={`owner-reinstate-${v.id}`}
+                    <Button type="button" variant="secondary" size="md" data-testid={`owner-reinstate-${v.id}`}
                       onClick={() => setPending({ id: v.id, name: v.name, action: "reinstate" })}
-                      className="rounded border px-3 py-1 text-sm">
+                      className="!min-h-0 px-3 py-1">
                       {t("owner.reinstate")}
-                    </button>
+                    </Button>
                   ) : (
-                    <button type="button" data-testid={`owner-suspend-${v.id}`}
+                    <Button type="button" variant="secondary" size="md" data-testid={`owner-suspend-${v.id}`}
                       onClick={() => setPending({ id: v.id, name: v.name, action: "suspend" })}
-                      className="rounded border border-red-300 px-3 py-1 text-sm text-red-700">
+                      className="!min-h-0 border-red-300 px-3 py-1 text-danger">
                       {t("owner.suspend")}
-                    </button>
+                    </Button>
                   )}
                 </li>
               );
