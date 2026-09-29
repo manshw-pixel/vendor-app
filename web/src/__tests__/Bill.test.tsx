@@ -824,3 +824,37 @@ describe("the bill screen", () => {
     expect(await screen.findByTestId("item-detail")).toBeTruthy();
   });
 });
+
+describe("the customer chip", () => {
+  it("Change keeps the basket and switches the customer", async () => {
+    (data.listCustomers as Mock).mockResolvedValueOnce({ data: [
+      { id: "c1", name: "Asha", flat_no: "A-1", mobile: "+9198" },
+      { id: "c2", name: "Bina", flat_no: "B-2", mobile: "+9197" },
+    ], error: null });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    fireEvent.change(screen.getByTestId("weight-input"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
+    expect(screen.getByTestId("customer-chip").textContent).toMatch(/Asha.*A-1/);
+    fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    fireEvent.click(await screen.findByText("Bina"));
+    expect(screen.getByTestId("customer-chip").textContent).toMatch(/Bina.*B-2/);
+    expect(screen.getByTestId("running-total").textContent).toMatch(/80/);
+  });
+  it("Change is hidden once the lines are saved", async () => {
+    (data.issueToken as Mock).mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    fireEvent.change(screen.getByTestId("weight-input"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => expect(screen.getByTestId("running-total").textContent).toMatch(/80/));
+    expect(screen.getByRole("button", { name: /^change$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^change$/i })).toBeNull());
+    expect(screen.getByTestId("customer-chip").textContent).toMatch(/Asha/);
+  });
+});
