@@ -10,6 +10,11 @@ import { differenceOf, formatBusinessDate, latestPerDate, parseCounted, type Clo
 import { PAYMENT_MODES } from "../payments";
 import { describeError } from "../errors";
 import { rupees } from "../money";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { Banner } from "../ui/Banner";
+import { Dialog } from "../ui/Dialog";
+import { Spinner } from "../ui/Spinner";
 
 /**
  * End of day: what came in by each mode, the cash the drawer should hold, and a count to
@@ -46,6 +51,7 @@ export default function CloseDay() {
   // in-flight close/reopen has already finished.
   const currentDate = useRef<string | null>(null);
   currentDate.current = date;
+  const cancelCloseRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (d: string | null) => {
     wanted.current = d;
@@ -124,13 +130,13 @@ export default function CloseDay() {
       <h1 className="text-lg font-semibold text-slate-800">{t("close.title")}</h1>
 
       {problem && (
-        <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
+        <Banner tone="error">
           {t(problem.key)} <span className="text-xs text-slate-500">{problem.detail}</span>
-        </p>
+        </Banner>
       )}
 
       {summary && (
-        <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="font-semibold text-slate-800">{formatBusinessDate(summary.business_date, lang)}</p>
             <p data-testid="close-status" className={`text-sm ${active ? "text-slate-600" : "text-green-700"}`}>
@@ -222,50 +228,49 @@ export default function CloseDay() {
               {needsNote && note.trim() === "" && (
                 <p className="text-xs text-amber-700">{t("close.noteRequired")}</p>
               )}
-              <button
+              <Button
                 data-testid="close-submit"
+                variant="danger"
+                size="lg"
                 disabled={!canSubmit}
                 onClick={() => setConfirming(true)}
-                className="w-full rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
+                className="w-full"
               >
                 {t("close.closeBtn")}
-              </button>
+              </Button>
             </div>
           )}
 
           {date !== null && (
-            <button data-testid="close-today" disabled={busy} onClick={() => pick(null)}
-                    className="text-sm text-emerald-700 underline disabled:opacity-50">
+            <Button data-testid="close-today" variant="ghost" disabled={busy} onClick={() => pick(null)}
+                    className="text-sm underline">
               {t("close.backToToday")}
-            </button>
+            </Button>
           )}
-        </section>
+        </Card>
       )}
 
       {(!loaded || !summary) && !problem && (
-        <p data-testid="close-loading" className="text-sm text-slate-400">{t("dash.loading")}</p>
+        <Spinner data-testid="close-loading" label={t("dash.loading")} />
       )}
 
       {pastUnclosed.length > 0 && (
-        <section className="bg-white border border-amber-200 rounded-xl p-4 space-y-2">
-          <h2 className="font-semibold text-slate-800">{t("close.notClosedList")}</h2>
+        <Card className="border-amber-200 p-4 space-y-2" title={t("close.notClosedList")}>
           <ul className="space-y-1">
             {pastUnclosed.map((d) => (
               <li key={d} className="flex items-center justify-between text-sm">
                 <span className="text-slate-700">{formatBusinessDate(d, lang)}</span>
-                <button data-testid={`close-pick-${d}`} disabled={busy} onClick={() => pick(d)}
-                        className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50">
+                <Button data-testid={`close-pick-${d}`} variant="secondary" disabled={busy} onClick={() => pick(d)}>
                   {t("close.closeThis")}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
 
       {history.length > 0 && (
-        <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-          <h2 className="font-semibold text-slate-800">{t("close.history")}</h2>
+        <Card className="p-4 space-y-2" title={t("close.history")}>
           <ul className="space-y-2">
             {history.map((c) => (
               <li key={c.id} className="text-sm space-y-1">
@@ -278,11 +283,10 @@ export default function CloseDay() {
                     {c.reopened_at ? t("close.reopened") : (c.closer ?? "—")}
                   </span>
                   {isAdmin && c.reopened_at === null && (
-                    <button data-testid={`close-reopen-${c.business_date}`} disabled={busy}
-                            onClick={() => { setReopening(c.business_date); setReason(""); }}
-                            className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50">
+                    <Button data-testid={`close-reopen-${c.business_date}`} variant="secondary" disabled={busy}
+                            onClick={() => { setReopening(c.business_date); setReason(""); }}>
                       {t("close.reopen")}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {c.note && <p className="text-xs text-slate-500">{c.note}</p>}
@@ -294,38 +298,38 @@ export default function CloseDay() {
                              onChange={(e) => setReason(e.target.value)}
                              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
                     </label>
-                    <button data-testid="close-reopen-accept"
+                    <Button data-testid="close-reopen-accept" variant="warn"
                             disabled={reason.trim() === "" || busy}
-                            onClick={() => void reopen(c.business_date)}
-                            className="rounded-lg px-4 py-2 min-h-[44px] bg-amber-600 text-white font-semibold disabled:opacity-50">
+                            onClick={() => void reopen(c.business_date)}>
                       {t("close.reopenAccept")}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
 
       {confirming && summary && (
-        <div role="dialog" aria-modal="true" aria-labelledby="close-confirm-title"
-             className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-            <h2 id="close-confirm-title" className="font-semibold text-slate-800">
-              {t("close.confirmTitle", { date: formatBusinessDate(summary.business_date, lang) })}
-            </h2>
-            <p className="text-slate-700">{t("close.confirmBody")}</p>
-            <button data-testid="close-confirm" onClick={() => void submit()}
-                    className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold">
-              {t("close.confirmAccept")}
-            </button>
-            <button onClick={() => setConfirming(false)}
-                    className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300">
-              {t("close.cancel")}
-            </button>
-          </div>
-        </div>
+        <Dialog
+          label={t("close.confirmTitle", { date: formatBusinessDate(summary.business_date, lang) })}
+          onClose={() => { if (!busy) setConfirming(false); }}
+          initialFocusRef={cancelCloseRef}
+        >
+          <h2 className="font-semibold text-slate-800">
+            {t("close.confirmTitle", { date: formatBusinessDate(summary.business_date, lang) })}
+          </h2>
+          <p className="text-slate-700">{t("close.confirmBody")}</p>
+          <Button data-testid="close-confirm" variant="danger" size="lg" onClick={() => void submit()}
+                  className="w-full">
+            {t("close.confirmAccept")}
+          </Button>
+          <Button ref={cancelCloseRef} variant="secondary" onClick={() => { if (!busy) setConfirming(false); }}
+                  className="w-full">
+            {t("close.cancel")}
+          </Button>
+        </Dialog>
       )}
     </div>
   );

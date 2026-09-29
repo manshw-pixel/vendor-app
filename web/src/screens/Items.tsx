@@ -11,6 +11,9 @@ import { itemName, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
 import { describeError } from "../errors";
 import { filterItems } from "../itemSearch";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { EmptyState } from "../ui/EmptyState";
 
 const BLANK: ItemInput = { name_en: "", name_hi: "", name_mr: "", price: "", cost: "", stock_kg: "",
   unit: "kg", low_stock_at: "10" };
@@ -95,29 +98,27 @@ export default function Items() {
           <Link
             to="/items/rate-list"
             data-testid="items-rate-list"
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] inline-flex items-center"
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-surface min-h-[44px] inline-flex items-center"
           >
             {t("rateList.open")}
           </Link>
-          <button
+          <Button
+            variant="secondary"
             onClick={() => { setErrors({}); setEditing({ id: null, input: BLANK, sold: false }); toForm(); }}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
           >
             {t("items.add")}
-          </button>
+          </Button>
         </div>
       </div>
 
       {problem && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-          {t(problem.key)}
-        </p>
+        <Banner tone="error">{t(problem.key)}</Banner>
       )}
 
       {editing && (
         <form
           onSubmit={(e) => { e.preventDefault(); void save(); }}
-          className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
+          className="border border-slate-200 rounded-xl bg-surface p-4 space-y-3"
         >
           <h3 className="font-semibold text-slate-800">
             {editing.id === null ? t("items.add") : t("items.edit")}
@@ -238,18 +239,16 @@ export default function Items() {
           <p className="text-xs text-slate-500">{t("items.stockNote")}</p>
 
           <div className="flex gap-2">
-            <button
+            <Button
               type="submit" data-testid="item-save" disabled={busy}
-              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
             >
               {t("items.save")}
-            </button>
-            <button
-              type="button" onClick={() => { setEditing(null); setErrors({}); }}
-              className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+            </Button>
+            <Button
+              type="button" variant="secondary" onClick={() => { setEditing(null); setErrors({}); }}
             >
               {t("items.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -262,12 +261,20 @@ export default function Items() {
           placeholder={t("items.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white text-base text-slate-800"
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-surface text-base text-slate-800"
         />
       )}
 
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-500">{t("items.empty")}</p>
+        <EmptyState
+          action={
+            <Link to="/items/rate-list" className="text-brand-strong font-semibold underline">
+              {t("rateList.open")}
+            </Link>
+          }
+        >
+          {t("items.empty")}
+        </EmptyState>
       ) : shown.length === 0 ? (
         <p data-testid="items-no-match" className="text-sm text-slate-500">{t("bill.noItemMatch")}</p>
       ) : (
@@ -277,7 +284,7 @@ export default function Items() {
             return (
               <li
                 key={it.id}
-                className="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3"
+                className="bg-surface border border-slate-200 rounded-xl p-3 flex items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-800 truncate">
@@ -302,20 +309,20 @@ export default function Items() {
                       : t("stock.lastCost", { amount: rupees(Number(it.last_cost)) })}
                   </span>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
                   data-testid={`item-edit-${it.id}`}
                   onClick={() => { setErrors({}); setEditing({ id: it.id, input: toInput(it), sold: it.sold }); toForm(); }}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
                 >
                   {t("items.edit")}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   data-testid={`item-toggle-${it.id}`}
                   onClick={() => void toggle(it)} disabled={busy}
-                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
                 >
                   {it.is_active ? t("items.deactivate") : t("items.reactivate")}
-                </button>
+                </Button>
               </li>
             );
           })}

@@ -52,6 +52,15 @@ describe("outbox screen", () => {
     await waitFor(() => expect(screen.queryByText(/Offline #1/)).toBeNull());
   });
 
+  it("the discard confirm dialog opens with Cancel focused", async () => {
+    render(<Outbox />);
+    await screen.findByText(/Offline #1/);
+    fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
+    expect(document.activeElement).toBe(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }),
+    );
+  });
+
   it("offers no discard on a bill that is still waiting", async () => {
     setKV(memoryKV());
     await ob.enqueue({ vendorId: "v1", customerId: "c1", customerLabel: "B", lines: [] as any,

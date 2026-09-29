@@ -14,17 +14,21 @@ import { rupees } from "../money";
 import { describeError } from "../errors";
 import { loadDuesList } from "../dues";
 import { totalOutstanding } from "../duesRules";
+import { Card as UiCard } from "../ui/Card";
+import { Spinner } from "../ui/Spinner";
+import { Banner } from "../ui/Banner";
+import { EmptyState } from "../ui/EmptyState";
 import "../i18n";
 
 function Card({ title, subtitle, children }: {
   title: string; subtitle?: string; children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-4">
-      <h3 className="font-semibold text-slate-800">{title}</h3>
+    <UiCard className="p-4">
+      <h3 className="font-semibold text-ink">{title}</h3>
       {subtitle && <p className="text-xs text-slate-500 mb-2">{subtitle}</p>}
       {children}
-    </section>
+    </UiCard>
   );
 }
 
@@ -101,27 +105,23 @@ export default function Dashboards() {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-semibold text-slate-800">{t("dash.title")}</h2>
+      <h2 className="font-semibold text-ink">{t("dash.title")}</h2>
 
       <DateFilter value={range} onChange={setRange} />
 
-      {busy && (
-        <p data-testid="dash-loading" className="text-sm text-slate-500">
-          {t("dash.loading")}
-        </p>
-      )}
+      {busy && <Spinner data-testid="dash-loading" label={t("dash.loading")} />}
 
       {problem && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-700">{t(problem.key)}</p>
+        <Banner tone="error">
+          <p>{t(problem.key)}</p>
           {/* The raw message, not just a category. Withholding it is what turned a
               missing migration into a guessing game. */}
           {problem.detail && (
-            <p data-testid="dash-problem-detail" className="text-xs text-red-600 mt-1 break-words">
+            <p data-testid="dash-problem-detail" className="text-xs mt-1 break-words">
               {t("error.details")}: {problem.detail}
             </p>
           )}
-        </div>
+        </Banner>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -186,7 +186,7 @@ export default function Dashboards() {
 
       <Card title={t("dash.topItems")} subtitle={t("dash.topItemsSub")}>
         {top.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("dash.empty")}</p>
+          <EmptyState>{t("dash.empty")}</EmptyState>
         ) : (
           <ul className="space-y-1">
             {top.map((i) => (
@@ -197,7 +197,7 @@ export default function Dashboards() {
                   {" · "}
                   <span data-testid={`dash-top-margin-${i.item_id}`}
                         title={t("dash.margin")}
-                        className="text-green-700">
+                        className="text-brand-strong">
                     {i.margin === null ? "—" : rupees(Number(i.margin))}
                   </span>
                 </span>
@@ -209,7 +209,7 @@ export default function Dashboards() {
 
       <Card title={t("dash.together")} subtitle={t("dash.togetherSub")}>
         {pairs.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("dash.empty")}</p>
+          <EmptyState>{t("dash.empty")}</EmptyState>
         ) : (
           <ul className="space-y-1">
             {pairs.map((p) => (
@@ -232,7 +232,7 @@ export default function Dashboards() {
 
       <Card title={t("dash.requests")} subtitle={t("dash.requestsSub")}>
         {requests.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("dash.empty")}</p>
+          <EmptyState>{t("dash.empty")}</EmptyState>
         ) : (
           <ul className="space-y-1">
             {requests.map((r) => (

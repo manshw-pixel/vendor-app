@@ -9,6 +9,11 @@ import { itemName, type Lang } from "../i18n/locales";
 import { qtyText, perUnit, type Unit } from "../units";
 import { rupees } from "../money";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
+import { Spinner } from "../ui/Spinner";
+import { EmptyState } from "../ui/EmptyState";
 import "../i18n";
 
 export default function Stock() {
@@ -96,15 +101,15 @@ export default function Stock() {
         <p className="text-xs text-slate-500">{t("stock.hint")}</p>
       </div>
 
-      <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+      <Card className="p-4 space-y-3">
         <div className="flex gap-2" role="radiogroup">
           {(["purchase", "wastage"] as const).map((k) => (
-            <button key={k} type="button" role="radio" aria-checked={kind === k}
+            <Button key={k} type="button" role="radio" aria-checked={kind === k}
                     data-testid={`stock-kind-${k}`} onClick={() => setKind(k)}
-                    className={`flex-1 rounded-lg min-h-[44px] border ${kind === k
-                      ? "bg-green-600 text-white border-green-600" : "border-slate-300 text-slate-700"}`}>
+                    variant={kind === k ? "primary" : "secondary"}
+                    className="flex-1">
               {t(`stock.${k}`)}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -142,35 +147,35 @@ export default function Stock() {
           <input value={note} onChange={(e) => setNote(e.target.value)} data-testid="stock-note" className={input} />
         </label>
 
-        <button onClick={() => void submit()} disabled={saving} data-testid="stock-submit"
-                className="w-full bg-green-600 text-white rounded-lg min-h-[44px] disabled:opacity-50">
+        <Button onClick={() => void submit()} disabled={saving} data-testid="stock-submit"
+                className="w-full">
           {t("stock.submit")}
-        </button>
-      </section>
+        </Button>
+      </Card>
 
       {problem && (
-        <div data-testid="stock-problem" className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-700">
+        <div data-testid="stock-problem">
+          <Banner tone="error">
             {t(problem.key, { qty: problem.kg !== undefined && problem.kg !== "" ? qtyText(problem.kg, problem.unit ?? "kg", t) : "" })}
-          </p>
-          {problem.detail && (
-            <p className="text-xs text-red-600 mt-1 break-words">{t("error.details")}: {problem.detail}</p>
-          )}
+            {problem.detail && (
+              <p className="text-xs mt-1 break-words">{t("error.details")}: {problem.detail}</p>
+            )}
+          </Banner>
         </div>
       )}
 
       <DateFilter value={range} onChange={setRange} />
 
-      {busy && <p className="text-sm text-slate-500">{t("stock.loading")}</p>}
-      {!busy && rows.length === 0 && <p className="text-sm text-slate-500">{t("stock.empty")}</p>}
+      {busy && <Spinner label={t("stock.loading")} />}
+      {!busy && rows.length === 0 && <EmptyState>{t("stock.empty")}</EmptyState>}
 
       <ul className="space-y-2">
         {rows.map((m) => (
           <li key={m.id} data-testid={`stock-row-${m.id}`}
-              className="bg-white border border-slate-200 rounded-xl p-3 text-sm">
+              className="bg-surface border border-slate-200 rounded-xl p-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="text-slate-800">{itemName(m, lang)}</span>
-              <span className={m.kind === "purchase" ? "text-green-700" : "text-red-700"}>
+              <span className={m.kind === "purchase" ? "text-brand-strong" : "text-red-700"}>
                 {signedQty(m.kind, m.qty_kg, m.unit, t)}
               </span>
             </div>

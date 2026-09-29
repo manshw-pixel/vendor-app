@@ -10,6 +10,10 @@ import { describeError } from "../errors";
 import { rupees } from "../money";
 import { listCustomers } from "../data";
 import { matchCustomers, type Customer } from "../customers";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
 
 /**
  * Who owes what. The balances and their order are the server's (dues_list, 0022); this
@@ -73,9 +77,9 @@ export default function Dues() {
       <h1 className="text-lg font-semibold text-slate-800">{t("dues.title")}</h1>
 
       {problem && (
-        <p data-testid="dues-problem" className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
-          {t(problem.key)} <span className="text-xs text-slate-500">{problem.detail}</span>
-        </p>
+        <Banner tone="error">
+          <span data-testid="dues-problem">{t(problem.key)} <span className="text-xs text-slate-500">{problem.detail}</span></span>
+        </Banner>
       )}
 
       {rows && (
@@ -85,14 +89,14 @@ export default function Dues() {
       )}
 
       {isAdmin && unassigned.length > 0 && (
-        <section className="bg-white border border-amber-200 rounded-xl p-3 space-y-2">
-          <button data-testid="dues-unassigned" onClick={() => setShowUnassigned((s) => !s)}
-                  className="w-full text-left text-sm font-semibold text-amber-800 min-h-[44px]">
+        <Card className="border-amber-200 p-3 space-y-2">
+          <Button data-testid="dues-unassigned" variant="ghost" onClick={() => setShowUnassigned((s) => !s)}
+                  className="w-full text-left text-sm font-semibold text-amber-800">
             {t("dues.unassigned", {
               n: unassigned.length,
               amount: rupees(unassigned.reduce((s, b) => s + b.amount, 0)),
             })}
-          </button>
+          </Button>
           {showUnassigned && (
             <ul className="space-y-2">
               {unassigned.map((b) => (
@@ -101,10 +105,9 @@ export default function Dues() {
                     <span className="text-slate-700">
                       {t("dues.kind.credit_bill", { n: b.token_no ?? "—" })} · {rupees(b.amount)}
                     </span>
-                    <button data-testid={`dues-assign-${b.bill_id}`} onClick={() => void startAssign(b.bill_id)}
-                            className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]">
+                    <Button data-testid={`dues-assign-${b.bill_id}`} variant="secondary" onClick={() => void startAssign(b.bill_id)}>
                       {t("dues.assign")}
-                    </button>
+                    </Button>
                   </div>
                   {assigning === b.bill_id && (
                     <div className="space-y-2">
@@ -115,11 +118,11 @@ export default function Dues() {
                       <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
                         {matchCustomers(customers, pickQuery).map((c) => (
                           <li key={c.id}>
-                            <button data-testid={`dues-assign-pick-${c.id}`} onClick={() => void assign(b.bill_id, c.id)}
+                            <Button data-testid={`dues-assign-pick-${c.id}`} variant="ghost" onClick={() => void assign(b.bill_id, c.id)}
                                     disabled={busy}
-                                    className="w-full text-left px-3 py-2 min-h-[44px] disabled:opacity-50">
+                                    className="w-full text-left">
                               {c.name} · {c.flat_no}
-                            </button>
+                            </Button>
                           </li>
                         ))}
                       </ul>
@@ -129,7 +132,7 @@ export default function Dues() {
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       )}
 
       <input
@@ -142,10 +145,10 @@ export default function Dues() {
       />
 
       {rows && rows.length === 0 && !problem && (
-        <p className="text-sm text-slate-500">{t("dues.empty")}</p>
+        <EmptyState>{t("dues.empty")}</EmptyState>
       )}
 
-      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white">
+      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-surface">
         {shown.map((r) => (
           <li key={r.customer_id}>
             <Link to={`/dues/${r.customer_id}`} className="block px-3 py-3 min-h-[44px] active:bg-slate-100">

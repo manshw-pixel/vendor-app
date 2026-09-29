@@ -47,4 +47,9 @@ describe("Card and Banner", () => {
     expect(screen.getByRole("alert").textContent).toBe("bad");
     expect(screen.getByRole("status").textContent).toBe("fyi");
   });
+  it("role overrides a tone's default, e.g. an assertive warn Banner", () => {
+    render(<Banner tone="warn" role="alert">careful</Banner>);
+    expect(screen.getByRole("alert").textContent).toBe("careful");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });

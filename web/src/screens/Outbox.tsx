@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { useSession } from "../components/SessionProvider";
@@ -7,6 +7,10 @@ import { useOutbox } from "../offline/useOutbox";
 import { discard, listOutbox, retry, type OfflineBill } from "../offline/outbox";
 import { friendlyOutboxError } from "../offline/outboxErrors";
 import { rupees } from "../money";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Dialog } from "../ui/Dialog";
+import { EmptyState } from "../ui/EmptyState";
 
 /**
  * This device's queue: every offline bill still waiting to sync, and every one that
@@ -24,6 +28,7 @@ export default function Outbox() {
   const { flushNow } = useOutbox(vendorId);
   const [bills, setBills] = useState<OfflineBill[] | null>(null);
   const [discarding, setDiscarding] = useState<string | null>(null);
+  const cancelDiscardRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     if (!vendorId) return;
@@ -56,17 +61,13 @@ export default function Outbox() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold text-slate-800">{t("nav.outbox")}</h1>
-        <button
-          onClick={flushNow}
-          disabled={!online}
-          className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50"
-        >
+        <Button variant="secondary" onClick={flushNow} disabled={!online}>
           {t("outbox.syncNow")}
-        </button>
+        </Button>
       </div>
 
       {bills && bills.length === 0 && (
-        <p className="text-sm text-slate-500">{t("outbox.empty")}</p>
+        <EmptyState>{t("outbox.empty")}</EmptyState>
       )}
 
       <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white">
@@ -84,19 +85,15 @@ export default function Outbox() {
             </p>
             {b.state === "attention" && (
               <div className="space-y-2">
-                {b.error && <p className="text-sm text-red-700">{friendlyOutboxError(b.error, t)}</p>}
-                <button
-                  onClick={() => void onRetry(b.clientId)}
-                  className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]"
-                >
+                {b.error && (
+                  <Banner tone="error">{friendlyOutboxError(b.error, t)}</Banner>
+                )}
+                <Button variant="secondary" onClick={() => void onRetry(b.clientId)}>
                   {t("outbox.retry")}
-                </button>{" "}
-                <button
-                  onClick={() => setDiscarding(b.clientId)}
-                  className="border border-red-300 text-red-700 rounded-lg px-3 py-2 bg-white min-h-[44px]"
-                >
+                </Button>{" "}
+                <Button variant="danger" onClick={() => setDiscarding(b.clientId)}>
                   {t("outbox.discard")}
-                </button>
+                </Button>
               </div>
             )}
           </li>
@@ -104,30 +101,21 @@ export default function Outbox() {
       </ul>
 
       {discarding && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="outbox-discard-title"
-          className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4"
+        <Dialog
+          label={t("outbox.discardConfirm")}
+          onClose={() => setDiscarding(null)}
+          initialFocusRef={cancelDiscardRef}
         >
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-            <p id="outbox-discard-title" className="text-slate-800">{t("outbox.discardConfirm")}</p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setDiscarding(null)}
-                className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px]"
-              >
-                {t("outbox.cancel")}
-              </button>
-              <button
-                onClick={() => void onDiscard(discarding)}
-                className="rounded-lg px-3 py-2 bg-red-700 text-white min-h-[44px]"
-              >
-                {t("outbox.discard")}
-              </button>
-            </div>
+          <p className="text-slate-800">{t("outbox.discardConfirm")}</p>
+          <div className="flex gap-2 justify-end">
+            <Button ref={cancelDiscardRef} variant="secondary" onClick={() => setDiscarding(null)}>
+              {t("outbox.cancel")}
+            </Button>
+            <Button variant="danger" onClick={() => void onDiscard(discarding)}>
+              {t("outbox.discard")}
+            </Button>
           </div>
-        </div>
+        </Dialog>
       )}
     </div>
   );

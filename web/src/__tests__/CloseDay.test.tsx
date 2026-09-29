@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import i18n from "../i18n";
 import type { DaySummary } from "../dayClose";
@@ -78,6 +78,15 @@ describe("Close day", () => {
     fireEvent.click(screen.getByTestId("close-confirm"));
     await waitFor(() => expect(closeDay).toHaveBeenCalledWith("2026-09-23", 1200, ""));
     expect(notifyDayClosesChanged).toHaveBeenCalled();
+  });
+
+  it("the close confirm dialog opens with Cancel focused, not the destructive action", async () => {
+    renderAs("biller");
+    fireEvent.change(await screen.findByTestId("close-counted"), { target: { value: "1200" } });
+    fireEvent.click(screen.getByTestId("close-submit"));
+    expect(document.activeElement).toBe(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }),
+    );
   });
 
   it("needs a note when the cash does not match", async () => {

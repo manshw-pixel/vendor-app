@@ -11,6 +11,9 @@ import { formatBusinessDate } from "../closeRules";
 import { REPAY_MODES, type RepayMode } from "../payments";
 import { describeError } from "../errors";
 import { rupees } from "../money";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
 
 /**
  * One customer's udhaar: the server's balance, what made it, and the three things staff
@@ -110,13 +113,13 @@ export default function CustomerDues() {
       )}
 
       {problem && (
-        <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
+        <Banner tone="error">
           {t(problem.key)} <span className="text-xs text-slate-500">{problem.detail}</span>
-        </p>
+        </Banner>
       )}
 
       {balance !== null && (
-        <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <Card className="p-4 space-y-3">
           <p className="text-sm text-slate-500">{t("dues.balance")}</p>
           <p data-testid="cd-balance" className="text-3xl font-semibold text-slate-800">
             {balance > 0 ? rupees(balance)
@@ -125,16 +128,14 @@ export default function CustomerDues() {
           </p>
           <div className="flex gap-2">
             {balance > 0 && (
-              <button data-testid="cd-receive" disabled={busy} onClick={() => open("receive")}
-                      className="rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50">
+              <Button data-testid="cd-receive" size="lg" disabled={busy} onClick={() => open("receive")}>
                 {t("dues.receive")}
-              </button>
+              </Button>
             )}
             {isAdmin && (
-              <button data-testid="cd-opening" disabled={busy} onClick={() => open("opening")}
-                      className="rounded-lg px-4 py-3 min-h-[44px] border border-slate-300 bg-white disabled:opacity-50">
+              <Button data-testid="cd-opening" variant="secondary" size="lg" disabled={busy} onClick={() => open("opening")}>
                 {t("dues.opening")}
-              </button>
+              </Button>
             )}
           </div>
 
@@ -152,13 +153,12 @@ export default function CustomerDues() {
                 <legend className="text-sm text-slate-700">{t("dues.modeLabel")}</legend>
                 <div className="grid grid-cols-3 gap-2">
                   {REPAY_MODES.map((m) => (
-                    <button key={m} type="button" data-testid={`cd-mode-${m}`} aria-pressed={mode === m}
+                    <Button key={m} variant={mode === m ? "primary" : "secondary"} size="lg"
+                            data-testid={`cd-mode-${m}`} aria-pressed={mode === m}
                             onClick={() => setMode(m)}
-                            className={`rounded-lg px-3 py-3 min-h-[44px] border font-semibold ${
-                              mode === m ? "bg-emerald-600 text-white border-emerald-600"
-                                         : "bg-white text-slate-700 border-slate-300"}`}>
+                            className="font-semibold">
                       {t(`pay.${m}`)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </fieldset>
@@ -167,13 +167,13 @@ export default function CustomerDues() {
                 <input data-testid="cd-note" value={note} onChange={(e) => setNote(e.target.value)}
                        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
               </label>
-              <button data-testid="cd-receive-confirm" disabled={!canReceive} onClick={() => void receive()}
-                      className="w-full rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50">
+              <Button data-testid="cd-receive-confirm" size="lg" disabled={!canReceive} onClick={() => void receive()}
+                      className="w-full">
                 {t("dues.confirmReceive")}
-              </button>
-              <button onClick={() => setPanel(null)} className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300">
+              </Button>
+              <Button variant="secondary" onClick={() => setPanel(null)} className="w-full">
                 {t("dues.cancel")}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -192,21 +192,21 @@ export default function CustomerDues() {
                        onChange={(e) => setNote(e.target.value)}
                        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
               </label>
-              <button data-testid="cd-opening-confirm" disabled={!canOpening} onClick={() => void opening()}
-                      className="w-full rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50">
+              <Button data-testid="cd-opening-confirm" size="lg" disabled={!canOpening} onClick={() => void opening()}
+                      className="w-full">
                 {t("dues.confirmOpening")}
-              </button>
-              <button onClick={() => setPanel(null)} className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300">
+              </Button>
+              <Button variant="secondary" onClick={() => setPanel(null)} className="w-full">
                 {t("dues.cancel")}
-              </button>
+              </Button>
             </div>
           )}
-        </section>
+        </Card>
       )}
 
       <ul className="space-y-2">
         {entries.map((e) => (
-          <li key={e.id} className="bg-white border border-slate-200 rounded-xl p-3 text-sm space-y-1">
+          <li key={e.id} className="bg-surface border border-slate-200 rounded-xl p-3 text-sm space-y-1">
             <div data-testid={`cd-entry-${e.id}`}
                  className={`flex items-center justify-between gap-2 ${e.reversed_at ? "line-through text-slate-400" : ""}`}>
               <span>
@@ -229,11 +229,10 @@ export default function CustomerDues() {
               </span>
             </div>
             {canReverse(e) && reversing !== e.id && (
-              <button data-testid={`cd-reverse-${e.id}`} disabled={busy}
-                      onClick={() => { setReversing(e.id); setReason(""); }}
-                      className="border border-slate-300 rounded-lg px-3 py-2 bg-white min-h-[44px] disabled:opacity-50">
+              <Button data-testid={`cd-reverse-${e.id}`} variant="secondary" disabled={busy}
+                      onClick={() => { setReversing(e.id); setReason(""); }}>
                 {t("dues.reverse")}
-              </button>
+              </Button>
             )}
             {reversing === e.id && (
               <div className="space-y-2">
@@ -242,15 +241,14 @@ export default function CustomerDues() {
                   <input data-testid="cd-reverse-reason" value={reason} onChange={(ev) => setReason(ev.target.value)}
                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]" />
                 </label>
-                <button data-testid="cd-reverse-accept" disabled={reason.trim() === "" || busy}
-                        onClick={() => void reverse(e.id)}
-                        className="rounded-lg px-4 py-2 min-h-[44px] bg-amber-600 text-white font-semibold disabled:opacity-50">
+                <Button data-testid="cd-reverse-accept" variant="warn" disabled={reason.trim() === "" || busy}
+                        onClick={() => void reverse(e.id)}>
                   {t("dues.confirmReverse")}
-                </button>
-                <button data-testid="cd-reverse-cancel" onClick={() => { setReversing(null); setReason(""); }}
-                        className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300">
+                </Button>
+                <Button data-testid="cd-reverse-cancel" variant="secondary" onClick={() => { setReversing(null); setReason(""); }}
+                        className="w-full">
                   {t("dues.cancel")}
-                </button>
+                </Button>
               </div>
             )}
           </li>

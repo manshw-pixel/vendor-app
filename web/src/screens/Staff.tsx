@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 // i18next initialises as a side effect of this import, exactly as Bill.tsx/Pending.tsx
 // do. The screen is rendered directly (by tests, and by the router) without going
@@ -10,6 +10,10 @@ import { canEditStaff, validateNewStaff, type NewStaffInput, type NewStaffField 
 import { ROLES, type Role } from "../config";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { EmptyState } from "../ui/EmptyState";
+import { Dialog } from "../ui/Dialog";
 
 const ROLE_KEY: Record<Role, string> = {
   admin: "staff.roleAdmin",
@@ -42,6 +46,7 @@ export default function Staff() {
   const [added, setAdded] = useState(false);
   const [problem, setProblem] = useState<{ key: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const cancelRemoveRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await listStaff();
@@ -102,26 +107,23 @@ export default function Staff() {
     <div className="space-y-4">
       <h2 className="font-semibold text-slate-800">{t("staff.title")}</h2>
 
-      <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
-        {t("staff.adminCreates")}
-      </p>
+      <Banner tone="info">{t("staff.adminCreates")}</Banner>
 
       {!adding && (
-        <button
+        <Button
           data-testid="staff-add-open"
           onClick={() => {
             setAdded(false);
             setAddErrors({});
             setAdding({ email: "", password: "", name: "", role: "recorder" });
           }}
-          className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px]"
         >
           {t("staff.add")}
-        </button>
+        </Button>
       )}
 
       {added && (
-        <p data-testid="staff-added" className="text-sm text-green-700">{t("staff.added")}</p>
+        <Banner tone="success"><span data-testid="staff-added">{t("staff.added")}</span></Banner>
       )}
 
       {adding && (
@@ -131,7 +133,7 @@ export default function Staff() {
           // the submit event entirely on a bad address, so validateNewStaff's own message
           // (and its test) would never run.
           noValidate
-          className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
+          className="border border-slate-200 rounded-xl bg-surface p-4 space-y-3"
         >
           <h3 className="font-semibold text-slate-800">{t("staff.addTitle")}</h3>
           <div>
@@ -191,38 +193,30 @@ export default function Staff() {
             <select
               id="staff-add-role" data-testid="staff-add-role" value={adding.role}
               onChange={(e) => setAdding({ ...adding, role: e.target.value })}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-surface"
             >
               {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEY[r])}</option>)}
             </select>
           </div>
           <div className="flex gap-2">
-            <button
-              type="submit" data-testid="staff-add-save" disabled={busy}
-              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
-            >
+            <Button type="submit" data-testid="staff-add-save" disabled={busy}>
               {t("staff.save")}
-            </button>
-            <button
-              type="button" onClick={() => setAdding(null)}
-              className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
-            >
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setAdding(null)}>
               {t("staff.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {problem && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-          {t(problem.key)}
-        </p>
+        <Banner tone="error">{t(problem.key)}</Banner>
       )}
 
       {editing && (
         <form
           onSubmit={(e) => { e.preventDefault(); void save(); }}
-          className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
+          className="border border-slate-200 rounded-xl bg-surface p-4 space-y-3"
         >
           <div>
             <label className="block text-sm text-slate-600 mb-1" htmlFor="staff-name">
@@ -241,30 +235,24 @@ export default function Staff() {
             <select
               id="staff-role" data-testid="staff-role" value={editing.role}
               onChange={(e) => setEditing({ ...editing, role: e.target.value as Role })}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-white"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px] bg-surface"
             >
               {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEY[r])}</option>)}
             </select>
           </div>
           <div className="flex gap-2">
-            <button
-              type="submit" data-testid="staff-save" disabled={busy}
-              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
-            >
+            <Button type="submit" data-testid="staff-save" disabled={busy}>
               {t("staff.save")}
-            </button>
-            <button
-              type="button" onClick={() => setEditing(null)}
-              className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
-            >
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
               {t("staff.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-500">{t("staff.empty")}</p>
+        <EmptyState>{t("staff.empty")}</EmptyState>
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => {
@@ -272,7 +260,7 @@ export default function Staff() {
             return (
               <li
                 key={row.id}
-                className="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3"
+                className="bg-surface border border-slate-200 rounded-xl p-3 flex items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-800 truncate">
@@ -285,20 +273,21 @@ export default function Staff() {
                 </div>
                 {editable && (
                   <>
-                    <button
+                    <Button
+                      variant="secondary"
                       data-testid={`staff-edit-${row.id}`}
                       onClick={() => setEditing({ id: row.id, name: row.name, role: row.role })}
-                      className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
                     >
                       {t("staff.edit")}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
                       data-testid={`staff-remove-${row.id}`}
                       onClick={() => setConfirming(row)}
-                      className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                      className="border-red-300 text-red-700"
                     >
                       {t("staff.remove")}
-                    </button>
+                    </Button>
                   </>
                 )}
               </li>
@@ -312,32 +301,32 @@ export default function Staff() {
       </p>
 
       {confirming && (
-        <div
-          role="dialog" aria-label={t("staff.confirmRemoveTitle")}
-          className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
+        <Dialog
+          label={t("staff.confirmRemoveTitle")}
+          onClose={() => { if (!busy) setConfirming(null); }}
+          initialFocusRef={cancelRemoveRef}
         >
-          <div className="bg-white rounded-xl p-5 max-w-sm w-full space-y-3">
-            <h3 className="font-semibold text-slate-800">{t("staff.confirmRemoveTitle")}</h3>
-            <p data-testid="staff-remove-body" className="text-sm text-slate-600">
-              {t("staff.confirmRemoveBody")}
-            </p>
-            <div className="flex gap-2">
-              <button
-                data-testid="staff-remove-confirm"
-                onClick={() => void remove(confirming)} disabled={busy}
-                className="rounded-lg px-4 py-2 text-sm bg-red-700 text-white min-h-[44px] disabled:opacity-50"
-              >
-                {t("staff.confirmRemoveAccept")}
-              </button>
-              <button
-                onClick={() => setConfirming(null)}
-                className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
-              >
-                {t("staff.cancel")}
-              </button>
-            </div>
+          <h3 className="font-semibold text-slate-800">{t("staff.confirmRemoveTitle")}</h3>
+          <p data-testid="staff-remove-body" className="text-sm text-slate-600">
+            {t("staff.confirmRemoveBody")}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="danger"
+              data-testid="staff-remove-confirm"
+              onClick={() => void remove(confirming)} disabled={busy}
+            >
+              {t("staff.confirmRemoveAccept")}
+            </Button>
+            <Button
+              variant="secondary"
+              ref={cancelRemoveRef}
+              onClick={() => setConfirming(null)}
+            >
+              {t("staff.cancel")}
+            </Button>
           </div>
-        </div>
+        </Dialog>
       )}
     </div>
   );
