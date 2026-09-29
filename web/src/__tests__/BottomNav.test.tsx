@@ -60,3 +60,21 @@ describe("BottomNav", () => {
     expect(screen.getByTestId("low-stock-badge").textContent).toBe("3");
   });
 });
+
+describe("BottomNav More sheet can be dismissed without choosing", () => {
+  it("closes with the Close button", () => {
+    renderNav("admin", "/bill");
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("where").textContent).toBe("/bill");
+  });
+  it("closes when the backdrop is tapped, not when the sheet is", () => {
+    renderNav("admin", "/bill");
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByText("Shop setup"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("dialog"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
