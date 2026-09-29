@@ -27,6 +27,7 @@ import OwnerConsole from "./screens/OwnerConsole";
 import { homeFor } from "./routes";
 import type { Role } from "./config";
 import { supabase } from "./supabase";
+import { Spinner } from "./ui/Spinner";
 
 /**
  * The screen a person sees when their sign-in has no linked staff record.
@@ -161,8 +162,9 @@ function ShellRoutes({ role, vendorName, name }:
 }
 
 function Inner() {
+  const { t } = useTranslation();
   const s = useSession();
-  if (s.kind === "loading") return <div className="p-8 text-slate-400">…</div>;
+  if (s.kind === "loading") return <div className="p-8"><Spinner label={t("app.loading")} /></div>;
   if (s.kind === "signedOut") return <Login />;
   if (s.kind === "unmapped") return <Unmapped userId={s.userId} email={s.email} />;
   if (s.kind === "error") return <SessionError detail={s.detail} />;
