@@ -151,7 +151,7 @@ export default function OwnerConsole() {
         )}
 
         {bansIncomplete && (
-          <Banner tone="warn">
+          <Banner tone="warn" role="alert">
             <span data-testid="owner-bans-incomplete">{t("owner.bansIncomplete")}</span>
           </Banner>
         )}

@@ -9,11 +9,13 @@ const TONE: Record<Tone, string> = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-800",
 };
 
-/** error is announced immediately (role=alert); the rest politely (role=status). */
-export function Banner({ tone, action, className = "", children }:
-  { tone: Tone; action?: ReactNode; className?: string; children: ReactNode }) {
+/** error is announced immediately (role=alert); the rest politely (role=status), unless
+ *  `role` overrides that default -- e.g. a warn-toned notice that still needs assertive
+ *  announcement, without nesting a second live region to get it. */
+export function Banner({ tone, role, action, className = "", children }:
+  { tone: Tone; role?: "alert" | "status"; action?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <div role={tone === "error" ? "alert" : "status"}
+    <div role={role ?? (tone === "error" ? "alert" : "status")}
          className={`border rounded-xl p-3 text-sm flex items-start justify-between gap-3 ${TONE[tone]} ${className}`}>
       <div className="min-w-0">{children}</div>
       {action}

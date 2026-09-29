@@ -28,24 +28,24 @@ export function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
       <Card className="p-6 w-full max-w-sm shadow-sm">
         <form onSubmit={submit}>
-        <h1 className="text-lg font-semibold text-slate-800 mb-5">{t("app.name")}</h1>
-        {err && (
-          <Banner tone="error" className="mb-3">
-            {t(err.key)}
-            <span className="block text-xs opacity-70 mt-1">{err.detail}</span>
-          </Banner>
-        )}
-        <label className="block text-sm font-medium mb-1" htmlFor="email">{t("app.email")}</label>
-        <input id="email" type="email" required autoComplete="username" value={email}
-               onChange={(e) => setEmail(e.target.value)}
-               className="w-full border border-slate-300 rounded-lg px-3 mb-3" />
-        <label className="block text-sm font-medium mb-1" htmlFor="password">{t("app.password")}</label>
-        <input id="password" type="password" required autoComplete="current-password" value={password}
-               onChange={(e) => setPassword(e.target.value)}
-               className="w-full border border-slate-300 rounded-lg px-3 mb-5" />
-        <Button type="submit" disabled={busy} className="w-full">
-          {busy ? t("app.signingIn") : t("app.signIn")}
-        </Button>
+          <h1 className="text-lg font-semibold text-slate-800 mb-5">{t("app.name")}</h1>
+          {err && (
+            <Banner tone="error" className="mb-3">
+              {t(err.key)}
+              <span className="block text-xs opacity-70 mt-1">{err.detail}</span>
+            </Banner>
+          )}
+          <label className="block text-sm font-medium mb-1" htmlFor="email">{t("app.email")}</label>
+          <input id="email" type="email" required autoComplete="username" value={email}
+                 onChange={(e) => setEmail(e.target.value)}
+                 className="w-full border border-slate-300 rounded-lg px-3 mb-3" />
+          <label className="block text-sm font-medium mb-1" htmlFor="password">{t("app.password")}</label>
+          <input id="password" type="password" required autoComplete="current-password" value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 className="w-full border border-slate-300 rounded-lg px-3 mb-5" />
+          <Button type="submit" disabled={busy} className="w-full">
+            {busy ? t("app.signingIn") : t("app.signIn")}
+          </Button>
         </form>
       </Card>
       <LangSwitch />

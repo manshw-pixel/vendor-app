@@ -73,49 +73,49 @@ export function ChangePassword({ email }: { email: string }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
       <Card className="p-6 w-full max-w-sm shadow-sm">
-      <form onSubmit={submit} className="space-y-3">
-        <h1 className="text-lg font-semibold text-slate-800">{t("changePw.title")}</h1>
-        <p className="text-sm text-slate-600">{t("changePw.body", { email })}</p>
+        <form onSubmit={submit} className="space-y-3">
+          <h1 className="text-lg font-semibold text-slate-800">{t("changePw.title")}</h1>
+          <p className="text-sm text-slate-600">{t("changePw.body", { email })}</p>
 
-        {error && (
-          <Banner tone="error">
-            <span data-testid="newpw-error">
-              {t(error.key)}
-              {error.detail && <span className="block text-xs opacity-70 mt-1">{error.detail}</span>}
-            </span>
-          </Banner>
-        )}
+          {error && (
+            <Banner tone="error">
+              <span data-testid="newpw-error">
+                {t(error.key)}
+                {error.detail && <span className="block text-xs opacity-70 mt-1">{error.detail}</span>}
+              </span>
+            </Banner>
+          )}
 
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="newpw">{t("changePw.new")}</label>
-          <input
-            id="newpw" data-testid="newpw" type="password" autoComplete="new-password"
-            value={pw} onChange={(e) => setPw(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="newpw-confirm">{t("changePw.confirm")}</label>
-          <input
-            id="newpw-confirm" data-testid="newpw-confirm" type="password" autoComplete="new-password"
-            value={confirm} onChange={(e) => setConfirm(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium mb-1" htmlFor="newpw">{t("changePw.new")}</label>
+            <input
+              id="newpw" data-testid="newpw" type="password" autoComplete="new-password"
+              value={pw} onChange={(e) => setPw(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1" htmlFor="newpw-confirm">{t("changePw.confirm")}</label>
+            <input
+              id="newpw-confirm" data-testid="newpw-confirm" type="password" autoComplete="new-password"
+              value={confirm} onChange={(e) => setConfirm(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]"
+            />
+          </div>
 
-        <Button
-          type="submit" data-testid="newpw-save" disabled={busy}
-          className="w-full"
-        >
-          {t("changePw.save")}
-        </Button>
-        <Button
-          type="button" variant="secondary" data-testid="newpw-signout" onClick={() => void supabase.auth.signOut()}
-          className="w-full"
-        >
-          {t("app.signOut")}
-        </Button>
-      </form>
+          <Button
+            type="submit" data-testid="newpw-save" disabled={busy}
+            className="w-full"
+          >
+            {t("changePw.save")}
+          </Button>
+          <Button
+            type="button" variant="secondary" data-testid="newpw-signout" onClick={() => void supabase.auth.signOut()}
+            className="w-full"
+          >
+            {t("app.signOut")}
+          </Button>
+        </form>
       </Card>
       <LangSwitch />
     </div>
