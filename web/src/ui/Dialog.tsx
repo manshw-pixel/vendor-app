@@ -8,7 +8,8 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
  * Deliberately a div with role="dialog", not a native <dialog>: jsdom's showModal support
  * is partial, and the existing tests find dialogs by role. Focus goes to the first control
  * on open, Tab is trapped inside, Escape calls onClose, and focus returns to whatever had
- * it before -- the button that opened it, in practice.
+ * it before -- the button that opened it, in practice. Tapping the dimmed backdrop
+ * (not the panel) also calls onClose, so a sheet can always be dismissed.
  *
  * A caller that must not be dismissed right now (a write in flight) passes an onClose that
  * does nothing.
@@ -41,6 +42,7 @@ export function Dialog({ label, onClose, className = "", children, initialFocusR
 
   return (
     <div role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKeyDown}
+         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
       <div ref={ref} className={`bg-surface rounded-xl p-4 w-full max-w-sm space-y-3 ${className}`}>
         {children}

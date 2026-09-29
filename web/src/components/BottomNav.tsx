@@ -64,6 +64,13 @@ export function BottomNav({ routes, lowStock }: { routes: RouteDef[]; lowStock: 
       </nav>
       {open && (
         <Dialog label={t("nav.more")} onClose={() => setOpen(false)}>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-ink">{t("nav.more")}</h2>
+            <button onClick={() => setOpen(false)} aria-label={t("nav.closeMenu")}
+                    className="min-h-[44px] min-w-[44px] rounded-lg text-2xl leading-none text-muted active:bg-slate-100">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
           {GROUPS.map((g) => {
             const rs = more.filter((r) => r.group === g);
             if (rs.length === 0) return null;
