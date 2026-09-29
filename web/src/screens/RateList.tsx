@@ -13,10 +13,14 @@ import { useSession } from "../components/SessionProvider";
 import { itemName, type Lang } from "../i18n/locales";
 import { rupees } from "../money";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
+import { Spinner } from "../ui/Spinner";
 
 type Step = "pick" | "reading" | "review" | "confirm" | "applying" | "done";
 const MAX_PHOTOS = 5;
-const BTN = "border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50";
+const BTN = "border border-slate-300 rounded-lg px-3 py-2 text-sm bg-surface min-h-[44px] disabled:opacity-50";
 const INPUT = "border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]";
 
 const validPrice = (p: string) => { const n = Number(p); return p.trim() !== "" && Number.isFinite(n) && n > 0; };
@@ -105,7 +109,7 @@ export default function RateList() {
   }
 
   const problemBox = problem && (
-    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{t(problem.key)}</p>
+    <Banner tone="error">{t(problem.key)}</Banner>
   );
   const title = <h2 className="font-semibold text-slate-800">{t("rateList.title")}</h2>;
 
@@ -114,8 +118,8 @@ export default function RateList() {
       <div className="space-y-4">
         {title}
         {problemBox}
-        {step === "reading" ? <p className="text-slate-600">{t("rateList.reading")}</p> : (
-          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        {step === "reading" ? <Spinner label={t("rateList.reading")} /> : (
+          <Card className="p-4 space-y-3">
             <p className="text-sm text-slate-600">{t("rateList.pick")}</p>
             <label className={`${BTN} inline-flex items-center cursor-pointer`}>
               {t("rateList.choose")}
@@ -124,9 +128,9 @@ export default function RateList() {
             </label>
             {files.length > 0 && <p className="text-xs text-slate-600">{t("rateList.chosen", { n: files.length })}</p>}
             {tooMany && <p className="text-xs text-amber-700">{t("rateList.tooMany")}</p>}
-            <button data-testid="rate-list-read" disabled={files.length === 0}
-              onClick={() => void read()} className={BTN}>{t("rateList.read")}</button>
-          </div>
+            <Button data-testid="rate-list-read" disabled={files.length === 0}
+              onClick={() => void read()}>{t("rateList.read")}</Button>
+          </Card>
         )}
       </div>
     );
@@ -160,8 +164,8 @@ export default function RateList() {
             <RowView key={r.key} r={r} items={items} put={put} relink={relink} />
           ))}
         </ul>
-        <button data-testid="rate-review" disabled={applyRows.length === 0 || anyError}
-          onClick={() => setStep("confirm")} className={BTN}>{t("rateList.review")}</button>
+        <Button data-testid="rate-review" disabled={applyRows.length === 0 || anyError}
+          onClick={() => setStep("confirm")}>{t("rateList.review")}</Button>
       </div>
     );
   }
@@ -175,7 +179,7 @@ export default function RateList() {
         <h2 className="font-semibold text-slate-800">{t("rateList.confirmTitle")}</h2>
         {problemBox}
         {ups.length > 0 && (
-          <section className="bg-white border border-slate-200 rounded-xl p-4">
+          <Card className="p-4">
             <h3 className="font-medium text-slate-700 mb-2">{t("rateList.toChange")}</h3>
             <ul data-testid="rate-confirm-updates" className="space-y-1 text-sm">
               {ups.map((r) => (
@@ -184,10 +188,10 @@ export default function RateList() {
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         )}
         {news.length > 0 && (
-          <section className="bg-white border border-slate-200 rounded-xl p-4">
+          <Card className="p-4">
             <h3 className="font-medium text-slate-700 mb-2">{t("rateList.toAdd")}</h3>
             <ul data-testid="rate-confirm-creates" className="space-y-1 text-sm">
               {news.map((r) => (
@@ -197,17 +201,17 @@ export default function RateList() {
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         )}
         <p className="text-sm text-slate-600">
           {t("rateList.unchangedCount", { n: unchangedClient })} · {t("rateList.skippedCount", { n: skipped })}
         </p>
-        {step === "applying" && <p className="text-slate-600">{t("rateList.applying")}</p>}
+        {step === "applying" && <Spinner label={t("rateList.applying")} />}
         <div className="flex gap-2">
-          <button data-testid="rate-confirm-back" disabled={step === "applying"}
-            onClick={() => { setProblem(null); setStep("review"); }} className={BTN}>{t("rateList.back")}</button>
-          <button data-testid="rate-apply" disabled={step === "applying"}
-            onClick={() => void apply()} className={BTN}>{t("rateList.apply")}</button>
+          <Button variant="secondary" data-testid="rate-confirm-back" disabled={step === "applying"}
+            onClick={() => { setProblem(null); setStep("review"); }}>{t("rateList.back")}</Button>
+          <Button data-testid="rate-apply" disabled={step === "applying"}
+            onClick={() => void apply()}>{t("rateList.apply")}</Button>
         </div>
       </div>
     );
@@ -218,12 +222,12 @@ export default function RateList() {
   const created = result?.created ?? [];
   return (
     <div className="space-y-4">
-      <h2 className="font-semibold text-emerald-800">{t("rateList.completed")}</h2>
+      <h2 className="font-semibold text-brand-strong">{t("rateList.completed")}</h2>
       <p className="text-sm text-slate-700">
         {t("rateList.resultTitle", { changed: updated.length, added: created.length })}
       </p>
       {updated.length > 0 && (
-        <section className="bg-white border border-slate-200 rounded-xl p-4">
+        <Card className="p-4">
           <h3 className="font-medium text-slate-700 mb-2">{t("rateList.pricesChanged")}</h3>
           <ul data-testid="rate-result-updated" className="space-y-1 text-sm">
             {updated.map((u) => {
@@ -232,15 +236,15 @@ export default function RateList() {
                 <li key={u.item_id}>
                   {itemName(u, lang)} — {rupees(oldP)} → {rupees(newP)} {perUnit(u.unit, t)}{" "}
                   {newP > oldP && <span className="text-red-700">▲</span>}
-                  {newP < oldP && <span className="text-emerald-700">▼</span>}
+                  {newP < oldP && <span className="text-brand-strong">▼</span>}
                 </li>
               );
             })}
           </ul>
-        </section>
+        </Card>
       )}
       {created.length > 0 && (
-        <section className="bg-white border border-slate-200 rounded-xl p-4">
+        <Card className="p-4">
           <h3 className="font-medium text-slate-700 mb-2">{t("rateList.itemsAdded")}</h3>
           <ul data-testid="rate-result-created" className="space-y-1 text-sm">
             {created.map((c) => (
@@ -250,7 +254,7 @@ export default function RateList() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
       <p className="text-sm text-slate-600">
         {t("rateList.unchangedCount", { n: Number(result?.unchanged ?? 0) + unchangedClient })} ·{" "}
@@ -258,7 +262,7 @@ export default function RateList() {
       </p>
       <div className="flex gap-2">
         <Link to="/items" className={`${BTN} inline-flex items-center`}>{t("rateList.done")}</Link>
-        <button onClick={reset} className={BTN}>{t("rateList.another")}</button>
+        <Button variant="secondary" onClick={reset}>{t("rateList.another")}</Button>
       </div>
     </div>
   );
@@ -283,7 +287,7 @@ function RowView({ r, items, put, relink }: {
   );
 
   return (
-    <li data-testid={`rate-row-${r.key}`} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+    <li data-testid={`rate-row-${r.key}`} className="bg-surface border border-slate-200 rounded-xl p-3 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm">
           <span className="font-medium text-slate-800">{r.row.name_as_written}</span>{" "}
@@ -355,8 +359,9 @@ function RowView({ r, items, put, relink }: {
             {priceInput(r, r.unit)}
           </div>
           {r.suggestion && (
-            <button data-testid={`rate-suggest-${r.key}`} onClick={() => relink(r.key, r.suggestion!)}
-              className={BTN}>{t("rateList.didYouMean", { name: itemName(r.suggestion, lang) })}</button>
+            <Button variant="secondary" data-testid={`rate-suggest-${r.key}`} onClick={() => relink(r.key, r.suggestion!)}>
+              {t("rateList.didYouMean", { name: itemName(r.suggestion, lang) })}
+            </Button>
           )}
           <select data-testid={`rate-link-${r.key}`} value="" aria-label={t("rateList.linkTo")}
             onChange={(e) => { const it = items.find((i) => i.id === e.target.value); if (it) relink(r.key, it); }}

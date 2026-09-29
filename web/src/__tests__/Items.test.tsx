@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import i18n from "../i18n";
 import type { AdminItem } from "../admin";
 
 const rows: AdminItem[] = [
@@ -140,6 +141,13 @@ describe("the items screen", () => {
     listAllItems.mockResolvedValueOnce({ data: [], error: null });
     render(<MemoryRouter><Items /></MemoryRouter>);
     expect(await screen.findByText(/no items yet|अजून माल नाही|कोई सामान नहीं/i)).toBeTruthy();
+  });
+
+  it("links to the rate list from the empty state", async () => {
+    listAllItems.mockResolvedValueOnce({ data: [], error: null });
+    render(<MemoryRouter><Items /></MemoryRouter>);
+    const empty = (await screen.findByText(i18n.t("items.empty"))).parentElement!;
+    expect(within(empty).getByRole("link").getAttribute("href")).toMatch(/\/items\/rate-list$/);
   });
 
   it("shows the last purchase cost, or says there is none", async () => {

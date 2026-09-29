@@ -83,6 +83,12 @@ describe("the staff screen", () => {
     await waitFor(() => expect(deleteUserAccount).toHaveBeenCalledWith("u2"));
   });
 
+  it("focuses Cancel when the remove dialog opens", async () => {
+    render(<Staff />);
+    fireEvent.click(await screen.findByTestId("staff-remove-u2"));
+    expect(await screen.findByRole("button", { name: /cancel|रद्द|रद्द करा/i })).toBe(document.activeElement);
+  });
+
   it("gives the confirm dialog an accessible name", async () => {
     // Commit 1dc5cc4 fixed exactly this on the two existing dialogs; a third must not
     // reintroduce it.

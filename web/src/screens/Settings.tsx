@@ -9,6 +9,9 @@ import {
 import { validateSettings, type SettingsInput, type SettingsField } from "../adminRules";
 import { useSession } from "../components/SessionProvider";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
 import Staff from "./Staff";
 
 const FIELDS = [
@@ -157,14 +160,13 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-md">
-        <h2 className="font-semibold text-slate-800">{t("settings.loyaltySection")}</h2>
+      <Card className="p-4 space-y-3 max-w-md" title={t("settings.loyaltySection")}>
         <p data-testid="settings-future-only" className="text-sm text-slate-600">
           {t("settings.futureOnly")}
         </p>
 
         {problem && (
-          <p data-testid="settings-problem" className="text-sm text-red-700">{t(problem.key)}</p>
+          <Banner tone="error"><span data-testid="settings-problem">{t(problem.key)}</span></Banner>
         )}
 
         {loaded && (
@@ -197,25 +199,21 @@ export default function Settings() {
             ))}
 
             {saved && (
-              <p data-testid="settings-saved" className="text-sm text-green-700">{t("settings.saved")}</p>
+              <Banner tone="success"><span data-testid="settings-saved">{t("settings.saved")}</span></Banner>
             )}
 
-            <button
-              type="submit" data-testid="settings-save" disabled={busy}
-              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
-            >
+            <Button type="submit" data-testid="settings-save" disabled={busy}>
               {t("settings.save")}
-            </button>
+            </Button>
           </form>
         )}
-      </section>
+      </Card>
 
-      <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-md">
-        <h2 className="font-semibold text-slate-800">{t("shop.section")}</h2>
+      <Card className="p-4 space-y-3 max-w-md" title={t("shop.section")}>
         <p className="text-sm text-slate-600">{t("shop.help")}</p>
 
         {shopProblem && (
-          <p data-testid="shop-problem" className="text-sm text-red-700">{t(shopProblem.key)}</p>
+          <Banner tone="error"><span data-testid="shop-problem">{t(shopProblem.key)}</span></Banner>
         )}
 
         <form onSubmit={(e) => { e.preventDefault(); void saveShop(); }} className="space-y-3">
@@ -241,17 +239,14 @@ export default function Settings() {
           </div>
 
           {shopSaved && (
-            <p data-testid="shop-saved" className="text-sm text-green-700">{t("shop.saved")}</p>
+            <Banner tone="success"><span data-testid="shop-saved">{t("shop.saved")}</span></Banner>
           )}
 
-          <button
-            type="submit" data-testid="shop-save" disabled={shopBusy || !shopLoaded}
-            className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
-          >
+          <Button type="submit" data-testid="shop-save" disabled={shopBusy || !shopLoaded}>
             {t("shop.save")}
-          </button>
+          </Button>
         </form>
-      </section>
+      </Card>
 
       {/* No heading here: Staff renders its own <h2>{t("staff.title")}</h2>, and it has to
           -- the router mounts that screen standalone too. A wrapper heading saying the
@@ -262,30 +257,32 @@ export default function Settings() {
 
       {/* Last on the page and visually separated on purpose: everything above this line is
           reversible, and nothing below it is. */}
-      <section className="bg-white border border-red-300 rounded-xl p-4 space-y-3 max-w-md">
-        <h2 className="font-semibold text-red-800">{t("danger.title")}</h2>
+      <Card className="border-red-300 p-4 space-y-3 max-w-md" title={t("danger.title")}>
         <p className="text-sm text-slate-600">{t("danger.body")}</p>
         <p className="text-sm text-slate-600">{t("danger.keeps")}</p>
 
         {wiped && (
-          <p data-testid="danger-done" className="text-sm text-green-700">
-            {t("danger.done", {
-              bills: wiped.bills, customers: wiped.customers, points: wiped.points_rows,
-            })}
-          </p>
+          <Banner tone="success">
+            <span data-testid="danger-done">
+              {t("danger.done", {
+                bills: wiped.bills, customers: wiped.customers, points: wiped.points_rows,
+              })}
+            </span>
+          </Banner>
         )}
         {wipeProblem && (
-          <p data-testid="danger-problem" className="text-sm text-red-700">{t(wipeProblem.key)}</p>
+          <Banner tone="error"><span data-testid="danger-problem">{t(wipeProblem.key)}</span></Banner>
         )}
 
         {!wiping ? (
-          <button
+          <Button
+            variant="secondary"
             data-testid="danger-open"
             onClick={() => { setWiping(true); setWiped(null); setWipeProblem(null); }}
-            className="border border-red-300 text-red-700 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+            className="border-red-300 text-red-700"
           >
             {t("danger.clear")}
-          </button>
+          </Button>
         ) : (
           <div className="space-y-2 border-t border-slate-200 pt-3">
             {/* Typing the shop's name, not a bare confirm button. The remove-a-person
@@ -302,23 +299,22 @@ export default function Settings() {
               />
             </label>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="danger"
                 data-testid="danger-go" disabled={wipeBusy || typedName.trim() !== vendorName}
                 onClick={() => void clearData()}
-                className="rounded-lg px-4 py-2 text-sm bg-red-700 text-white min-h-[44px] disabled:opacity-50"
               >
                 {t("danger.confirm")}
-              </button>
-              <button
-                type="button" onClick={() => { setWiping(false); setTypedName(""); }}
-                className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+              </Button>
+              <Button
+                type="button" variant="secondary" onClick={() => { setWiping(false); setTypedName(""); }}
               >
                 {t("staff.cancel")}
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }
