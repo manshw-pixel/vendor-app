@@ -1,6 +1,6 @@
 {
   "app": { "name": "व्हेंडर अ‍ॅप", "signIn": "साइन इन", "signOut": "साइन आउट", "email": "ईमेल", "password": "पासवर्ड", "signingIn": "साइन इन होत आहे…", "language": "भाषा", "updateReady": "नवीन आवृत्ती तयार आहे.", "reload": "रीलोड करा" },
-  "nav": { "bill": "नवीन बिल", "pending": "बाकी", "items": "माल", "customers": "ग्राहक", "staff": "कर्मचारी", "settings": "सेटिंग", "dashboards": "डॅशबोर्ड", "completed": "पूर्ण झालेले", "requests": "विनंत्या", "stock": "स्टॉक आवक/जावक", "close": "दिवस बंद करा", "dues": "उधारी खाते", "outbox": "सिंक होणे बाकी", "syncIssues": "सिंक समस्या" },
+  "nav": { "bill": "नवीन बिल", "pending": "बाकी", "items": "माल", "customers": "ग्राहक", "staff": "कर्मचारी", "settings": "सेटिंग", "dashboards": "डॅशबोर्ड", "completed": "पूर्ण झालेले", "requests": "विनंत्या", "stock": "स्टॉक आवक/जावक", "close": "दिवस बंद करा", "dues": "उधारी खाते", "outbox": "सिंक होणे बाकी", "syncIssues": "सिंक समस्या", "more": "अधिक", "group": { "setup": "दुकान सेटअप", "reports": "अहवाल", "endOfDay": "दिवसाची अखेर" } },
   "outbox": { "empty": "काहीही बाकी नाही. प्रत्येक बिल सिंक झाले आहे.", "syncNow": "आता सिंक करा", "retry": "पुन्हा प्रयत्न करा", "waiting": "प्रतीक्षेत", "attention": "लक्ष देणे आवश्यक", "discard": "काढून टाका", "discardConfirm": "ही विक्री या डिव्हाइसवरून काढायची? ती नोंदवली जाणार नाही.", "cancel": "रद्द करा" },
   "syncIssues": {
     "empty": "सिंक समस्या नाही.",

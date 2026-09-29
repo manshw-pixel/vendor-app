@@ -1,6 +1,7 @@
 import type { Role } from "./config";
 
-export type RouteDef = { path: string; labelKey: string };
+export type NavGroup = "setup" | "reports" | "endOfDay";
+export type RouteDef = { path: string; labelKey: string; group?: NavGroup };
 
 /**
  * These guards are UX, not security.
@@ -29,15 +30,15 @@ const BY_ROLE: Record<Role, RouteDef[]> = {
     { path: "/bill", labelKey: "nav.bill" },
     { path: "/pending", labelKey: "nav.pending" },
     { path: "/completed", labelKey: "nav.completed" },
-    { path: "/items", labelKey: "nav.items" },
-    { path: "/customers", labelKey: "nav.customers" },
     { path: "/dues", labelKey: "nav.dues" },
-    { path: "/requests", labelKey: "nav.requests" },
-    { path: "/stock", labelKey: "nav.stock" },
-    { path: "/settings", labelKey: "nav.settings" },
-    { path: "/dashboards", labelKey: "nav.dashboards" },
-    { path: "/close", labelKey: "nav.close" },
-    { path: "/sync-issues", labelKey: "nav.syncIssues" },
+    { path: "/items", labelKey: "nav.items", group: "setup" },
+    { path: "/customers", labelKey: "nav.customers", group: "setup" },
+    { path: "/stock", labelKey: "nav.stock", group: "setup" },
+    { path: "/requests", labelKey: "nav.requests", group: "setup" },
+    { path: "/settings", labelKey: "nav.settings", group: "setup" },
+    { path: "/dashboards", labelKey: "nav.dashboards", group: "reports" },
+    { path: "/sync-issues", labelKey: "nav.syncIssues", group: "reports" },
+    { path: "/close", labelKey: "nav.close", group: "endOfDay" },
   ],
 };
 
@@ -86,4 +87,14 @@ export function homeFor(role: Role, opts: Opts = {}): string {
   const first = routesForRole(role, opts)[0];
   if (!first) throw new Error(`role ${role} has no routes`);
   return first.path;
+}
+
+const MAX_TABS = 5;
+
+/** Which routes get a bottom tab and which go behind More. Up to five fit as tabs; past
+ *  that, four stay and More takes the fifth slot -- replacing a single fifth tab with a
+ *  More that holds only it would cost a tap and save nothing. */
+export function splitNav(routes: RouteDef[]): { tabs: RouteDef[]; more: RouteDef[] } {
+  if (routes.length <= MAX_TABS) return { tabs: routes, more: [] };
+  return { tabs: routes.slice(0, MAX_TABS - 1), more: routes.slice(MAX_TABS - 1) };
 }
