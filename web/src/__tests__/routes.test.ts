@@ -17,15 +17,15 @@ describe("routesForRole", () => {
       "/bill",
       "/pending",
       "/completed",
+      "/dues",
       "/items",
       "/customers",
-      "/dues",
-      "/requests",
       "/stock",
+      "/requests",
       "/settings",
       "/dashboards",
-      "/close",
       "/sync-issues",
+      "/close",
     ]);
   });
 

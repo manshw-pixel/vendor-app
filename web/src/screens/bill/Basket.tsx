@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { lineTotal, runningTotal, type Draft } from "../../billing";
 import { rupees } from "../../money";
 import { qtyText } from "../../units";
+import { Card } from "../../ui/Card";
 
 /** The total here is FEEDBACK. issue_token recomputes the real one from bill_items, and
  *  nothing on this screen ever sends a total to the server. */
@@ -19,8 +20,7 @@ export function Basket({
   const { t } = useTranslation();
 
   return (
-    <div className="border border-slate-200 rounded-xl bg-white">
-      <h2 className="font-semibold text-slate-800 px-3 pt-3">{t("bill.basket")}</h2>
+    <Card title={t("bill.basket")}>
       {lines.length === 0 ? (
         <p className="text-sm text-slate-500 p-3">{t("bill.empty")}</p>
       ) : (
@@ -56,6 +56,6 @@ export function Basket({
           {rupees(runningTotal(lines))}
         </span>
       </div>
-    </div>
+    </Card>
   );
 }

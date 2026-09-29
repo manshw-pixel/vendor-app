@@ -248,6 +248,53 @@ describe("the bill screen", () => {
     expect(data.issueToken).not.toHaveBeenCalled();
   });
 
+  it("has exactly one Done button in the items phase", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    expect(screen.getAllByRole("button", { name: /done/i })).toHaveLength(1);
+  });
+
+  it("does not close the confirm dialog on Escape while issuing", async () => {
+    (data.createBill as unknown as Mock).mockImplementationOnce(() => new Promise(() => {}));
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    fireEvent.click(screen.getByRole("button", { name: /issue the token/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("focuses Cancel, not the irreversible action, when the confirm dialog opens", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    await screen.findByRole("dialog");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /cancel/i }));
+  });
+
+  it("closes the confirm dialog on Escape when not issuing", async () => {
+    renderBill();
+    fireEvent.click(await screen.findByText("Asha"));
+    await pickItem("i1");
+    fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("rejects a weight with more precision than the column stores", async () => {
     renderBill();
     fireEvent.click(await screen.findByText("Asha"));

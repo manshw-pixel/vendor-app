@@ -9,6 +9,7 @@ import { filterItems } from "../../itemSearch";
 import { rupees } from "../../money";
 import { stockLevel } from "../../adminRules";
 import { isWholeUnit, qtyText, validateQty } from "../../units";
+import { Button } from "../../ui/Button";
 
 /**
  * Stock is SHOWN, never enforced. complete_bill clamps the decrement at zero on purpose,
@@ -230,12 +231,9 @@ export function ItemGrid({
             )}
           </label>
           {reason && <p className="text-sm text-red-600">{t(`bill.badWeight.${reason}`)}</p>}
-          <button
-            onClick={add}
-            className="w-full rounded-lg px-3 py-2 min-h-[44px] bg-emerald-600 text-white"
-          >
+          <Button onClick={add} className="w-full">
             {t("bill.add")}
-          </button>
+          </Button>
         </div>
       )}
     </div>

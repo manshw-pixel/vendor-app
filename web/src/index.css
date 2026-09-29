@@ -1,9 +1,20 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand: var(--color-emerald-600);
+  --color-brand-strong: var(--color-emerald-700);
+  --color-danger: var(--color-red-600);
+  --color-warn: var(--color-amber-600);
+  --color-surface: #ffffff;
+  --color-canvas: #f6f8fb;
+  --color-ink: var(--color-slate-800);
+  --color-muted: var(--color-slate-500);
+}
+
 /* Mobile-first defaults. Staff use this one-handed on a phone while weighing produce,
    so tap targets are large and the page never scrolls sideways. */
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: #f6f8fb; color: #334155; overflow-x: hidden; }
+body { margin: 0; background: var(--color-canvas); color: #334155; overflow-x: hidden; }
 button, [role="button"], a.btn { min-height: 44px; }
 input, select { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming on focus */
 

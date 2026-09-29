@@ -24,6 +24,10 @@ import { Basket } from "./bill/Basket";
 import { TokenResult } from "./bill/TokenResult";
 import { OfflineCheckout, amountToTake } from "./bill/OfflineCheckout";
 import { OfflineResult } from "./bill/OfflineResult";
+import { CheckoutBar } from "./bill/CheckoutBar";
+import { Banner } from "../ui/Banner";
+import { Button } from "../ui/Button";
+import { Dialog } from "../ui/Dialog";
 import { useRouteOffline } from "../offline/useRouteOffline";
 import { isStale, loadSnapshot, refreshSnapshot, type Snapshot } from "../offline/catalogue";
 import { enqueue, isNetworkError } from "../offline/outbox";
@@ -98,6 +102,7 @@ export default function Bill() {
   // A ref as well as state: two taps in one frame both see the state still false.
   const [savingOffline, setSavingOffline] = useState(false);
   const savingRef = useRef(false);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!vendorIdForLoad) return;
@@ -267,31 +272,30 @@ export default function Bill() {
   }
 
   if (offline && snapshot === null) {
-    return <p className="text-sm text-amber-700">{t("offline.noCache")}</p>;
+    return <Banner tone="warn">{t("offline.noCache")}</Banner>;
   }
 
   return (
     <div className="space-y-4">
       {offline && snapshot && isStale(snapshot) && (
-        <p className="text-sm text-amber-700">{t("offline.stale")}</p>
+        <Banner tone="warn">{t("offline.stale")}</Banner>
       )}
 
       {failure && (
-        <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
-          {t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span>
-        </p>
+        <Banner tone="error">{t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span></Banner>
       )}
 
       {failure && networkFailed && written === null && phase === "items" && (
-        <button
+        <Button
+          variant="warn"
           onClick={() => setOfflineCheckout(true)}
-          className="w-full rounded-xl px-3 py-2 min-h-[44px] border border-amber-400 bg-amber-50 text-amber-800 font-semibold"
+          className="w-full font-semibold"
         >
           {t("offline.saveOffline")}
-        </button>
+        </Button>
       )}
 
-      {failure && tokenUnknown && <p className="text-xs text-amber-700">{t("bill.tokenUnknown")}</p>}
+      {failure && tokenUnknown && <Banner tone="warn">{t("bill.tokenUnknown")}</Banner>}
 
       {phase === "customer" && (
         <CustomerStep
@@ -328,36 +332,28 @@ export default function Bill() {
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
           />
 
-          <button
-            onClick={() => (useOfflinePath ? setOfflineCheckout(true) : setConfirming(true))}
+          <CheckoutBar
+            total={runningTotal(lines)}
+            count={lines.length}
             disabled={!canFinish}
-            className="w-full rounded-xl px-3 py-3 min-h-[44px] bg-emerald-600 text-white text-lg font-semibold disabled:opacity-40"
-          >
-            {t("bill.done")}
-          </button>
+            onDone={() => (useOfflinePath ? setOfflineCheckout(true) : setConfirming(true))}
+          />
         </>
       )}
 
       {confirming && (
-        <div role="dialog" aria-modal="true" aria-label={t("bill.confirmTitle")}
-             className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-            <p className="text-slate-700">{t("bill.confirmBody")}</p>
-            <button
-              onClick={() => void confirm()}
-              disabled={issuing}
-              className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
-            >
-              {t("bill.confirmTitle")}
-            </button>
-            <button
-              onClick={() => setConfirming(false)}
-              className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300"
-            >
-              {t("bill.cancel")}
-            </button>
-          </div>
-        </div>
+        // No dismissing while the write is in flight: the result would land on a screen
+        // that no longer shows it.
+        <Dialog label={t("bill.confirmTitle")} onClose={() => { if (!issuing) setConfirming(false); }}
+                initialFocusRef={confirmCancelRef}>
+          <p className="text-slate-700">{t("bill.confirmBody")}</p>
+          <Button size="lg" onClick={() => void confirm()} disabled={issuing} className="w-full">
+            {t("bill.confirmTitle")}
+          </Button>
+          <Button ref={confirmCancelRef} variant="secondary" onClick={() => setConfirming(false)} className="w-full">
+            {t("bill.cancel")}
+          </Button>
+        </Dialog>
       )}
 
       {offlineCheckout && customer && (
