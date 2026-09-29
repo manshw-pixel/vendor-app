@@ -196,7 +196,7 @@ export default function Completed() {
 
       {doneToken !== null && (
         <Banner tone="success">
-          <span data-testid="void-done" role="status">{t("void.done", { n: doneToken })}</span>
+          <span data-testid="void-done">{t("void.done", { n: doneToken })}</span>
         </Banner>
       )}
 

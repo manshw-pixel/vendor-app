@@ -256,7 +256,7 @@ describe("the completed bills screen", () => {
     fireEvent.click(screen.getByTestId("void-confirm"));
     const done = await screen.findByTestId("void-done");
     expect(done.textContent).toContain("1");
-    expect(done.getAttribute("role")).toBe("status");
+    expect(done.parentElement?.closest('[role="status"]')).toBeTruthy();
   });
 
   it("gives the void reason field an accessible name", async () => {
