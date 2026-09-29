@@ -14,6 +14,9 @@ import { rupees } from "../money";
 import { describeError } from "../errors";
 import { useSession } from "../components/SessionProvider";
 import "../i18n";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { EmptyState } from "../ui/EmptyState";
 
 /** Void and Edit are offered under the same window: void_bill (0017) only reverses stock
  *  and points for a bill completed on the browser's local "today", so an Edit that skipped
@@ -186,28 +189,19 @@ export default function Completed() {
       <DateFilter value={range} onChange={setRange} />
 
       {problem && (
-        <p
-          data-testid="completed-problem"
-          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
-        >
-          {t(problem.key)}
-        </p>
+        <Banner tone="error">
+          <span data-testid="completed-problem">{t(problem.key)}</span>
+        </Banner>
       )}
 
       {doneToken !== null && (
-        <p
-          data-testid="void-done"
-          role="status"
-          className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3"
-        >
-          {t("void.done", { n: doneToken })}
-        </p>
+        <Banner tone="success">
+          <span data-testid="void-done" role="status">{t("void.done", { n: doneToken })}</span>
+        </Banner>
       )}
 
       {rows.length === 0 && !busy ? (
-        <p data-testid="completed-empty" className="text-sm text-slate-500">
-          {t("completed.empty")}
-        </p>
+        <EmptyState><span data-testid="completed-empty">{t("completed.empty")}</span></EmptyState>
       ) : (
         <ul className="space-y-2">
           {rows.map((b) => (
@@ -268,13 +262,14 @@ export default function Completed() {
                       {t("completed.receipt")}
                     </Link>
                     {inVoidWindow(b.completed_at) && (
-                      <button
+                      <Button
                         data-testid={`completed-void-${b.id}`}
+                        variant="danger"
                         onClick={() => startVoid(b.id)}
-                        className="inline-block border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                        className="text-sm"
                       >
                         {t("void.action")}
-                      </button>
+                      </Button>
                     )}
                     {/* Void is open to biller and admin (void_bill, 0017), but /bill --
                         where Edit hands off to -- is not a biller route (routes.ts): a
@@ -283,13 +278,14 @@ export default function Completed() {
                         Edit to admin keeps Void available to whoever can already use it
                         while never opening a void the same operator cannot finish. */}
                     {inVoidWindow(b.completed_at) && session.role === "admin" && (
-                      <button
+                      <Button
                         data-testid={`bill-edit-${b.id}`}
+                        variant="secondary"
                         onClick={() => startEdit(b.id)}
-                        className="inline-block border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                        className="text-sm"
                       >
                         {t("completed.edit")}
-                      </button>
+                      </Button>
                     )}
                   </div>
 
@@ -310,21 +306,23 @@ export default function Completed() {
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
                       />
                       <div className="flex gap-2">
-                        <button
+                        <Button
                           data-testid="void-confirm"
+                          variant="danger"
                           disabled={reason.trim() === "" || voiding}
                           onClick={() => void confirmVoid(b.id, b.token_no)}
-                          className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+                          className="text-sm"
                         >
                           {t("void.confirm")}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           data-testid="void-cancel"
+                          variant="secondary"
                           onClick={() => { setVoidingId(null); setReason(""); }}
-                          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                          className="text-sm"
                         >
                           {t("void.cancel")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -347,21 +345,23 @@ export default function Completed() {
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
                       />
                       <div className="flex gap-2">
-                        <button
+                        <Button
                           data-testid="edit-confirm"
+                          variant="secondary"
                           disabled={reason.trim() === "" || editing}
                           onClick={() => void editBill(b)}
-                          className="border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+                          className="text-sm"
                         >
                           {t("completed.edit")}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           data-testid="edit-cancel"
+                          variant="secondary"
                           onClick={() => { setEditingId(null); setReason(""); }}
-                          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+                          className="text-sm"
                         >
                           {t("void.cancel")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -373,24 +373,26 @@ export default function Completed() {
       )}
 
       {more && (
-        <button
+        <Button
           data-testid="completed-more"
+          variant="secondary"
           onClick={loadMore}
           disabled={busy}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
+          className="w-full text-sm"
         >
           {busy ? t("completed.loading") : t("completed.loadMore")}
-        </button>
+        </Button>
       )}
 
       <div className="pt-2 border-t border-slate-100">
-        <button
+        <Button
           data-testid="completed-voided-toggle"
+          variant="ghost"
           onClick={() => setVoidedOpen((v) => !v)}
-          className="text-sm text-slate-600 underline min-h-[44px]"
+          className="text-sm underline"
         >
           {voidedOpen ? t("completed.hideVoided") : t("completed.showVoided")}
-        </button>
+        </Button>
 
         {voidedOpen && (
           <div className="mt-2 space-y-2">

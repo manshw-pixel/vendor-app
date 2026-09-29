@@ -7,6 +7,10 @@ import { listCustomers } from "../data";
 import { updateCustomer, customerPoints } from "../admin";
 import { matchCustomers, validateCustomer, isDuplicateMobile, type Customer } from "../customers";
 import { describeError } from "../errors";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
 
 type Draft = { name: string; flat_no: string; mobile: string };
 
@@ -97,15 +101,13 @@ export default function Customers() {
       </div>
 
       {problem && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-          {t(problem.key)}
-        </p>
+        <Banner tone="error">{t(problem.key)}</Banner>
       )}
 
       {open && (
         <form
           onSubmit={(e) => { e.preventDefault(); void save(); }}
-          className="bg-white border border-slate-200 rounded-xl p-4 space-y-3"
+          className="border border-slate-200 rounded-xl bg-surface p-4 space-y-3"
         >
           <h3 className="font-semibold text-slate-800">{t("customersScreen.edit")}</h3>
           <p className="text-sm text-slate-500">
@@ -131,41 +133,41 @@ export default function Customers() {
 
           {incomplete && <p className="text-sm text-red-700">{t("bill.required")}</p>}
           {duplicate && (
-            <p data-testid="customer-duplicate" className="text-sm text-red-700">
-              {t("customersScreen.duplicate")}
-            </p>
+            <Banner tone="error">
+              <span data-testid="customer-duplicate">{t("customersScreen.duplicate")}</span>
+            </Banner>
           )}
 
           <div className="flex gap-2">
-            <button
+            <Button
               type="submit" data-testid="customer-save" disabled={busy}
-              className="rounded-lg px-4 py-2 text-sm bg-slate-800 text-white min-h-[44px] disabled:opacity-50"
+              className="text-sm"
             >
               {t("customersScreen.save")}
-            </button>
-            <button
-              type="button" onClick={() => setOpen(null)}
-              className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white min-h-[44px]"
+            </Button>
+            <Button
+              type="button" variant="secondary" onClick={() => setOpen(null)}
+              className="text-sm"
             >
               {t("customersScreen.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {shown.length === 0 ? (
-        <p className="text-sm text-slate-500">{t("customersScreen.empty")}</p>
+        <EmptyState>{t("customersScreen.empty")}</EmptyState>
       ) : (
         <ul className="space-y-2">
           {shown.map((c) => (
             <li key={c.id} className="flex gap-2">
-              <button
-                data-testid={`customer-${c.id}`} onClick={() => void openCustomer(c)}
-                className="flex-1 text-left bg-white border border-slate-200 rounded-xl p-3 min-h-[44px]"
+              <Button
+                data-testid={`customer-${c.id}`} variant="secondary" onClick={() => void openCustomer(c)}
+                className="flex-1 text-left bg-surface"
               >
                 <span className="font-medium text-slate-800">{c.name}</span>
                 <span className="block text-sm text-slate-500">{c.flat_no} · {c.mobile}</span>
-              </button>
+              </Button>
               {isAdmin && (
                 // The only other way into /dues/:id is a Dues-list row, and that list shows
                 // non-zero balances only -- so an opening balance for someone who owes

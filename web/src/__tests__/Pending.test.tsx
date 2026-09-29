@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { PendingBill } from "../data";
 
@@ -470,6 +470,14 @@ describe("deleting a pending bill", () => {
     fireEvent.click(screen.getByTestId("pending-delete-confirm"));
     await waitFor(() => expect(deletePendingBill).toHaveBeenCalledWith("b1"));
     await waitFor(() => expect(listPending).toHaveBeenCalledTimes(2));
+  });
+
+  it("the delete confirm dialog opens with Cancel focused", async () => {
+    renderPending({ role: "admin" });
+    fireEvent.click(await screen.findByTestId("pending-delete-b1"));
+    expect(document.activeElement).toBe(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }),
+    );
   });
 
   it("cancel does not delete", async () => {

@@ -12,6 +12,10 @@ import { parseAmount } from "../duesRules";
 import { describeError } from "../errors";
 import { rupees } from "../money";
 import { PAYMENT_MODES, type PaymentMode } from "../payments";
+import { Button } from "../ui/Button";
+import { Banner } from "../ui/Banner";
+import { Dialog } from "../ui/Dialog";
+import { EmptyState } from "../ui/EmptyState";
 
 /**
  * The biller's queue: bills already `billed`, waiting for a customer to pay at the
@@ -60,6 +64,7 @@ export default function Pending() {
   // The bill whose confirm is open, for the customer reads in openConfirm: a slow read for
   // one bill must never land on another bill's dialog (the Dashboards `wanted` idiom).
   const opening = useRef<string | null>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
 
   async function refresh() {
     const { data, error } = await listPending();
@@ -193,9 +198,9 @@ export default function Pending() {
       <h1 className="text-lg font-semibold text-slate-800">{t("pending.title")}</h1>
 
       {failure && (
-        <p className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm text-red-700">
+        <Banner tone="error">
           {t(failure.key)} <span className="text-xs text-slate-500">{failure.detail}</span>
-        </p>
+        </Banner>
       )}
 
       {completionUnknown && (
@@ -205,11 +210,11 @@ export default function Pending() {
       )}
 
       {completed && (
-        <p className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+        <Banner tone="success">
           {pointsAwarded !== null && pointsAwarded > 0
             ? t("pending.pointsAwarded", { n: pointsAwarded })
             : t("pending.completed")}
-        </p>
+        </Banner>
       )}
 
       {completed && completedId && (
@@ -227,13 +232,11 @@ export default function Pending() {
       )}
 
       {deleted && (
-        <p className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
-          {t("pending.deleted")}
-        </p>
+        <Banner tone="success">{t("pending.deleted")}</Banner>
       )}
 
       {bills !== null && bills.length === 0 && !failure && (
-        <p className="text-slate-500 text-sm">{t("pending.empty")}</p>
+        <EmptyState>{t("pending.empty")}</EmptyState>
       )}
 
       <ul className="space-y-2">
@@ -260,23 +263,23 @@ export default function Pending() {
                 </Link>
               )}
               {(session.role === "admin" || session.role === "biller") && (
-                <button
+                <Button
                   data-testid={`pending-delete-${bill.id}`}
+                  variant="danger"
                   onClick={() => setDeletingId(bill.id)}
                   disabled={completingId === bill.id}
-                  className="border border-red-300 text-red-700 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px] disabled:opacity-50"
                 >
                   {t("pending.delete")}
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 data-testid={`pending-complete-${bill.id}`}
+                size="lg"
                 onClick={() => void openConfirm(bill)}
                 disabled={completingId === bill.id}
-                className="rounded-lg px-4 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
               >
                 {t("pending.complete")}
-              </button>
+              </Button>
             </div>
           </li>
         ))}
@@ -286,25 +289,26 @@ export default function Pending() {
         const bill = bills?.find((b) => b.id === deletingId);
         if (!bill) return null;
         return (
-          <div role="dialog" aria-modal="true" aria-labelledby="pending-delete-title"
-               className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4">
-            <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-              <h2 id="pending-delete-title" className="font-semibold text-slate-800">
-                {t("pending.deleteTitle", { n: bill.token_no })}
-              </h2>
-              <p className="text-slate-700">{t("pending.deleteBody")}</p>
-              <div className="flex gap-2 justify-end">
-                <button data-testid="pending-delete-cancel" onClick={() => setDeletingId(null)}
-                        className="border border-slate-300 rounded-lg px-3 py-2 min-h-[44px]">
-                  {t("bill.cancel")}
-                </button>
-                <button data-testid="pending-delete-confirm" onClick={() => void confirmDelete(bill.id)}
-                        className="rounded-lg px-4 py-2 min-h-[44px] bg-red-600 text-white font-semibold">
-                  {t("pending.deleteAccept")}
-                </button>
-              </div>
+          <Dialog
+            label={t("pending.deleteTitle", { n: bill.token_no })}
+            onClose={() => setDeletingId(null)}
+            initialFocusRef={cancelDeleteRef}
+          >
+            <h2 className="font-semibold text-slate-800">
+              {t("pending.deleteTitle", { n: bill.token_no })}
+            </h2>
+            <p className="text-slate-700">{t("pending.deleteBody")}</p>
+            <div className="flex gap-2 justify-end">
+              <Button ref={cancelDeleteRef} data-testid="pending-delete-cancel" variant="secondary"
+                      onClick={() => setDeletingId(null)}>
+                {t("bill.cancel")}
+              </Button>
+              <Button data-testid="pending-delete-confirm" variant="danger"
+                      onClick={() => void confirmDelete(bill.id)}>
+                {t("pending.deleteAccept")}
+              </Button>
             </div>
-          </div>
+          </Dialog>
         );
       })()}
 
@@ -319,17 +323,14 @@ export default function Pending() {
         const collectValid = collecting && collectParsed.ok && !collectOver;
         const collectAmount = collectValid && collectParsed.ok ? collectParsed.value : 0;
         return (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pending-confirm-title"
-            className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center p-4"
+          <Dialog
+            label={t("pending.confirmTitle")}
+            onClose={() => { opening.current = null; setConfirmingId(null); }}
           >
-            <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-              <h2 id="pending-confirm-title" className="font-semibold text-slate-800">
-                {t("pending.confirmTitle")}
-              </h2>
-              <p className="text-slate-700">{t("pending.confirmBody")}</p>
+            <h2 className="font-semibold text-slate-800">
+              {t("pending.confirmTitle")}
+            </h2>
+            <p className="text-slate-700">{t("pending.confirmBody")}</p>
 
               {owes !== null && (
                 <p data-testid="pending-owes" className="text-sm text-amber-700">
@@ -352,13 +353,13 @@ export default function Pending() {
                       className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 min-h-[44px]"
                     />
                   </label>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     onClick={() => setRedeemInput(String(Math.min(balance, Math.floor(bill.total))))}
-                    className="text-sm text-emerald-700 underline"
+                    className="text-sm underline"
                   >
                     {t("pending.redeemAll")}
-                  </button>
+                  </Button>
                   {/* While a due is collected the button carries the one "Collect" figure, so
                       this line names the bill instead. */}
                   <p data-testid="redeem-summary" className="text-sm text-slate-700">
@@ -372,20 +373,18 @@ export default function Pending() {
                 <legend className="text-sm text-slate-700">{t("pending.modeLabel")}</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {PAYMENT_MODES.map((m) => (
-                    <button
+                    <Button
                       key={m}
-                      type="button"
+                      variant={mode === m ? "primary" : "secondary"}
+                      size="lg"
                       data-testid={`pay-mode-${m}`}
                       aria-pressed={mode === m}
                       disabled={m === "credit" && !bill.customer_id}
                       onClick={() => setMode(m)}
-                      className={`rounded-lg px-3 py-3 min-h-[44px] border font-semibold disabled:opacity-50 ${
-                        mode === m
-                          ? "bg-emerald-600 text-white border-emerald-600"
-                          : "bg-white text-slate-700 border-slate-300"}`}
+                      className="font-semibold"
                     >
                       {t(`pay.${m}`)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 {!bill.customer_id && (
@@ -422,26 +421,27 @@ export default function Pending() {
                 </div>
               )}
 
-              <button
+              <Button
                 data-testid={`pending-confirm-${bill.id}`}
+                size="lg"
                 onClick={() => void confirm(bill, collectAmount)}
                 disabled={mode === null || (collecting && !collectValid)}
-                className="w-full rounded-lg px-3 py-3 min-h-[44px] bg-emerald-600 text-white font-semibold disabled:opacity-50"
+                className="w-full"
               >
                 {mode === "credit"
                   ? t("pending.confirmCredit")
                   : collectAmount > 0
                     ? t("pending.collectTotal", { amount: rupees(net + collectAmount) })
                     : t("pending.confirmAccept")}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => { opening.current = null; setConfirmingId(null); }}
-                className="w-full rounded-lg px-3 py-2 min-h-[44px] border border-slate-300"
+                className="w-full"
               >
                 {t("bill.cancel")}
-              </button>
-            </div>
-          </div>
+              </Button>
+          </Dialog>
         );
       })()}
     </div>
