@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink } from "react-router-dom";
 import { supabase } from "../supabase";
 import { routesForRole } from "../routes";
+import { BottomNav } from "./BottomNav";
 import { LANGS, type Lang } from "../i18n/locales";
 import { setLang } from "../i18n";
 import type { Role } from "../config";
@@ -87,30 +87,8 @@ export function Shell({ role, vendorName, name, children }:
           </div>
         </div>
       </header>
-      <nav className="bg-white border-b border-slate-200 px-4 overflow-x-auto">
-        <div className="max-w-3xl mx-auto flex gap-1">
-          {routesForRole(role, { offline: routeOffline }).map((r) => (
-            <NavLink key={r.path} to={r.path}
-                     className={({ isActive }) =>
-                       `px-3 py-2 text-sm whitespace-nowrap border-b-2 min-h-[44px] flex items-center ${
-                         isActive ? "border-green-600 text-green-700 font-medium" : "border-transparent text-slate-600"}`}>
-              <>
-                {t(r.labelKey)}
-                {r.path === "/items" && lowStock > 0 && (
-                  <span
-                    data-testid="low-stock-badge"
-                    title={t("items.lowBadge", { n: lowStock })}
-                    className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center"
-                  >
-                    {lowStock}
-                  </span>
-                )}
-              </>
-            </NavLink>
-          ))}
-        </div>
-      </nav>
-      <main className="max-w-3xl mx-auto p-4">{children}</main>
+      <BottomNav routes={routesForRole(role, { offline: routeOffline })} lowStock={lowStock} />
+      <main className="max-w-3xl mx-auto p-4 pb-40 sm:pb-24">{children}</main>
     </div>
   );
 }
