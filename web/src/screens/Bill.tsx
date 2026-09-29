@@ -313,9 +313,18 @@ export default function Bill() {
       {phase === "items" && (
         <>
           {customer && (
-            <p className="text-sm text-slate-500">
-              {customer.name} · {customer.flat_no}
-            </p>
+            <div data-testid="customer-chip"
+                 className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl bg-surface pl-3 pr-1">
+              <p className="min-w-0 truncate py-2">
+                <span className="font-semibold text-ink">{customer.name}</span>
+                <span className="text-muted"> · {customer.flat_no}</span>
+              </p>
+              {/* Once a write has started the bill belongs to this customer. The basket
+                  survives a change: only who it is for is being corrected. */}
+              {written === null && !issuing && (
+                <Button variant="ghost" onClick={() => setPhase("customer")}>{t("bill.change")}</Button>
+              )}
+            </div>
           )}
 
           {!written?.linesWritten && (
@@ -330,6 +339,7 @@ export default function Bill() {
             lines={lines}
             frozen={written?.linesWritten ?? false}
             onRemove={(index) => setLines((prev) => prev.filter((_, i) => i !== index))}
+            onRestore={(i, l) => setLines((prev) => [...prev.slice(0, i), l, ...prev.slice(i)])}
           />
 
           <CheckoutBar

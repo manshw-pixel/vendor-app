@@ -100,6 +100,7 @@ export default function AmendBill() {
       <Basket
         lines={lines}
         onRemove={(i) => setLines(lines.filter((_, n) => n !== i))}
+        onRestore={(i, l) => setLines([...lines.slice(0, i), l, ...lines.slice(i)])}
       />
 
       <ItemGrid
