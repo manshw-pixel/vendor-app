@@ -9,10 +9,13 @@ vi.mock("../dayClose", () => ({
   DAY_CLOSES_CHANGED: "day-closes-changed",
 }));
 
-const { UnclosedBanner } = await import("../components/UnclosedBanner");
+const { UnclosedBanner, useUnclosedDays } = await import("../components/UnclosedBanner");
 
+function H({ role }: { role: "admin" | "biller" | "recorder" }) {
+  return <UnclosedBanner days={useUnclosedDays(role)} />;
+}
 const renderAs = (role: "admin" | "biller" | "recorder") =>
-  render(<MemoryRouter><UnclosedBanner role={role} /></MemoryRouter>);
+  render(<MemoryRouter><H role={role} /></MemoryRouter>);
 
 beforeEach(async () => {
   vi.clearAllMocks();
