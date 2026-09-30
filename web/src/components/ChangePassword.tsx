@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../supabase";
+import { SignOutButton } from "./SignOutButton";
 import { MIN_PASSWORD_LENGTH } from "../../../supabase/functions/admin-create-user/guards";
 import { LangSwitch } from "./Shell";
 import { useSessionReload } from "./SessionProvider";
@@ -109,12 +110,7 @@ export function ChangePassword({ email }: { email: string }) {
           >
             {t("changePw.save")}
           </Button>
-          <Button
-            type="button" variant="secondary" data-testid="newpw-signout" onClick={() => void supabase.auth.signOut()}
-            className="w-full"
-          >
-            {t("app.signOut")}
-          </Button>
+          <SignOutButton variant="secondary" data-testid="newpw-signout" className="w-full" />
         </form>
       </Card>
       <LangSwitch />

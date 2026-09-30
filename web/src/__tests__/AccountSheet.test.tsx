@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-const signOut = vi.fn(async () => ({ error: null }));
-vi.mock("../supabase", () => ({ supabase: { auth: { signOut: () => signOut() } } }));
+const signOut = vi.fn(async (..._a: unknown[]) => ({ error: null }));
+vi.mock("../supabase", () => ({ supabase: { auth: { signOut: (...a: unknown[]) => signOut(...a) } } }));
 
 const { default: i18n } = await import("../i18n");
 const { AccountSheet } = await import("../components/AccountSheet");

@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { supabase } from "../supabase";
 import { Dialog } from "../ui/Dialog";
-import { Button } from "../ui/Button";
+import { SignOutButton } from "./SignOutButton";
 import { LangSwitch } from "./Shell";
 
 /** Who is signed in, the language, and Sign out -- off the header so it fits a 360px phone. */
@@ -17,9 +16,7 @@ export function AccountSheet({ name, role, onClose }: { name: string; role: stri
         <p className="text-sm text-slate-600">{t("app.language")}</p>
         <LangSwitch />
       </div>
-      <Button variant="danger" className="w-full" onClick={() => void supabase.auth.signOut()}>
-        {t("app.signOut")}
-      </Button>
+      <SignOutButton variant="danger" className="w-full" />
     </Dialog>
   );
 }

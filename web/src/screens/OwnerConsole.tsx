@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../supabase";
+import { SignOutButton } from "../components/SignOutButton";
 import { useSession } from "../components/SessionProvider";
 import { LangSwitch } from "../components/Shell";
 import { rupees } from "../money";
@@ -121,13 +121,7 @@ export default function OwnerConsole() {
         </div>
         <div className="flex items-center gap-3">
           <LangSwitch />
-          <Button
-            variant="ghost" data-testid="owner-signout"
-            onClick={() => void supabase.auth.signOut()}
-            className="text-sm underline"
-          >
-            {t("app.signOut")}
-          </Button>
+          <SignOutButton variant="ghost" data-testid="owner-signout" className="text-sm underline" />
         </div>
       </header>
 
