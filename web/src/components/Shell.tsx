@@ -34,8 +34,6 @@ export function LangSwitch() {
   );
 }
 
-/** Shown when a new service worker has installed alongside the current one. Reloading is
- *  always the person's choice: an unattended reload could wipe an in-progress bill. */
 export function useUpdateReady(): ServiceWorkerRegistration | null {
   // Read any registration recorded before this component mounted (e.g. install finished
   // during the initial page load, ahead of Shell's first render) as well as subscribing
@@ -54,16 +52,18 @@ export function pickStrip({ offline, unclosed, update }: { offline: boolean; unc
   return null;
 }
 
+/** Shown when a new service worker has installed alongside the current one. Reloading is
+ *  always the person's choice: an unattended reload could wipe an in-progress bill. */
 export function UpdateBanner() {
   const { t } = useTranslation();
   const reg = useUpdateReady();
   if (!reg) return null;
   return (
-    <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
+    <div className="bg-brand-soft text-brand-ink text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
       <span>{t("app.updateReady")}</span>
       <Button
         variant="secondary" size="md"
-        className="!min-h-0 border-emerald-700 bg-surface px-2 py-0.5"
+        className="!min-h-0 border-brand-strong bg-surface px-2 py-0.5"
         onClick={() => {
           navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
           reg.waiting?.postMessage("skip-waiting");
