@@ -352,24 +352,39 @@ instead of wiping something.
 Do not weaken that guard; `tests/guard.test.mjs` pins every one of those refusals and
 needs no database to run.
 
-Migrations reach Cloud through the CLI, in a shell with no test variables exported:
+Migrations reach Cloud through the CLI, in **your own terminal** (Git Bash), with no test
+variables exported. On Windows `supabase login` stores its token where the CLI cannot read
+it back, so every command 401s; pass the token through the environment instead, typed
+where it is never echoed or logged:
 
 ```bash
-supabase login                          # stores a token outside the repo
-supabase link --project-ref <prod-ref>  # once per clone
-supabase db push                        # applies supabase/migrations/ in order
+read -s SUPABASE_ACCESS_TOKEN && export SUPABASE_ACCESS_TOKEN   # paste; nothing shows
+npx supabase migration list --project-ref <prod-ref>   # local and remote must match
+npx supabase db push --project-ref <prod-ref> --dry-run # shows what would be applied
+npx supabase db push --project-ref <prod-ref>           # applies only the missing ones
 ```
 
-**Deployed:** migrations 0001 through 0018 are live on the production project
-(`ap-northeast-1`, Postgres 17.6) and verified there, alongside the `admin-create-user`,
-`admin-delete-user`, `owner-create-vendor`, and `owner-suspend-vendor` Edge Functions.
-`0019_platform_owner.sql` (this branch) is applied locally and covered by the test suite
-above but not yet pushed to Cloud.
+Never put the token on a command line, in a file in the repo, or in a chat transcript.
+Generate and revoke tokens at Dashboard → Account → Access Tokens.
 
-**Migration `0007` must be pushed** (`supabase db push`) for the dashboards screen to work
-at all — it adds the `top_items_between`, `bought_together_between` and `collected_between`
-RPCs the dashboards call directly, and the Pages workflow deploys only the SPA, never migrations. `0006` (the
-points threshold) may still be unpushed too; check before assuming either has landed.
+**Deploy order for a slice:** Edge Functions (if any) → `db push` → merge the PR (the
+Pages workflow deploys only the SPA, never migrations, and the client may call the new
+RPCs immediately).
+
+**Prefer `db push` to the SQL editor.** `db push` records each migration in
+`supabase_migrations.schema_migrations` and refuses to run when history and files
+disagree. A migration pasted into the SQL editor is not recorded, and the next `db push`
+would try to run it again. If a hand-apply is ever unavoidable, record it straight after:
+
+```sql
+insert into supabase_migrations.schema_migrations (version, name, statements)
+values ('00NN', '<name>', '{}') on conflict (version) do nothing;
+```
+
+**Deployed:** migrations 0001 through 0026 are live on the production project
+(`ap-northeast-1`, Postgres 17.6), and as of 2026-09-30 its migration history records all
+twenty-six (0020, 0025 and 0026 had been hand-applied and were recorded after their
+objects were verified present).
 
 The project is schema-complete but **empty**, and the first admin cannot be created
 through the API: `app_users` writes require an existing admin of that vendor, and
@@ -377,7 +392,7 @@ through the API: `app_users` writes require an existing admin of that vendor, an
 hand in the SQL editor after that person signs up — see
 [`docs/runbook-platform-owner.md`](docs/runbook-platform-owner.md).
 
-Credentials live in the CLI's own login or a gitignored `.env` — never in the repo, and
+Credentials live in the shell environment or a gitignored `.env` — never in the repo, and
 never in `supabase/config.toml`, which is committed. Project refs are not secret, but
 they are not committed either: they name which database gets wiped, so they stay in the
 environment where you can see them.
