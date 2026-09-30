@@ -70,7 +70,7 @@ export default function Outbox() {
         <EmptyState>{t("outbox.empty")}</EmptyState>
       )}
 
-      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white">
+      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-surface">
         {bills?.map((b) => (
           <li key={b.clientId} className="px-3 py-3 space-y-2">
             <div className="flex items-center justify-between gap-2">

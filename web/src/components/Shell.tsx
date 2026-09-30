@@ -6,7 +6,7 @@ import type { Lang } from "../i18n/locales";
 import { setLang } from "../i18n";
 import type { Role } from "../config";
 import { useLowStock } from "../useLowStock";
-import { UnclosedBanner } from "./UnclosedBanner";
+import { UnclosedBanner, useUnclosedDays } from "./UnclosedBanner";
 import { useSession } from "./SessionProvider";
 import { useOnline } from "../offline/useOnline";
 import { useRouteOffline } from "../offline/useRouteOffline";
@@ -34,22 +34,46 @@ export function LangSwitch() {
   );
 }
 
-/** Shown when a new service worker has installed alongside the current one. Reloading is
- *  always the person's choice: an unattended reload could wipe an in-progress bill. */
-export function UpdateBanner() {
-  const { t } = useTranslation();
+export function useUpdateReady(): ServiceWorkerRegistration | null {
   // Read any registration recorded before this component mounted (e.g. install finished
   // during the initial page load, ahead of Shell's first render) as well as subscribing
   // for one that arrives later.
   const [reg, setReg] = useState<ServiceWorkerRegistration | null>(() => getUpdateReady());
   useEffect(() => onUpdateReady(setReg), []);
+  return reg;
+}
+
+/**
+ * One top strip at a time, most urgent first:
+ * 1. offline: no network, or bills still waiting to send (money at risk)
+ * 2. unclosed: a past day still needs closing
+ * 3. update: a reload is always optional
+ * 4. offline chip for rejected ("attention") bills only. Those can sit for days
+ *    while online, so they rank last; otherwise they would permanently hide the
+ *    day-close and update strips. The chip still shows when nothing else does.
+ */
+export function pickStrip({ offline, attention, unclosed, update }:
+  { offline: boolean; attention: boolean; unclosed: boolean; update: boolean }):
+  "offline" | "unclosed" | "update" | null {
+  if (offline) return "offline";
+  if (unclosed) return "unclosed";
+  if (update) return "update";
+  if (attention) return "offline";
+  return null;
+}
+
+/** Shown when a new service worker has installed alongside the current one. Reloading is
+ *  always the person's choice: an unattended reload could wipe an in-progress bill. */
+export function UpdateBanner() {
+  const { t } = useTranslation();
+  const reg = useUpdateReady();
   if (!reg) return null;
   return (
-    <div className="bg-emerald-100 text-emerald-900 text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
+    <div className="bg-brand-soft text-brand-ink text-sm px-4 py-2 text-center flex items-center justify-center gap-3">
       <span>{t("app.updateReady")}</span>
       <Button
         variant="secondary" size="md"
-        className="!min-h-0 border-emerald-700 bg-surface px-2 py-0.5"
+        className="!min-h-0 border-brand-strong bg-surface px-2 py-0.5"
         onClick={() => {
           navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
           reg.waiting?.postMessage("skip-waiting");
@@ -72,13 +96,16 @@ export function Shell({ role, vendorName, name, children }:
   const online = useOnline();
   const routeOffline = useRouteOffline();
   const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
+  const days = useUnclosedDays(role);
+  const reg = useUpdateReady();
+  const strip = pickStrip({ offline: !online || waiting > 0, attention: attention > 0, unclosed: days.length > 0, update: !!reg });
   useSnapshotRefresh(session.kind === "ready" ? session.vendorId : null,
                      session.kind === "ready" && !!session.fromCache);
   return (
     <div className="min-h-screen">
-      <UpdateBanner />
-      <OfflineChip online={online} waiting={waiting} attention={attention} />
-      <UnclosedBanner role={role} />
+      {strip === "offline" && <OfflineChip online={online} waiting={waiting} attention={attention} />}
+      {strip === "unclosed" && <UnclosedBanner days={days} />}
+      {strip === "update" && <UpdateBanner />}
       <header className="bg-surface border-b border-slate-200 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <p className="font-semibold text-ink truncate min-w-0">{vendorName || t("app.name")}</p>

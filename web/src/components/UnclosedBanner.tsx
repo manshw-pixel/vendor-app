@@ -15,8 +15,7 @@ const EVERY_MS = 5 * 60 * 1000;
  * Polls like useLowStock, and also re-reads the moment the close screen closes or reopens
  * a day, so the banner never lingers over the day just closed.
  */
-export function UnclosedBanner({ role }: { role: Role }) {
-  const { t, i18n } = useTranslation();
+export function useUnclosedDays(role: Role): string[] {
   const enabled = role === "admin" || role === "biller";
   const [days, setDays] = useState<string[]>([]);
 
@@ -40,7 +39,12 @@ export function UnclosedBanner({ role }: { role: Role }) {
     };
   }, [enabled]);
 
-  if (!enabled || days.length === 0) return null;
+  return enabled ? days : [];
+}
+
+export function UnclosedBanner({ days }: { days: string[] }) {
+  const { t, i18n } = useTranslation();
+  if (days.length === 0) return null;
   // Newest first from the server; name the OLDEST, which is the one most overdue.
   const date = formatBusinessDate(days[days.length - 1] as string, i18n.language);
   return (

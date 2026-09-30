@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../supabase";
+import { SignOutButton } from "../components/SignOutButton";
 import { useSession } from "../components/SessionProvider";
 import { LangSwitch } from "../components/Shell";
 import { rupees } from "../money";
@@ -113,21 +113,15 @@ export default function OwnerConsole() {
   }
 
   return (
-    <div data-testid="owner-console" className="min-h-screen bg-slate-50">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-4 py-3">
+    <div data-testid="owner-console" className="min-h-screen bg-canvas">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-surface px-4 py-3">
         <div>
           <h1 className="font-semibold text-slate-800">{t("owner.title")}</h1>
           <p className="text-sm text-slate-600">{ownerName}</p>
         </div>
         <div className="flex items-center gap-3">
           <LangSwitch />
-          <Button
-            variant="ghost" data-testid="owner-signout"
-            onClick={() => void supabase.auth.signOut()}
-            className="text-sm underline"
-          >
-            {t("app.signOut")}
-          </Button>
+          <SignOutButton variant="ghost" data-testid="owner-signout" className="text-sm underline" />
         </div>
       </header>
 
@@ -232,8 +226,8 @@ export default function OwnerConsole() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800">{v.name}</span>
                       <span className={suspended
-                        ? "rounded bg-red-100 px-2 text-xs text-red-800"
-                        : "rounded bg-emerald-100 px-2 text-xs text-emerald-800"}>
+                        ? "rounded bg-danger-soft px-2 text-xs text-danger-ink"
+                        : "rounded bg-brand-soft px-2 text-xs text-brand-ink"}>
                         {suspended ? t("owner.suspendedBadge") : t("owner.active")}
                       </span>
                     </div>

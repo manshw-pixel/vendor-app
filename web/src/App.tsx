@@ -26,7 +26,7 @@ import SyncIssues from "./screens/SyncIssues";
 import OwnerConsole from "./screens/OwnerConsole";
 import { homeFor } from "./routes";
 import type { Role } from "./config";
-import { supabase } from "./supabase";
+import { SignOutButton } from "./components/SignOutButton";
 import { Spinner } from "./ui/Spinner";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
@@ -113,12 +113,7 @@ function Suspended({ vendorName, email }: { vendorName: string; email: string })
         <p className="text-sm text-slate-600">
           {t("session.suspended", { vendor: vendorName, email })}
         </p>
-        <Button
-          variant="secondary"
-          onClick={() => void supabase.auth.signOut()}
-        >
-          {t("app.signOut")}
-        </Button>
+        <SignOutButton variant="secondary" />
       </Card>
     </div>
   );
