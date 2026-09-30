@@ -43,12 +43,22 @@ export function useUpdateReady(): ServiceWorkerRegistration | null {
   return reg;
 }
 
-export function pickStrip({ offline, unclosed, update }: { offline: boolean; unclosed: boolean; update: boolean }):
+/**
+ * One top strip at a time, most urgent first:
+ * 1. offline: no network, or bills still waiting to send (money at risk)
+ * 2. unclosed: a past day still needs closing
+ * 3. update: a reload is always optional
+ * 4. offline chip for rejected ("attention") bills only. Those can sit for days
+ *    while online, so they rank last; otherwise they would permanently hide the
+ *    day-close and update strips. The chip still shows when nothing else does.
+ */
+export function pickStrip({ offline, attention, unclosed, update }:
+  { offline: boolean; attention: boolean; unclosed: boolean; update: boolean }):
   "offline" | "unclosed" | "update" | null {
-  // Unsent bills are money at risk; a reload is always optional.
   if (offline) return "offline";
   if (unclosed) return "unclosed";
   if (update) return "update";
+  if (attention) return "offline";
   return null;
 }
 
@@ -88,7 +98,7 @@ export function Shell({ role, vendorName, name, children }:
   const { waiting, attention } = useOutbox(session.kind === "ready" ? session.vendorId : null);
   const days = useUnclosedDays(role);
   const reg = useUpdateReady();
-  const strip = pickStrip({ offline: !online || waiting + attention > 0, unclosed: days.length > 0, update: !!reg });
+  const strip = pickStrip({ offline: !online || waiting > 0, attention: attention > 0, unclosed: days.length > 0, update: !!reg });
   useSnapshotRefresh(session.kind === "ready" ? session.vendorId : null,
                      session.kind === "ready" && !!session.fromCache);
   return (
